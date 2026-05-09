@@ -6,6 +6,8 @@ import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import net.minecraft.server.world.ServerWorld
@@ -22,6 +24,7 @@ object PastureWorkerManager {
     // Track previously-tagged UUIDs per pasture for tag removal cleanup
     private val previouslyTagged = ConcurrentHashMap<BlockPos, MutableSet<UUID>>()
     private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
+    private const val STALE_ENTRY_TTL = 20L * 30L
     private val initializedWorlds = ConcurrentHashMap.newKeySet<net.minecraft.registry.RegistryKey<World>>()
 
     fun tickPasture(world: World, pos: BlockPos, pasture: PokemonPastureBlockEntity) {
@@ -36,6 +39,8 @@ object PastureWorkerManager {
         // Periodic auto-save
         if (world.time % SAVE_INTERVAL == 0L) {
             CobblePalsSaveData.markDirty(serverWorld)
+            StateManager.pruneStale(world.time, STALE_ENTRY_TTL)
+            ClaimManager.pruneStale(world.time, STALE_ENTRY_TTL)
         }
 
         // Stagger pasture ticks — offset by position hash
@@ -49,6 +54,12 @@ object PastureWorkerManager {
             try { currentIds.add(t.pokemonId) } catch (_: Exception) {}
         }
         val prevIds = previousTethered.getOrPut(pos) { mutableSetOf() }
+        val orphanedAssignments = TagAssignmentManager.removeOrphansAt(serverWorld.registryKey.value.toString(), pos, currentIds)
+        orphanedAssignments.forEach { orphanedId ->
+            InventoryManager.remove(orphanedId)
+            StateManager.remove(orphanedId)
+            ClaimManager.releaseAll(orphanedId)
+        }
         for (prevId in prevIds) {
             if (prevId !in currentIds) {
                 TagExecutionEngine.cleanup(prevId, world, pos)
@@ -60,7 +71,10 @@ object PastureWorkerManager {
         // Detect tag removal: clean up state for pokemon that lost their tag
         val currentlyTagged = mutableSetOf<UUID>()
         for (id in currentIds) {
-            if (TagAssignmentManager.has(id)) currentlyTagged.add(id)
+            if (TagAssignmentManager.has(id)) {
+                TagAssignmentManager.associateWithPasture(id, serverWorld.registryKey.value.toString(), pos)
+                currentlyTagged.add(id)
+            }
         }
         val prevTagged = previouslyTagged.getOrPut(pos) { mutableSetOf() }
         for (prevId in prevTagged) {
@@ -153,6 +167,10 @@ object PastureWorkerManager {
         for (world in server.worlds) {
             CobblePalsSaveData.markDirty(world)
         }
+        TagAssignmentManager.clear()
+        InventoryManager.clear()
+        StateManager.clear()
+        ClaimManager.clear()
         // Reset per-world init state for potential re-start (singleplayer)
         initializedWorlds.clear()
         previousTethered.clear()

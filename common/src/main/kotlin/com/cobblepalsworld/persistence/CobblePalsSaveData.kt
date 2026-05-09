@@ -2,8 +2,10 @@ package com.cobblepalsworld.persistence
 
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentSerializer
+import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
+import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
@@ -22,7 +24,8 @@ class CobblePalsSaveData : PersistentState() {
     override fun writeNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): NbtCompound {
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
-        for ((uuid, tag) in getAllAssignments()) {
+        for ((uuid, record) in getAllAssignments()) {
+            val (tag, pastureBinding) = record
             val tagNbt = NbtCompound()
             tagNbt.putString("Type", tag.type.id)
             tagNbt.put("Filter", FilterSerializer.toNbt(tag.filter, registries))
@@ -31,6 +34,12 @@ class CobblePalsSaveData : PersistentState() {
                 tagNbt.putInt("BoundX", pos.x)
                 tagNbt.putInt("BoundY", pos.y)
                 tagNbt.putInt("BoundZ", pos.z)
+            }
+            pastureBinding?.let { binding ->
+                tagNbt.putString("PastureDimension", binding.dimensionId)
+                tagNbt.putInt("PastureX", binding.pos.x)
+                tagNbt.putInt("PastureY", binding.pos.y)
+                tagNbt.putInt("PastureZ", binding.pos.z)
             }
             assignmentsNbt.put(uuid.toString(), tagNbt)
         }
@@ -59,11 +68,9 @@ class CobblePalsSaveData : PersistentState() {
         return nbt
     }
 
-    private fun getAllAssignments(): Map<UUID, TagInstance> {
-        val result = mutableMapOf<UUID, TagInstance>()
-        // Iterate TagAssignmentManager's assignments
-        // We need access — let TagAssignmentManager expose a snapshot
-        TagAssignmentManager.forEach { uuid, tag -> result[uuid] = tag }
+    private fun getAllAssignments(): Map<UUID, Pair<TagInstance, com.cobblepalsworld.pasture.PastureBinding?>> {
+        val result = mutableMapOf<UUID, Pair<TagInstance, com.cobblepalsworld.pasture.PastureBinding?>>()
+        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding -> result[uuid] = tag to pastureBinding }
         return result
     }
 
@@ -78,6 +85,11 @@ class CobblePalsSaveData : PersistentState() {
 
         fun fromNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): CobblePalsSaveData {
             val data = CobblePalsSaveData()
+
+            TagAssignmentManager.clear()
+            InventoryManager.clear()
+            StateManager.clear()
+            ClaimManager.clear()
 
             // Load assignments
             if (nbt.contains("Assignments")) {
@@ -97,6 +109,14 @@ class CobblePalsSaveData : PersistentState() {
                             BlockPos(tagNbt.getInt("BoundX"), tagNbt.getInt("BoundY"), tagNbt.getInt("BoundZ"))
                         } else null
                         TagAssignmentManager.assign(uuid, TagInstance(type, filter, boundPos, augments))
+                        if (tagNbt.contains("PastureDimension")) {
+                            val pasturePos = BlockPos(
+                                tagNbt.getInt("PastureX"),
+                                tagNbt.getInt("PastureY"),
+                                tagNbt.getInt("PastureZ")
+                            )
+                            TagAssignmentManager.associateWithPasture(uuid, tagNbt.getString("PastureDimension"), pasturePos)
+                        }
                     } catch (e: Exception) {
                         CobblePalsWorld.LOGGER.warn("Failed to load assignment for $key", e)
                     }
@@ -125,6 +145,14 @@ class CobblePalsSaveData : PersistentState() {
                     }
                 }
             }
+
+            val orphanInventoryIds = mutableListOf<UUID>()
+            InventoryManager.forEach { uuid, _ ->
+                if (!TagAssignmentManager.has(uuid)) {
+                    orphanInventoryIds += uuid
+                }
+            }
+            orphanInventoryIds.forEach(InventoryManager::remove)
 
             return data
         }

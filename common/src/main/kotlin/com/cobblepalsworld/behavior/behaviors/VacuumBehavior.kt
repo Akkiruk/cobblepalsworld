@@ -5,6 +5,7 @@ import com.cobblepalsworld.behavior.TagBehavior
 import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -56,29 +57,33 @@ object VacuumBehavior : TagBehavior {
             entity.x + range, entity.y + range, entity.z + range
         )
 
-        // Collect items (limited by free slots and maxItemsPerTrip)
+        // Collect only what the inventory can actually accept this trip.
         val items = world.getEntitiesByClass(ItemEntity::class.java, searchBox) { itemEntity ->
             itemEntity.isAlive && FilterMatcher.matches(itemEntity.stack, tag.filter)
-        }
-        val inventory = com.cobblepalsworld.inventory.InventoryManager.getOrCreate(entity.pokemon)
+        }.sortedBy { it.squaredDistanceTo(entity) }
+        val inventory = InventoryManager.getOrCreate(entity.pokemon)
+        val plannedInventory = inventory.copyForPlanning()
         val maxItems = effectiveMaxItems(tag, state)
-        var freeSlots = (0 until inventory.size()).count { inventory.getStack(it).isEmpty }
-        var totalCollected = 0
+        var remainingTripCapacity = maxItems
         val collected = mutableListOf<net.minecraft.item.ItemStack>()
         for (itemEntity in items) {
-            if (freeSlots <= 0 || totalCollected >= maxItems) break
+            if (remainingTripCapacity <= 0) break
+
             val stack = itemEntity.stack
-            val canTake = minOf(stack.count, maxItems - totalCollected)
-            if (canTake < stack.count) {
-                // Partial pickup — only take what we can carry
-                collected.add(stack.copyWithCount(canTake))
-                stack.decrement(canTake)
-            } else {
+            val probe = stack.copyWithCount(minOf(stack.count, remainingTripCapacity))
+            val remainder = plannedInventory.insertStack(probe)
+            val canTake = probe.count - remainder.count
+            if (canTake <= 0) continue
+
+            if (canTake >= stack.count) {
                 collected.add(stack.copy())
                 itemEntity.discard()
+            } else {
+                collected.add(stack.copyWithCount(canTake))
+                stack.decrement(canTake)
             }
-            totalCollected += canTake
-            freeSlots--
+
+            remainingTripCapacity -= canTake
         }
 
         // XP Vacuum augment: collect XP orbs and award to nearest player

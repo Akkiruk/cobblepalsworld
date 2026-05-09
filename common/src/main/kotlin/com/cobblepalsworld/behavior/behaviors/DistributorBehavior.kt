@@ -6,7 +6,9 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -62,11 +64,11 @@ object DistributorBehavior : TagBehavior {
 
         // At source → extract items
         if (tag.boundPos != null && target == tag.boundPos) {
-            return extractItems(container, pokemonInv, tag, state)
+            return extractItems(world, container, pokemonInv, tag, state)
         }
 
         // At target → deposit items
-        depositItems(container, pokemonInv, tag, state)
+        depositItems(world, container, pokemonInv, tag, state)
         container.markDirty()
 
         // Advance round-robin
@@ -98,16 +100,15 @@ object DistributorBehavior : TagBehavior {
 
     private fun findTargetContainers(world: World, origin: BlockPos, tag: TagInstance, range: Int): List<BlockPos> {
         val sourcePos = tag.boundPos
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .filter { pos ->
-                ContainerFinder.isContainer(world, pos) && pos != sourcePos
-            }
-            .map { it.toImmutable() }
-            .toList()
+        return ContainerFinder.findAllMatching(world, origin, range, setOfNotNull(sourcePos))
     }
 
     private fun extractItems(
-        source: Inventory, pokemonInv: net.minecraft.inventory.SimpleInventory, tag: TagInstance, state: WorkerState
+        world: World,
+        source: Inventory,
+        pokemonInv: PokemonInventory,
+        tag: TagInstance,
+        state: WorkerState
     ): WorkResult {
         val maxItems = effectiveMaxItems(tag, state)
         var extracted = 0
@@ -117,22 +118,32 @@ object DistributorBehavior : TagBehavior {
             val stack = source.getStack(slot)
             if (stack.isEmpty || !FilterMatcher.matches(stack, tag.filter)) continue
 
-            val freeSlot = (0 until pokemonInv.size()).firstOrNull { pokemonInv.getStack(it).isEmpty } ?: break
-            val toTake = minOf(stack.count, maxItems - extracted)
-            pokemonInv.setStack(freeSlot, stack.copyWithCount(toTake))
-            stack.decrement(toTake)
+            val requested = stack.copyWithCount(minOf(stack.count, maxItems - extracted))
+            val remainder = pokemonInv.insertStack(requested)
+            val inserted = requested.count - remainder.count
+            if (inserted <= 0) continue
+
+            stack.decrement(inserted)
             if (stack.isEmpty) source.setStack(slot, ItemStack.EMPTY)
-            extracted += toTake
+            extracted += inserted
         }
         source.markDirty()
+        if (extracted > 0) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()  // Items stored directly for Phase 2 distribution
     }
 
     private fun depositItems(
-        target: Inventory, pokemonInv: net.minecraft.inventory.SimpleInventory, tag: TagInstance, state: WorkerState
+        world: World,
+        target: Inventory,
+        pokemonInv: PokemonInventory,
+        tag: TagInstance,
+        state: WorkerState
     ) {
         val maxItems = effectiveMaxItems(tag, state)
         var deposited = 0
+        var changed = false
 
         for (slot in 0 until pokemonInv.size()) {
             if (deposited >= maxItems) break
@@ -143,9 +154,16 @@ object DistributorBehavior : TagBehavior {
             val depositStack = stack.copyWithCount(toDeposit)
             val remaining = ContainerFinder.insertStack(target, depositStack)
             val actuallyDeposited = toDeposit - remaining.count
+            if (actuallyDeposited <= 0) continue
+
             stack.decrement(actuallyDeposited)
             if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
             deposited += actuallyDeposited
+            changed = true
+        }
+
+        if (changed) {
+            PastureWorkerManager.markDirtyNow(world)
         }
     }
 }

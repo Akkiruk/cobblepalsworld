@@ -11,6 +11,7 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.platform.ActivatorPlatformBridge
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
@@ -70,10 +71,9 @@ object ActivatorBehavior : TagBehavior {
                 ) boundPos else null
             }
 
-            return BlockPos.iterateOutwards(origin, range, range / 2, range)
-                .firstOrNull { pos ->
-                    ContainerFinder.isContainer(world, pos) && containerHasUsableItems(world, pos, tag)
-                }?.toImmutable()
+            return ContainerFinder.findClosestMatching(world, origin, range) { _, pos ->
+                containerHasUsableItems(world, pos, tag)
+            }
         }
 
         // Phase 2: Behave like a stationary router once stocked.
@@ -238,8 +238,10 @@ object ActivatorBehavior : TagBehavior {
     ) {
         val selectedSlot = player.inventory.selectedSlot
         val mainHandResult = player.getStackInHand(Hand.MAIN_HAND).copy()
+        var changed = false
         if (sourceSlot != null) {
             pokemonInv.setStack(sourceSlot, mainHandResult)
+            changed = true
         }
 
         for (slot in 0 until player.inventory.size()) {
@@ -247,7 +249,7 @@ object ActivatorBehavior : TagBehavior {
             val extra = player.inventory.getStack(slot)
             if (extra.isEmpty) continue
 
-            val remainder = insertIntoPokemonInventory(pokemonInv, extra.copy())
+            val remainder = pokemonInv.insertStack(extra.copy())
             if (!remainder.isEmpty) {
                 world.spawnEntity(
                     ItemEntity(
@@ -260,31 +262,12 @@ object ActivatorBehavior : TagBehavior {
                 )
             }
             player.inventory.setStack(slot, ItemStack.EMPTY)
-        }
-    }
-
-    private fun insertIntoPokemonInventory(inventory: PokemonInventory, stack: ItemStack): ItemStack {
-        val remaining = stack.copy()
-
-        for (slot in 0 until inventory.size()) {
-            val existing = inventory.getStack(slot)
-            if (existing.isEmpty) continue
-            if (!ItemStack.areItemsAndComponentsEqual(existing, remaining)) continue
-
-            val transferable = minOf(existing.maxCount - existing.count, remaining.count)
-            if (transferable <= 0) continue
-            existing.increment(transferable)
-            remaining.decrement(transferable)
-            if (remaining.isEmpty) return ItemStack.EMPTY
+            changed = true
         }
 
-        for (slot in 0 until inventory.size()) {
-            if (!inventory.getStack(slot).isEmpty) continue
-            inventory.setStack(slot, remaining.copy())
-            return ItemStack.EMPTY
+        if (changed) {
+            PastureWorkerManager.markDirtyNow(world)
         }
-
-        return remaining
     }
 
     private fun blacklistItemFailure(stack: ItemStack, exception: Exception) {
@@ -328,14 +311,19 @@ object ActivatorBehavior : TagBehavior {
             val stack = container.getStack(slot)
             if (!isUsableItem(stack, tag)) continue
 
-            val freeSlot = (0 until pokemonInv.size()).firstOrNull { pokemonInv.getStack(it).isEmpty } ?: break
-            val toTake = minOf(stack.count, maxItems - extracted)
-            pokemonInv.setStack(freeSlot, stack.copyWithCount(toTake))
-            stack.decrement(toTake)
+            val requested = stack.copyWithCount(minOf(stack.count, maxItems - extracted))
+            val remainder = pokemonInv.insertStack(requested)
+            val inserted = requested.count - remainder.count
+            if (inserted <= 0) continue
+
+            stack.decrement(inserted)
             if (stack.isEmpty) container.setStack(slot, ItemStack.EMPTY)
-            extracted += toTake
+            extracted += inserted
         }
         container.markDirty()
+        if (extracted > 0) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()
     }
 

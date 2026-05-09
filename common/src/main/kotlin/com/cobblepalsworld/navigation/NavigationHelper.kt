@@ -28,8 +28,9 @@ object NavigationHelper {
 
     fun isAtPosition(entity: PokemonEntity, pos: BlockPos, tolerance: Double = DEFAULT_ARRIVAL_TOLERANCE): Boolean {
         val dx = entity.x - (pos.x + 0.5)
+        val dy = entity.y - (pos.y + 0.5)
         val dz = entity.z - (pos.z + 0.5)
-        return dx * dx + dz * dz <= tolerance * tolerance
+        return dx * dx + dy * dy + dz * dz <= tolerance * tolerance
     }
 
     private fun normalizedSpeed(entity: PokemonEntity): Double {

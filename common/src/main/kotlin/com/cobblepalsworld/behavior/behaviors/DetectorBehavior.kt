@@ -41,9 +41,7 @@ object DetectorBehavior : TagBehavior {
             return if (ContainerFinder.isContainer(world, boundPos)) boundPos else null
         }
 
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos -> ContainerFinder.isContainer(world, pos) }
-            ?.toImmutable()
+        return ContainerFinder.findClosest(world, origin, range)
     }
 
     override fun doWork(

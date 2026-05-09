@@ -8,9 +8,25 @@ object InventoryManager {
     private val inventories = ConcurrentHashMap<UUID, PokemonInventory>()
 
     fun getOrCreate(pokemon: Pokemon): PokemonInventory {
-        return inventories.getOrPut(pokemon.uuid) {
-            PokemonInventory(pokemon.uuid, InventorySizeCalculator.calculate(pokemon))
+        val current = inventories[pokemon.uuid]
+        val desiredSlots = InventorySizeCalculator.calculate(pokemon)
+        if (current == null) {
+            return PokemonInventory(pokemon.uuid, desiredSlots).also { inventories[pokemon.uuid] = it }
         }
+
+        if (desiredSlots <= current.size()) {
+            return current
+        }
+
+        val expanded = PokemonInventory(pokemon.uuid, desiredSlots)
+        for (slot in 0 until current.size()) {
+            val stack = current.getStack(slot)
+            if (!stack.isEmpty) {
+                expanded.setStack(slot, stack.copy())
+            }
+        }
+        inventories[pokemon.uuid] = expanded
+        return expanded
     }
 
     fun get(pokemonId: UUID): PokemonInventory? = inventories[pokemonId]

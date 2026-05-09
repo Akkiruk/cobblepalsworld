@@ -13,7 +13,7 @@ interface TagBehavior {
 
     /**
      * True for dual-phase behaviors that extract items for their OWN use (Sender, Placer,
-     * Activator, Distributor, Dropper). When true, the engine won't force-deposit items
+        * Activator, Distributor). When true, the engine won't force-deposit items
      * at IDLE — instead it lets findTarget decide the next step.
      */
     val handlesOwnInventory: Boolean get() = false

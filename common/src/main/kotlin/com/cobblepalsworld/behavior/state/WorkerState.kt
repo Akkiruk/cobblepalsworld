@@ -10,6 +10,7 @@ class WorkerState(val pokemonId: UUID) {
     var cooldownUntil: Long = 0L
     var arrivalTick: Long? = null
     var lastPathfindTick: Long = 0L
+    var lastSeenTick: Long = 0L
 
     // --- Eco mode (inspired by Modular Routers) ---
     /** Ticks since this worker last did useful work. Reset on any successful action. */
@@ -47,6 +48,9 @@ class WorkerState(val pokemonId: UUID) {
         depositPos = null
         arrivalTick = null
         workSourcePos = null
+        idleTicks = 0
+        ecoMode = false
+        ecoSkipCounter = 0
     }
 
     fun markDidWork() {

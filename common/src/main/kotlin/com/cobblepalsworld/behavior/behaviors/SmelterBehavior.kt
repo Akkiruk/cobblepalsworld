@@ -42,10 +42,9 @@ object SmelterBehavior : TagBehavior {
             ) boundPos else null
         }
 
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos ->
-                ContainerFinder.isContainer(world, pos) && hasSmeltableItems(world, pos, tag)
-            }?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range) { _, pos ->
+            hasSmeltableItems(world, pos, tag)
+        }
     }
 
     override fun doWork(

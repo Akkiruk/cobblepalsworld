@@ -6,7 +6,9 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import net.minecraft.entity.passive.AnimalEntity
@@ -84,6 +86,7 @@ object ShepherdBehavior : TagBehavior {
                 recentlyFed[animal.uuid] = world.time
                 stack.decrement(1)
                 if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
+                PastureWorkerManager.markDirtyNow(world)
                 break
             }
         }
@@ -122,15 +125,14 @@ object ShepherdBehavior : TagBehavior {
 
     private fun findFoodContainer(world: World, origin: BlockPos, tag: TagInstance, range: Int): BlockPos? {
         val exclude = mutableSetOf(origin)
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos ->
-                pos !in exclude && ContainerFinder.isContainer(world, pos) && containerHasFood(world, pos)
-            }?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range, exclude) { _, pos ->
+            containerHasFood(world, pos)
+        }
     }
 
     private fun extractFood(
         world: World, target: BlockPos,
-        pokemonInv: net.minecraft.inventory.SimpleInventory
+        pokemonInv: PokemonInventory
     ): WorkResult {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
         var extracted = 0
@@ -141,14 +143,19 @@ object ShepherdBehavior : TagBehavior {
             val stack = container.getStack(slot)
             if (stack.isEmpty || !isBreedingFood(stack)) continue
 
-            val freeSlot = (0 until pokemonInv.size()).firstOrNull { pokemonInv.getStack(it).isEmpty } ?: break
-            val toTake = minOf(stack.count, maxItems - extracted)
-            pokemonInv.setStack(freeSlot, stack.copyWithCount(toTake))
-            stack.decrement(toTake)
+            val requested = stack.copyWithCount(minOf(stack.count, maxItems - extracted))
+            val remainder = pokemonInv.insertStack(requested)
+            val inserted = requested.count - remainder.count
+            if (inserted <= 0) continue
+
+            stack.decrement(inserted)
             if (stack.isEmpty) container.setStack(slot, ItemStack.EMPTY)
-            extracted += toTake
+            extracted += inserted
         }
         container.markDirty()
+        if (extracted > 0) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()
     }
 

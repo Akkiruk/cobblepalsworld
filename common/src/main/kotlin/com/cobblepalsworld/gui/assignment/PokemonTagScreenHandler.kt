@@ -26,7 +26,7 @@ class PokemonTagScreenHandler : ScreenHandler {
     private val tagInventory: SimpleInventory
     private val augmentInventory: SimpleInventory
     private val pokemonDisplayInventory: SimpleInventory
-    val pokemonId: UUID
+    val pokemonId: UUID?
     private val invData: PropertyDelegate
 
     val carryCount: Int get() = invData.get(0)
@@ -49,7 +49,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.tagInventory = SimpleInventory(1)
         this.augmentInventory = SimpleInventory(AUGMENT_SLOT_COUNT)
         this.pokemonDisplayInventory = SimpleInventory(9)
-        this.pokemonId = UUID(0, 0)
+        this.pokemonId = null
         this.invData = ArrayPropertyDelegate(4)
         setupSlots(playerInventory)
     }
@@ -170,7 +170,8 @@ class PokemonTagScreenHandler : ScreenHandler {
 
     override fun onClosed(player: PlayerEntity) {
         super.onClosed(player)
-        if (!player.world.isClient && pokemonId != UUID(0, 0)) {
+        val currentPokemonId = pokemonId
+        if (!player.world.isClient && currentPokemonId != null) {
             val stack = tagInventory.getStack(0)
             if (!stack.isEmpty && stack.item is TagItem) {
                 val tagItem = stack.item as TagItem
@@ -178,21 +179,21 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val boundPos = TagItem.getBoundPos(stack)
                 val augments = readAugmentsFromSlots()
 
-                val oldTag = TagAssignmentManager.get(pokemonId)
+                val oldTag = TagAssignmentManager.get(currentPokemonId)
                 val newTag = TagInstance(tagItem.tagType, filter, boundPos, augments)
 
                 // If tag type changed or was re-configured, clean up old work state
                 if (oldTag != null && (oldTag.type != newTag.type || oldTag != newTag)) {
-                    TagExecutionEngine.cleanup(pokemonId, player.world, player.blockPos)
+                    TagExecutionEngine.cleanup(currentPokemonId, player.world, player.blockPos)
                 }
 
-                TagAssignmentManager.assign(pokemonId, newTag)
+                TagAssignmentManager.assign(currentPokemonId, newTag)
                 CobblePalsSaveData.markDirty(player.world as net.minecraft.server.world.ServerWorld)
             } else {
                 // Tag removed — full cleanup of active work
-                val hadTag = TagAssignmentManager.remove(pokemonId)
+                val hadTag = TagAssignmentManager.remove(currentPokemonId)
                 if (hadTag != null) {
-                    TagExecutionEngine.cleanup(pokemonId, player.world, player.blockPos)
+                    TagExecutionEngine.cleanup(currentPokemonId, player.world, player.blockPos)
                     CobblePalsSaveData.markDirty(player.world as net.minecraft.server.world.ServerWorld)
                 }
             }

@@ -63,6 +63,8 @@ object TagExecutionEngine {
         if (tag.augments.isRedstoneControlled() && world.isReceivingRedstonePower(origin)) return
 
         val state = StateManager.getOrCreate(pokemon.uuid)
+        state.lastSeenTick = world.time
+        state.targetPos?.let { ClaimManager.touch(it, pokemon.uuid, world) }
 
         // --- Eco mode: idle workers tick at a reduced rate to save CPU ---
         if (state.phase == WorkerPhase.IDLE) {
@@ -118,6 +120,7 @@ object TagExecutionEngine {
                     ).also { world.spawnEntity(it) }
                 }
             }
+            PastureWorkerManager.markDirtyNow(world)
         }
     }
 
@@ -311,22 +314,7 @@ object TagExecutionEngine {
     private fun storeItems(world: World, entity: PokemonEntity, pokemon: Pokemon, items: List<ItemStack>) {
         val inventory = InventoryManager.getOrCreate(pokemon)
         for (item in items) {
-            val remaining = item.copy()
-            for (slot in 0 until inventory.size()) {
-                val existing = inventory.getStack(slot)
-                if (existing.isEmpty) {
-                    inventory.setStack(slot, remaining.copy())
-                    remaining.count = 0
-                    break
-                } else if (ItemStack.areItemsAndComponentsEqual(existing, remaining) && existing.count < existing.maxCount) {
-                    val transfer = minOf(remaining.count, existing.maxCount - existing.count)
-                    existing.increment(transfer)
-                    inventory.setStack(slot, existing)
-                    remaining.decrement(transfer)
-                    if (remaining.isEmpty) break
-                }
-            }
-            // Drop overflow as ItemEntity instead of losing items
+            val remaining = inventory.insertStack(item)
             if (!remaining.isEmpty) {
                 net.minecraft.entity.ItemEntity(world, entity.x, entity.y, entity.z, remaining).also {
                     world.spawnEntity(it)

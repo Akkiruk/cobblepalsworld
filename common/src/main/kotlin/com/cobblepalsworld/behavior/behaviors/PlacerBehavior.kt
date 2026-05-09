@@ -6,8 +6,10 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -117,17 +119,15 @@ object PlacerBehavior : TagBehavior {
         val exclude = mutableSetOf(origin)
         tag.boundPos?.let { exclude.add(it) }
 
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos ->
-                pos !in exclude
-                    && ContainerFinder.isContainer(world, pos)
-                    && containerHasBlockItems(world, pos, tag.filter)
-            }?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range, exclude) { _, pos ->
+            containerHasBlockItems(world, pos, tag.filter)
+        }
     }
 
     private fun extractFromContainer(
         world: World, target: BlockPos,
-        pokemonInventory: net.minecraft.inventory.SimpleInventory, filter: TagFilter
+        pokemonInventory: PokemonInventory,
+        filter: TagFilter
     ): WorkResult {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
 
@@ -138,16 +138,13 @@ object PlacerBehavior : TagBehavior {
 
             // Take one stack (or partial) and carry it
             val toTake = stack.copyWithCount(1)
+            val remainder = pokemonInventory.insertStack(toTake)
+            if (!remainder.isEmpty) continue
+
             stack.decrement(1)
             container.setStack(slot, if (stack.isEmpty) ItemStack.EMPTY else stack)
             container.markDirty()
-
-            for (i in 0 until pokemonInventory.size()) {
-                if (pokemonInventory.getStack(i).isEmpty) {
-                    pokemonInventory.setStack(i, toTake)
-                    break
-                }
-            }
+            PastureWorkerManager.markDirtyNow(world)
             return WorkResult.Done()
         }
 
@@ -179,6 +176,7 @@ object PlacerBehavior : TagBehavior {
 
             stack.decrement(1)
             pokemonInventory.setStack(slot, if (stack.isEmpty) ItemStack.EMPTY else stack)
+            PastureWorkerManager.markDirtyNow(world)
             return WorkResult.Done()
         }
         return WorkResult.Done()

@@ -12,17 +12,54 @@ import net.minecraft.util.math.Box
 import net.minecraft.world.World
 
 object ContainerFinder {
+    private fun searchPositions(origin: BlockPos, range: Int): Iterable<BlockPos> =
+        BlockPos.iterateOutwards(origin, range, range, range)
 
     fun findClosest(world: World, origin: BlockPos, range: Int = 16): BlockPos? {
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { isContainer(world, it) }
-            ?.toImmutable()
+        return findClosestMatching(world, origin, range)
     }
 
     fun findClosestExcluding(world: World, origin: BlockPos, range: Int = 16, exclude: Set<BlockPos>): BlockPos? {
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { isContainer(world, it) && it !in exclude }
-            ?.toImmutable()
+        return findClosestMatching(world, origin, range, exclude)
+    }
+
+    fun findClosestMatching(
+        world: World,
+        origin: BlockPos,
+        range: Int = 16,
+        exclude: Set<BlockPos> = emptySet(),
+        predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
+    ): BlockPos? {
+        for (pos in searchPositions(origin, range)) {
+            val immutablePos = pos.toImmutable()
+            if (immutablePos in exclude) continue
+
+            val inventory = getInventoryAt(world, immutablePos) ?: continue
+            if (predicate(inventory, immutablePos)) {
+                return immutablePos
+            }
+        }
+        return null
+    }
+
+    fun findAllMatching(
+        world: World,
+        origin: BlockPos,
+        range: Int = 16,
+        exclude: Set<BlockPos> = emptySet(),
+        predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
+    ): List<BlockPos> {
+        val matches = mutableListOf<BlockPos>()
+        for (pos in searchPositions(origin, range)) {
+            val immutablePos = pos.toImmutable()
+            if (immutablePos in exclude) continue
+
+            val inventory = getInventoryAt(world, immutablePos) ?: continue
+            if (predicate(inventory, immutablePos)) {
+                matches += immutablePos
+            }
+        }
+        return matches
     }
 
     fun isContainer(world: World, pos: BlockPos): Boolean {

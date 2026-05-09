@@ -6,8 +6,10 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -67,7 +69,7 @@ object IlluminatorBehavior : TagBehavior {
 
         // At container → extract torches
         if (ContainerFinder.isContainer(world, target)) {
-            return extractTorches(world, target, pokemonInv, tag)
+            return extractTorches(world, target, pokemonInv, tag, state)
         }
 
         // At dark spot → place torch
@@ -99,32 +101,39 @@ object IlluminatorBehavior : TagBehavior {
             return if (ContainerFinder.isContainer(world, boundPos) && containerHasTorches(world, boundPos))
                 boundPos else null
         }
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos -> ContainerFinder.isContainer(world, pos) && containerHasTorches(world, pos) }
-            ?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range) { _, pos ->
+            containerHasTorches(world, pos)
+        }
     }
 
     private fun extractTorches(
         world: World, target: BlockPos,
-        pokemonInv: net.minecraft.inventory.SimpleInventory, tag: TagInstance
+        pokemonInv: PokemonInventory,
+        tag: TagInstance,
+        state: WorkerState
     ): WorkResult {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
-        val maxItems = effectiveMaxItems(tag, state = WorkerState(java.util.UUID.randomUUID())) // temp
         var extracted = 0
+        val maxCarry = minOf(16, effectiveMaxItems(tag, state))
 
         for (slot in 0 until container.size()) {
-            if (extracted >= 16) break // Carry reasonable amount
+            if (extracted >= maxCarry) break
             val stack = container.getStack(slot)
             if (stack.isEmpty || !isTorchItem(stack)) continue
 
-            val freeSlot = (0 until pokemonInv.size()).firstOrNull { pokemonInv.getStack(it).isEmpty } ?: break
-            val toTake = minOf(stack.count, 16 - extracted)
-            pokemonInv.setStack(freeSlot, stack.copyWithCount(toTake))
-            stack.decrement(toTake)
+            val requested = stack.copyWithCount(minOf(stack.count, maxCarry - extracted))
+            val remainder = pokemonInv.insertStack(requested)
+            val inserted = requested.count - remainder.count
+            if (inserted <= 0) continue
+
+            stack.decrement(inserted)
             if (stack.isEmpty) container.setStack(slot, ItemStack.EMPTY)
-            extracted += toTake
+            extracted += inserted
         }
         container.markDirty()
+        if (extracted > 0) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()
     }
 
@@ -149,6 +158,7 @@ object IlluminatorBehavior : TagBehavior {
                 }
                 stack.decrement(1)
                 if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
+                PastureWorkerManager.markDirtyNow(world)
                 return WorkResult.Done()
             }
         }

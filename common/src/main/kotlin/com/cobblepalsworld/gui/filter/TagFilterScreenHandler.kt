@@ -18,6 +18,7 @@ class TagFilterScreenHandler : ScreenHandler {
     private val filterInventory: SimpleInventory
     private val filterData: PropertyDelegate
     private val itemSlot: Int
+    private val trackedTagStack: ItemStack?
     private val matchTags: List<String>
     private val matchModIds: List<String>
 
@@ -26,6 +27,7 @@ class TagFilterScreenHandler : ScreenHandler {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
         this.filterData = ArrayPropertyDelegate(2)
         this.itemSlot = -1
+        this.trackedTagStack = null
         this.matchTags = emptyList()
         this.matchModIds = emptyList()
         setupSlots(playerInventory)
@@ -38,6 +40,7 @@ class TagFilterScreenHandler : ScreenHandler {
         this.itemSlot = if (hand == Hand.MAIN_HAND) playerInventory.selectedSlot else 40
 
         val stack = playerInventory.player.getStackInHand(hand)
+        this.trackedTagStack = stack
         if (stack.item is TagItem) {
             val registries = playerInventory.player.world.registryManager
             val filter = TagItem.getFilter(stack, registries)
@@ -79,8 +82,18 @@ class TagFilterScreenHandler : ScreenHandler {
     val isWhitelist: Boolean get() = filterData.get(0) != 0
     val isMatchNbt: Boolean get() = filterData.get(1) != 0
 
+    private val protectedScreenSlotIndex: Int
+        get() = when (itemSlot) {
+            in 9..35 -> TagFilter.MAX_FILTER_SLOTS + (itemSlot - 9)
+            in 0..8 -> TagFilter.MAX_FILTER_SLOTS + 27 + itemSlot
+            else -> -1
+        }
+
     // Ghost slot behavior: clicking copies cursor item (count=1) without consuming it
     override fun onSlotClick(slotIndex: Int, button: Int, actionType: SlotActionType, player: PlayerEntity) {
+        if (slotIndex == protectedScreenSlotIndex) return
+        if (actionType == SlotActionType.SWAP && itemSlot in 0..8 && button == itemSlot) return
+
         if (slotIndex in 0 until TagFilter.MAX_FILTER_SLOTS) {
             val cursorStack = cursorStack
             if (cursorStack.isEmpty) {
@@ -104,6 +117,7 @@ class TagFilterScreenHandler : ScreenHandler {
 
     // Shift-click from player inventory copies item into first empty ghost slot
     override fun quickMove(player: PlayerEntity, slotIndex: Int): ItemStack {
+        if (slotIndex == protectedScreenSlotIndex) return ItemStack.EMPTY
         if (slotIndex in 0 until TagFilter.MAX_FILTER_SLOTS) return ItemStack.EMPTY
         val slot = slots.getOrNull(slotIndex) ?: return ItemStack.EMPTY
         if (!slot.hasStack()) return ItemStack.EMPTY
@@ -121,7 +135,7 @@ class TagFilterScreenHandler : ScreenHandler {
     override fun onClosed(player: PlayerEntity) {
         super.onClosed(player)
         if (!player.world.isClient && itemSlot >= 0) {
-            val stack = player.inventory.getStack(itemSlot)
+            val stack = trackedTagStack ?: player.inventory.getStack(itemSlot)
             if (!stack.isEmpty && stack.item is TagItem) {
                 val items = (0 until TagFilter.MAX_FILTER_SLOTS)
                     .map { filterInventory.getStack(it) }

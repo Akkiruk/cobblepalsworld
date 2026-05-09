@@ -6,8 +6,10 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -74,13 +76,9 @@ object SenderBehavior : TagBehavior {
     ): BlockPos? {
         // Exclude the bound container — that's the DESTINATION, not the source
         val excludeBound = tag.boundPos
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos ->
-                (excludeBound == null || pos != excludeBound)
-                    && ContainerFinder.isContainer(world, pos)
-                    && !ClaimManager.isClaimedByOther(pos, pokemonId, world)
-                    && containerHasMatchingItems(world, pos, tag.filter)
-            }?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range, setOfNotNull(excludeBound)) { _, pos ->
+            !ClaimManager.isClaimedByOther(pos, pokemonId, world) && containerHasMatchingItems(world, pos, tag.filter)
+        }
     }
 
     private fun findDepositTarget(
@@ -91,14 +89,14 @@ object SenderBehavior : TagBehavior {
             return if (ContainerFinder.isContainer(world, boundPos) && containerHasSpace(world, boundPos))
                 boundPos else null
         }
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
-            .firstOrNull { pos -> ContainerFinder.isContainer(world, pos) && containerHasSpace(world, pos) }
-            ?.toImmutable()
+        return ContainerFinder.findClosestMatching(world, origin, range) { _, pos ->
+            containerHasSpace(world, pos)
+        }
     }
 
     private fun extractFromSource(
         world: World, target: BlockPos,
-        pokemonInv: net.minecraft.inventory.SimpleInventory,
+        pokemonInv: PokemonInventory,
         tag: TagInstance, state: WorkerState
     ): WorkResult {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
@@ -110,32 +108,42 @@ object SenderBehavior : TagBehavior {
             val stack = container.getStack(slot)
             if (stack.isEmpty || !FilterMatcher.matches(stack, tag.filter)) continue
 
-            val freeSlot = (0 until pokemonInv.size()).firstOrNull { pokemonInv.getStack(it).isEmpty } ?: break
-            val toTake = minOf(stack.count, maxItems - itemsExtracted)
-            pokemonInv.setStack(freeSlot, stack.copyWithCount(toTake))
-            stack.decrement(toTake)
+            val requested = stack.copyWithCount(minOf(stack.count, maxItems - itemsExtracted))
+            val remainder = pokemonInv.insertStack(requested)
+            val inserted = requested.count - remainder.count
+            if (inserted <= 0) continue
+
+            stack.decrement(inserted)
             if (stack.isEmpty) container.setStack(slot, ItemStack.EMPTY)
-            itemsExtracted += toTake
+            itemsExtracted += inserted
         }
         container.markDirty()
+        if (itemsExtracted > 0) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()  // Items stored directly — engine won't deposit-first
     }
 
     private fun depositToTarget(
         world: World, target: BlockPos,
-        pokemonInv: net.minecraft.inventory.SimpleInventory,
+        pokemonInv: PokemonInventory,
         tag: TagInstance
     ): WorkResult {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
+        var changed = false
 
         for (slot in 0 until pokemonInv.size()) {
             val stack = pokemonInv.getStack(slot)
             if (stack.isEmpty || !FilterMatcher.matches(stack, tag.filter)) continue
 
             val remaining = ContainerFinder.insertStack(container, stack.copy())
+            if (remaining.count != stack.count) changed = true
             pokemonInv.setStack(slot, remaining)
         }
         container.markDirty()
+        if (changed) {
+            PastureWorkerManager.markDirtyNow(world)
+        }
         return WorkResult.Done()
     }
 
