@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "IRI",
+    "HCH",
+    "IRI"
+  ],
+  "key": {
+    "I": { "item": "minecraft:iron_ingot" },
+    "R": { "item": "minecraft:redstone" },
+    "H": { "item": "minecraft:hopper" },
+    "C": { "item": "minecraft:comparator" }
+  },
+  "result": {
+    "id": "cobblepalsworld:router",
+    "count": 1
+  }
+}

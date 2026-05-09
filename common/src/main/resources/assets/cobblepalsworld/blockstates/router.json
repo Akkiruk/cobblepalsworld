@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,powered=false": { "model": "cobblepalsworld:block/router" },
+    "facing=east,powered=false": { "model": "cobblepalsworld:block/router", "y": 90 },
+    "facing=south,powered=false": { "model": "cobblepalsworld:block/router", "y": 180 },
+    "facing=west,powered=false": { "model": "cobblepalsworld:block/router", "y": 270 },
+    "facing=north,powered=true": { "model": "cobblepalsworld:block/router" },
+    "facing=east,powered=true": { "model": "cobblepalsworld:block/router", "y": 90 },
+    "facing=south,powered=true": { "model": "cobblepalsworld:block/router", "y": 180 },
+    "facing=west,powered=true": { "model": "cobblepalsworld:block/router", "y": 270 }
+  }
+}

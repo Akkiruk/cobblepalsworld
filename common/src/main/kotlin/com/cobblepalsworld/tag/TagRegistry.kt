@@ -2,6 +2,7 @@ package com.cobblepalsworld.tag
 
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentRegistry
+import com.cobblepalsworld.router.RouterRegistry
 import dev.architectury.registry.CreativeTabRegistry
 import dev.architectury.registry.registries.DeferredRegister
 import dev.architectury.registry.registries.RegistrySupplier
@@ -27,6 +28,7 @@ object TagRegistry {
             it.icon { ItemStack(registered[TagType.BREAKER]?.get() ?: return@icon ItemStack.EMPTY) }
             it.displayName(Text.translatable("itemGroup.cobblepalsworld"))
             it.entries { _, entries ->
+                RouterRegistry.allStacks().forEach { stack -> entries.add(stack) }
                 registered.values.forEach { supplier -> entries.add(ItemStack(supplier.get())) }
                 AugmentRegistry.allStacks().forEach { stack -> entries.add(stack) }
             }

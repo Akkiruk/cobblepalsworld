@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " O ",
+    "LNL",
+    " O "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "O": { "item": "minecraft:obsidian" },
+    "L": { "item": "minecraft:lava_bucket" }
+  },
+  "result": {
+    "id": "cobblepalsworld:void_tag",
+    "count": 1
+  }
+}

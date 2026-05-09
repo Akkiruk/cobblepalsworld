@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5
+
+- Added a router block with its own inventory, module slots, upgrade slots, comparator support, hopper access, owner security, and ordered installed-module execution.
+- Added router-native courier, stasher, dropper, flinger, void, player, planter, activator, vacuum, and lookout execution so installed tags can act independently of a Pokemon worker.
+- Added dedicated flinger and void tags for the pasture worker system, plus router recipes, models, blockstate, loot table, and language entries.
+
 ## 0.1.4
 
 - Added advanced tag settings for match-any/all filters, regulator amounts, redstone modes, activator action modes, and multi-target logistics routing.

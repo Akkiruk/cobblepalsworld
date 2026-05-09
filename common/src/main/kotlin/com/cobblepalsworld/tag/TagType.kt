@@ -120,6 +120,23 @@ enum class TagType(
         workParticle = ParticleTypes.SMOKE,
         workSound = SoundEvents.ENTITY_ITEM_FRAME_REMOVE_ITEM
     ),
+    FLINGER(
+        id = "flinger",
+        bindingMode = BindingMode.POSITION,
+        description = "Launches matching items from containers toward a bound target or forward direction",
+        color = Formatting.GRAY,
+        arrivalParticle = ParticleTypes.CLOUD,
+        workParticle = ParticleTypes.CLOUD,
+        workSound = SoundEvents.ENTITY_ARROW_SHOOT
+    ),
+    VOID(
+        id = "void",
+        description = "Deletes matching items after pulling them into its carry buffer",
+        color = Formatting.DARK_RED,
+        arrivalParticle = ParticleTypes.LARGE_SMOKE,
+        workParticle = ParticleTypes.LARGE_SMOKE,
+        workSound = SoundEvents.BLOCK_LAVA_EXTINGUISH
+    ),
     PLAYER(
         id = "player",
         description = "Delivers matching items from containers into the owner's inventory",

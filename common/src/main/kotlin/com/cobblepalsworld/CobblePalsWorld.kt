@@ -8,6 +8,7 @@ import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.router.RouterRegistry
 import com.cobblepalsworld.tag.TagRegistry
 import dev.architectury.event.EventResult
 import dev.architectury.event.events.common.InteractionEvent
@@ -28,6 +29,7 @@ object CobblePalsWorld {
 
     fun init() {
         LOGGER.info("Launching {}...", MODID)
+        RouterRegistry.init()
         TagRegistry.init()
         AugmentRegistry.init()
         MenuTypes.init()
@@ -47,6 +49,8 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(SenderBehavior)      // Courier
         TagBehaviorRegistry.register(DistributorBehavior)  // Stasher
         TagBehaviorRegistry.register(DropperBehavior)
+        TagBehaviorRegistry.register(FlingerBehavior)
+        TagBehaviorRegistry.register(VoidBehavior)
         TagBehaviorRegistry.register(PlayerBehavior)
         TagBehaviorRegistry.register(PlacerBehavior)       // Planter
         TagBehaviorRegistry.register(IlluminatorBehavior)
