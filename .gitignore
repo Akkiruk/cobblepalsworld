@@ -1,0 +1,12 @@
+.gradle/
+.kotlin/
+build/
+common/build/
+fabric/build/
+neoforge/build/
+out/
+run/
+audits/
+build-log.txt
+*.log
+*.hprof

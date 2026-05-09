@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " D ",
+    "DND",
+    " D "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "D": { "item": "minecraft:dropper" }
+  },
+  "result": {
+    "id": "cobblepalsworld:dropper_tag",
+    "count": 1
+  }
+}

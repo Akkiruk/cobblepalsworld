@@ -1,0 +1,37 @@
+modLoader = "kotlinforforge"
+loaderVersion = "[5.3,)"
+issueTrackerURL = "https://github.com/Akkiruk/cobblepalsworld/issues"
+license = "MPL-2.0"
+
+[[mods]]
+modId = "cobblepalsworld"
+version = "${version}"
+displayName = "CobblePals World"
+authors = "Akkiruk"
+description = '''
+Pokémon-powered modular automation. Assign Tags to your Pokémon and watch them work.
+'''
+
+[[dependencies.cobblepalsworld]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.cobblepalsworld]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.cobblepalsworld]]
+modId = "cobblemon"
+type = "required"
+versionRange = "[1.7.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "cobblepalsworld.mixins.json"

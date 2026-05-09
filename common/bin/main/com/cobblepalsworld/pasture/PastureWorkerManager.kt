@@ -1,0 +1,165 @@
+package com.cobblepalsworld.pasture
+
+import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
+import com.cobblemon.mod.common.entity.PoseType
+import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.cobblepalsworld.behavior.TagExecutionEngine
+import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.navigation.NavigationHelper
+import com.cobblepalsworld.persistence.CobblePalsSaveData
+import net.minecraft.server.world.ServerWorld
+import net.minecraft.util.math.BlockPos
+import net.minecraft.world.World
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+object PastureWorkerManager {
+    private val tickInterval get() = ConfigManager.config.general.tickInterval
+
+    // Track previously-tethered UUIDs per pasture for recall cleanup
+    private val previousTethered = ConcurrentHashMap<BlockPos, MutableSet<UUID>>()
+    // Track previously-tagged UUIDs per pasture for tag removal cleanup
+    private val previouslyTagged = ConcurrentHashMap<BlockPos, MutableSet<UUID>>()
+    private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
+    private val initializedWorlds = ConcurrentHashMap.newKeySet<net.minecraft.registry.RegistryKey<World>>()
+
+    fun tickPasture(world: World, pos: BlockPos, pasture: PokemonPastureBlockEntity) {
+        if (world.isClient) return
+        val serverWorld = world as? ServerWorld ?: return
+
+        // Load persisted data on first tick per world
+        if (initializedWorlds.add(serverWorld.registryKey)) {
+            CobblePalsSaveData.get(serverWorld)
+        }
+
+        // Periodic auto-save
+        if (world.time % SAVE_INTERVAL == 0L) {
+            CobblePalsSaveData.markDirty(serverWorld)
+        }
+
+        // Stagger pasture ticks — offset by position hash
+        if ((world.time + (pos.hashCode().toLong() and 0x7FFFFFFF)) % tickInterval != 0L) return
+
+        val tethered = pasture.tetheredPokemon
+
+        // Detect recalled Pokémon and clean up their state
+        val currentIds = mutableSetOf<UUID>()
+        for (t in tethered) {
+            try { currentIds.add(t.pokemonId) } catch (_: Exception) {}
+        }
+        val prevIds = previousTethered.getOrPut(pos) { mutableSetOf() }
+        for (prevId in prevIds) {
+            if (prevId !in currentIds) {
+                TagExecutionEngine.cleanup(prevId, world, pos)
+            }
+        }
+        prevIds.clear()
+        prevIds.addAll(currentIds)
+
+        // Detect tag removal: clean up state for pokemon that lost their tag
+        val currentlyTagged = mutableSetOf<UUID>()
+        for (id in currentIds) {
+            if (TagAssignmentManager.has(id)) currentlyTagged.add(id)
+        }
+        val prevTagged = previouslyTagged.getOrPut(pos) { mutableSetOf() }
+        for (prevId in prevTagged) {
+            if (prevId in currentIds && prevId !in currentlyTagged) {
+                // Pokemon is still tethered but lost its tag — clean up work state
+                TagExecutionEngine.cleanup(prevId, world, pos)
+            }
+        }
+        prevTagged.clear()
+        prevTagged.addAll(currentlyTagged)
+
+        // Tick each tethered Pokémon that has a tag assigned (capped by maxWorkersPerPasture)
+        var workerCount = 0
+        val maxWorkers = ConfigManager.config.general.maxWorkersPerPasture
+        for (tethering in tethered) {
+            val pokemon = try { tethering.getPokemon() } catch (_: Exception) { continue }
+                ?: continue
+            if (pokemon.isFainted()) continue
+
+            val entity = pokemon.entity ?: continue
+            val poseType = entity.dataTracker.get(PokemonEntity.POSE_TYPE)
+            if (poseType == PoseType.SLEEP) continue
+
+            val tag = TagAssignmentManager.get(pokemon.uuid)
+            if (tag != null) {
+                if (workerCount >= maxWorkers) continue
+                try {
+                    TagExecutionEngine.tick(world, entity, pokemon, tag, pos)
+                    workerCount++
+                } catch (e: Exception) {
+                    com.cobblepalsworld.CobblePalsWorld.LOGGER.error("Error ticking Pokémon worker", e)
+                }
+            } else {
+                // Idle pokemon (no tag): wander within 4 blocks of pasture
+                tickIdleWander(world, entity, pos)
+            }
+        }
+    }
+
+    private const val WANDER_RADIUS = 4
+    private const val WANDER_INTERVAL = 80L // attempt wander every ~4 seconds
+
+    private fun tickIdleWander(world: World, entity: PokemonEntity, pasturePos: BlockPos) {
+        if (world.time % WANDER_INTERVAL != 0L) return
+
+        val dx = entity.x - (pasturePos.x + 0.5)
+        val dz = entity.z - (pasturePos.z + 0.5)
+        val distSq = dx * dx + dz * dz
+
+        if (distSq > (WANDER_RADIUS + 1) * (WANDER_RADIUS + 1)) {
+            // Too far — walk back toward pasture
+            entity.navigation.startMovingTo(
+                pasturePos.x + 0.5, pasturePos.y.toDouble(), pasturePos.z + 0.5, 0.6
+            )
+            return
+        }
+
+        // Random wander within radius
+        val random = world.random
+        val targetX = pasturePos.x + random.nextInt(WANDER_RADIUS * 2 + 1) - WANDER_RADIUS
+        val targetZ = pasturePos.z + random.nextInt(WANDER_RADIUS * 2 + 1) - WANDER_RADIUS
+        val targetY = world.getTopY(net.minecraft.world.Heightmap.Type.WORLD_SURFACE, targetX, targetZ)
+
+        entity.navigation.startMovingTo(
+            targetX + 0.5, targetY.toDouble(), targetZ + 0.5, 0.5
+        )
+    }
+
+    fun onPastureBroken(pasture: PokemonPastureBlockEntity) {
+        val world = pasture.world ?: return
+        if (world.isClient) return
+
+        for (tethering in pasture.tetheredPokemon) {
+            try {
+                // Clean up worker state and drop carried items at pasture location
+                TagExecutionEngine.cleanup(tethering.pokemonId, world, pasture.pos)
+                // Remove tag assignment data
+                TagAssignmentManager.remove(tethering.pokemonId)
+            } catch (_: Exception) {}
+        }
+        previousTethered.remove(pasture.pos)
+        previouslyTagged.remove(pasture.pos)
+
+        // Mark save data dirty so cleanup is persisted
+        (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
+    }
+
+    fun onServerStopping(server: net.minecraft.server.MinecraftServer) {
+        // Force-save all data before shutdown to prevent item loss
+        for (world in server.worlds) {
+            CobblePalsSaveData.markDirty(world)
+        }
+        // Reset per-world init state for potential re-start (singleplayer)
+        initializedWorlds.clear()
+        previousTethered.clear()
+        previouslyTagged.clear()
+    }
+
+    fun markDirtyNow(world: World) {
+        (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
+    }
+}

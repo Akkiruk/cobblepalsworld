@@ -1,0 +1,31 @@
+package com.cobblepalsworld.neoforge
+
+import com.cobblepalsworld.platform.ActivatorPlatformBridge
+import net.minecraft.entity.Entity
+import net.minecraft.item.ItemStack
+import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.server.world.ServerWorld
+import net.minecraft.util.Hand
+import net.minecraft.util.hit.BlockHitResult
+import net.neoforged.neoforge.common.util.FakePlayerFactory
+
+object NeoForgeActivatorPlatformBridge : ActivatorPlatformBridge.Hooks {
+    override fun fakePlayer(world: ServerWorld): ServerPlayerEntity = FakePlayerFactory.getMinecraft(world)
+
+    override fun useItemOnBlock(
+        player: ServerPlayerEntity,
+        world: ServerWorld,
+        stack: ItemStack,
+        hitResult: BlockHitResult
+    ): Boolean {
+        return player.interactionManager.interactBlock(player, world, stack, Hand.MAIN_HAND, hitResult).isAccepted
+    }
+
+    override fun useItem(player: ServerPlayerEntity, world: ServerWorld, stack: ItemStack): Boolean {
+        return player.interactionManager.interactItem(player, world, stack, Hand.MAIN_HAND).isAccepted
+    }
+
+    override fun interactEntity(player: ServerPlayerEntity, target: Entity): Boolean {
+        return player.interact(target, Hand.MAIN_HAND).isAccepted
+    }
+}

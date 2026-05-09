@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " S ",
+    "SNS",
+    " S "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "S": { "item": "minecraft:iron_sword" }
+  },
+  "result": {
+    "id": "cobblepalsworld:guardian_tag",
+    "count": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " R ",
+    "RNR",
+    " R "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "R": { "item": "minecraft:redstone" }
+  },
+  "result": {
+    "id": "cobblepalsworld:redstone_augment",
+    "count": 1
+  }
+}

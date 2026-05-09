@@ -1,0 +1,94 @@
+package com.cobblepalsworld
+
+import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.cobblepalsworld.augment.AugmentRegistry
+import com.cobblepalsworld.behavior.TagBehaviorRegistry
+import com.cobblepalsworld.behavior.behaviors.*
+import com.cobblepalsworld.gui.MenuTypes
+import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
+import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.tag.TagRegistry
+import dev.architectury.event.EventResult
+import dev.architectury.event.events.common.InteractionEvent
+import dev.architectury.event.events.common.LifecycleEvent
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory
+import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.text.Text
+import net.minecraft.util.Formatting
+import net.minecraft.util.Hand
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
+
+object CobblePalsWorld {
+    const val MODID = "cobblepalsworld"
+
+    @JvmField
+    val LOGGER: Logger = LogManager.getLogger(MODID)
+
+    fun init() {
+        LOGGER.info("Launching {}...", MODID)
+        TagRegistry.init()
+        AugmentRegistry.init()
+        MenuTypes.init()
+        CobblePalsNetworking.registerServer()
+        registerBehaviors()
+        registerInteractions()
+        registerLifecycle()
+    }
+
+    private fun registerBehaviors() {
+        TagBehaviorRegistry.register(BreakerBehavior)
+        TagBehaviorRegistry.register(GuardianBehavior)
+        TagBehaviorRegistry.register(HarvesterBehavior)
+        TagBehaviorRegistry.register(FisherBehavior)
+        TagBehaviorRegistry.register(VacuumBehavior)
+        TagBehaviorRegistry.register(SmelterBehavior)
+        TagBehaviorRegistry.register(SenderBehavior)      // Courier
+        TagBehaviorRegistry.register(DistributorBehavior)  // Stasher
+        TagBehaviorRegistry.register(PlacerBehavior)       // Planter
+        TagBehaviorRegistry.register(IlluminatorBehavior)
+        TagBehaviorRegistry.register(ActivatorBehavior)
+        TagBehaviorRegistry.register(ShepherdBehavior)
+        TagBehaviorRegistry.register(DetectorBehavior)     // Lookout
+        TagBehaviorRegistry.register(ScoutBehavior)
+        TagBehaviorRegistry.register(WeatherworkerBehavior)
+    }
+
+    private fun registerInteractions() {
+        // Shift + right-click an owned Pokémon → open tag assignment GUI
+        InteractionEvent.INTERACT_ENTITY.register { player, entity, hand ->
+            if (!player.isSneaking || hand != Hand.MAIN_HAND || entity !is PokemonEntity) {
+                return@register EventResult.pass()
+            }
+            val pokemon = entity.pokemon
+            val owner = pokemon.getOwnerPlayer()
+            if (owner?.uuid != player.uuid) return@register EventResult.pass()
+
+            if (pokemon.tetheringId == null) {
+                if (!player.world.isClient) {
+                    player.sendMessage(
+                        Text.literal("This Pokémon must be in a Pasture to assign tags!")
+                            .formatted(Formatting.RED),
+                        true
+                    )
+                }
+                return@register EventResult.interruptTrue()
+            }
+
+            if (player is ServerPlayerEntity) {
+                player.openHandledScreen(SimpleNamedScreenHandlerFactory(
+                    { syncId, inv, _ -> PokemonTagScreenHandler(syncId, inv, pokemon.uuid) },
+                    Text.translatable("screen.cobblepalsworld.pokemon_tag")
+                ))
+            }
+            EventResult.interruptTrue()
+        }
+    }
+
+    private fun registerLifecycle() {
+        LifecycleEvent.SERVER_STOPPING.register { server ->
+            PastureWorkerManager.onServerStopping(server)
+        }
+    }
+}

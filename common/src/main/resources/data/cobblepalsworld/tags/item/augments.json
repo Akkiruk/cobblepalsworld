@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "cobblepalsworld:speed_augment",
+    "cobblepalsworld:stack_augment",
+    "cobblepalsworld:range_augment",
+    "cobblepalsworld:regulator_augment",
+    "cobblepalsworld:redstone_augment",
+    "cobblepalsworld:xp_vacuum_augment",
+    "cobblepalsworld:pushing_augment"
+  ]
+}

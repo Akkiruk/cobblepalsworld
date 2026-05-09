@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " X ",
+    "XNX",
+    " X "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "X": { "item": "minecraft:experience_bottle" }
+  },
+  "result": {
+    "id": "cobblepalsworld:xp_vacuum_augment",
+    "count": 1
+  }
+}

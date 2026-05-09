@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " H ",
+    "HNH",
+    " H "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "H": { "item": "minecraft:hopper" }
+  },
+  "result": {
+    "id": "cobblepalsworld:puller_tag",
+    "count": 1
+  }
+}

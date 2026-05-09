@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " W ",
+    "LNL",
+    " W "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "W": { "item": "minecraft:wheat" },
+    "L": { "item": "minecraft:lead" }
+  },
+  "result": {
+    "id": "cobblepalsworld:shepherd_tag",
+    "count": 1
+  }
+}

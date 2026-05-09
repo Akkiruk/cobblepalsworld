@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " R ",
+    "CNC",
+    " R "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "R": { "item": "minecraft:redstone" },
+    "C": { "item": "minecraft:comparator" }
+  },
+  "result": {
+    "id": "cobblepalsworld:lookout_tag",
+    "count": 1
+  }
+}

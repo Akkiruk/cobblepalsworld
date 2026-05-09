@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " E ",
+    "ENE",
+    " E "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "E": { "item": "minecraft:ender_pearl" }
+  },
+  "result": {
+    "id": "cobblepalsworld:courier_tag",
+    "count": 1
+  }
+}

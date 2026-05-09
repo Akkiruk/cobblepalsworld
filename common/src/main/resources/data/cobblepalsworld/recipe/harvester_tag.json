@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " W ",
+    "HNH",
+    " W "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "W": { "item": "minecraft:wheat" },
+    "H": { "item": "minecraft:iron_hoe" }
+  },
+  "result": {
+    "id": "cobblepalsworld:harvester_tag",
+    "count": 1
+  }
+}

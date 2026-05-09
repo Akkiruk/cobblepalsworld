@@ -1,0 +1,20 @@
+{
+  "replace": false,
+  "values": [
+    "cobblepalsworld:breaker_tag",
+    "cobblepalsworld:guardian_tag",
+    "cobblepalsworld:harvester_tag",
+    "cobblepalsworld:fisher_tag",
+    "cobblepalsworld:vacuum_tag",
+    "cobblepalsworld:smelter_tag",
+    "cobblepalsworld:courier_tag",
+    "cobblepalsworld:stasher_tag",
+    "cobblepalsworld:planter_tag",
+    "cobblepalsworld:illuminator_tag",
+    "cobblepalsworld:activator_tag",
+    "cobblepalsworld:shepherd_tag",
+    "cobblepalsworld:lookout_tag",
+    "cobblepalsworld:scout_tag",
+    "cobblepalsworld:weatherworker_tag"
+  ]
+}

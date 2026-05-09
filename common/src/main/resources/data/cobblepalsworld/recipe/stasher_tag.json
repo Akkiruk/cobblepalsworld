@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " C ",
+    "HNH",
+    " C "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "H": { "item": "minecraft:hopper" },
+    "C": { "item": "minecraft:comparator" }
+  },
+  "result": {
+    "id": "cobblepalsworld:stasher_tag",
+    "count": 1
+  }
+}

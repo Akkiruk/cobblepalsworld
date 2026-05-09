@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " C ",
+    "RNR",
+    " C "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "C": { "item": "minecraft:comparator" },
+    "R": { "item": "minecraft:redstone_torch" }
+  },
+  "result": {
+    "id": "cobblepalsworld:regulator_augment",
+    "count": 1
+  }
+}
