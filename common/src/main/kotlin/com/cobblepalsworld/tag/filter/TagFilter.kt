@@ -2,6 +2,11 @@ package com.cobblepalsworld.tag.filter
 
 import net.minecraft.item.ItemStack
 
+enum class FilterMatchMode {
+    ANY,
+    ALL
+}
+
 /**
  * Filter configuration stored on a tag item.
  * @param items Ghost items to match against (up to 9)
@@ -15,7 +20,8 @@ data class TagFilter(
     val whitelist: Boolean = true,
     val matchNbt: Boolean = false,
     val matchTags: List<String> = emptyList(),
-    val matchModIds: List<String> = emptyList()
+    val matchModIds: List<String> = emptyList(),
+    val matchMode: FilterMatchMode = FilterMatchMode.ANY
 ) {
     companion object {
         const val MAX_FILTER_SLOTS = 9

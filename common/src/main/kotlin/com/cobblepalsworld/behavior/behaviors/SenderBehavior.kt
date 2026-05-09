@@ -10,13 +10,20 @@ import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
 import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.tag.TagTarget
+import com.cobblepalsworld.tag.TargetStrategy
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
 import com.cobblepalsworld.tag.filter.TagFilter
 import net.minecraft.item.ItemStack
+import net.minecraft.registry.RegistryKey
+import net.minecraft.registry.RegistryKeys
+import net.minecraft.server.world.ServerWorld
+import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
+import java.util.UUID
 
 /**
  * Sender: collects items from nearby containers, then deposits them to the BOUND target.
@@ -28,6 +35,9 @@ object SenderBehavior : TagBehavior {
     override val tagType = TagType.COURIER
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
     override val handlesOwnInventory = true
+
+    private val targetCursor = mutableMapOf<UUID, Int>()
+    private val selectedRemoteTargets = mutableMapOf<UUID, TagTarget>()
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
@@ -43,8 +53,20 @@ object SenderBehavior : TagBehavior {
         val range = effectiveRange(tag, state)
 
         return if (hasItems) {
-            // Phase 2: has items → find deposit target (bound preferred)
-            findDepositTarget(world, origin, tag, range)
+            // Phase 2: has items → find deposit target (explicit targets preferred)
+            val configuredTarget = selectConfiguredTarget(world, origin, entity.pokemon.uuid, tag)
+            when {
+                configuredTarget == null -> findDepositTarget(world, origin, tag, range)
+                configuredTarget.dimensionId == world.registryKey.value.toString() -> {
+                    selectedRemoteTargets.remove(entity.pokemon.uuid)
+                    configuredTarget.pos
+                }
+                !ClaimManager.isClaimedByOther(origin, entity.pokemon.uuid, world) -> {
+                    selectedRemoteTargets[entity.pokemon.uuid] = configuredTarget
+                    origin
+                }
+                else -> null
+            }
         } else {
             // Phase 1: no items → find source container near pasture to extract from
             findSourceContainer(world, origin, tag, pokemonId, range)
@@ -61,9 +83,11 @@ object SenderBehavior : TagBehavior {
         return if (!hasItems) {
             // Phase 1: extract from source container
             extractFromSource(world, target, pokemonInv, tag, state)
+        } else if (!ContainerFinder.isContainer(world, target)) {
+            depositToConfiguredTarget(world, entity.pokemon.uuid, pokemonInv, tag)
         } else {
             // Phase 2: deposit into target container
-            depositToTarget(world, target, pokemonInv, tag)
+            depositToTarget(world, entity.pokemon.uuid, target, pokemonInv, tag)
         }
     }
 
@@ -75,8 +99,13 @@ object SenderBehavior : TagBehavior {
         world: World, origin: BlockPos, tag: TagInstance, pokemonId: java.util.UUID, range: Int
     ): BlockPos? {
         // Exclude the bound container — that's the DESTINATION, not the source
-        val excludeBound = tag.boundPos
-        return ContainerFinder.findClosestMatching(world, origin, range, setOfNotNull(excludeBound)) { _, pos ->
+        val excludeBound = buildSet {
+            tag.boundPos?.let { add(it) }
+            tag.settings.extraTargets
+                .filter { it.dimensionId == world.registryKey.value.toString() }
+                .forEach { add(it.pos) }
+        }
+        return ContainerFinder.findClosestMatching(world, origin, range, excludeBound) { _, pos ->
             !ClaimManager.isClaimedByOther(pos, pokemonId, world) && containerHasMatchingItems(world, pos, tag.filter)
         }
     }
@@ -91,6 +120,30 @@ object SenderBehavior : TagBehavior {
         }
         return ContainerFinder.findClosestMatching(world, origin, range) { _, pos ->
             containerHasSpace(world, pos)
+        }
+    }
+
+    private fun selectConfiguredTarget(world: World, origin: BlockPos, pokemonId: UUID, tag: TagInstance): TagTarget? {
+        val explicitTargets = buildList {
+            val currentDimensionId = world.registryKey.value.toString()
+            tag.boundPos?.let { add(TagTarget(currentDimensionId, it.toImmutable())) }
+            addAll(tag.settings.extraTargets)
+        }.distinctBy { it.dimensionId to it.pos }
+
+        if (explicitTargets.isEmpty()) return null
+
+        val orderedTargets = when (tag.settings.targetStrategy) {
+            TargetStrategy.ROUND_ROBIN -> explicitTargets
+            TargetStrategy.NEAREST_FIRST -> explicitTargets.sortedBy { target -> distanceScore(world, origin, target) }
+            TargetStrategy.FURTHEST_FIRST -> explicitTargets.sortedByDescending { target -> distanceScore(world, origin, target) }
+            TargetStrategy.RANDOM -> explicitTargets.shuffled()
+        }
+
+        return if (tag.settings.targetStrategy == TargetStrategy.ROUND_ROBIN) {
+            val index = targetCursor.getOrDefault(pokemonId, 0) % orderedTargets.size
+            orderedTargets[index]
+        } else {
+            orderedTargets.firstOrNull()
         }
     }
 
@@ -125,7 +178,9 @@ object SenderBehavior : TagBehavior {
     }
 
     private fun depositToTarget(
-        world: World, target: BlockPos,
+        world: World,
+        pokemonId: UUID,
+        target: BlockPos,
         pokemonInv: PokemonInventory,
         tag: TagInstance
     ): WorkResult {
@@ -144,7 +199,64 @@ object SenderBehavior : TagBehavior {
         if (changed) {
             PastureWorkerManager.markDirtyNow(world)
         }
+        advanceTargetCursor(pokemonId, tag)
         return WorkResult.Done()
+    }
+
+    private fun depositToConfiguredTarget(
+        world: World,
+        pokemonId: UUID,
+        pokemonInv: PokemonInventory,
+        tag: TagInstance
+    ): WorkResult {
+        val target = selectedRemoteTargets[pokemonId] ?: return WorkResult.Done()
+        val serverWorld = world as? ServerWorld ?: return WorkResult.Done()
+        val targetWorld = resolveWorld(serverWorld, target.dimensionId) ?: return WorkResult.Done()
+        val container = ContainerFinder.getInventoryAt(targetWorld, target.pos) ?: return WorkResult.Done()
+
+        var changed = false
+        for (slot in 0 until pokemonInv.size()) {
+            val stack = pokemonInv.getStack(slot)
+            if (stack.isEmpty || !FilterMatcher.matches(stack, tag.filter)) continue
+
+            val remaining = ContainerFinder.insertStack(container, stack.copy())
+            if (remaining.count != stack.count) changed = true
+            pokemonInv.setStack(slot, remaining)
+        }
+
+        container.markDirty()
+        if (changed) {
+            PastureWorkerManager.markDirtyNow(world)
+            PastureWorkerManager.markDirtyNow(targetWorld)
+        }
+        advanceTargetCursor(pokemonId, tag)
+        return WorkResult.Done()
+    }
+
+    private fun advanceTargetCursor(pokemonId: UUID, tag: TagInstance) {
+        val explicitTargetCount = (if (tag.boundPos != null) 1 else 0) + tag.settings.extraTargets.size
+        if (explicitTargetCount <= 1) return
+        if (tag.settings.targetStrategy == TargetStrategy.ROUND_ROBIN) {
+            targetCursor[pokemonId] = targetCursor.getOrDefault(pokemonId, 0) + 1
+        }
+    }
+
+    fun cleanup(pokemonId: UUID) {
+        targetCursor.remove(pokemonId)
+        selectedRemoteTargets.remove(pokemonId)
+    }
+
+    private fun resolveWorld(world: ServerWorld, dimensionId: String): ServerWorld? {
+        val id = Identifier.tryParse(dimensionId) ?: return null
+        return world.server.getWorld(RegistryKey.of(RegistryKeys.WORLD, id))
+    }
+
+    private fun distanceScore(world: World, origin: BlockPos, target: TagTarget): Double {
+        return if (target.dimensionId == world.registryKey.value.toString()) {
+            target.pos.getSquaredDistance(origin)
+        } else {
+            Double.MAX_VALUE
+        }
     }
 
     private fun containerHasMatchingItems(world: World, pos: BlockPos, filter: TagFilter): Boolean {

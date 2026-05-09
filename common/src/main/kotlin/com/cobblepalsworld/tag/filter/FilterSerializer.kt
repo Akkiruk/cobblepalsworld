@@ -16,11 +16,13 @@ object FilterSerializer {
     private const val KEY_MATCH_NBT = "MatchNbt"
     private const val KEY_MATCH_TAGS = "MatchTags"
     private const val KEY_MATCH_MOD_IDS = "MatchModIds"
+    private const val KEY_MATCH_MODE = "MatchMode"
 
     fun toNbt(filter: TagFilter, registries: RegistryWrapper.WrapperLookup): NbtCompound {
         val nbt = NbtCompound()
         nbt.putBoolean(KEY_WHITELIST, filter.whitelist)
         nbt.putBoolean(KEY_MATCH_NBT, filter.matchNbt)
+        nbt.putString(KEY_MATCH_MODE, filter.matchMode.name)
 
         val list = NbtList()
         for ((index, stack) in filter.items.withIndex()) {
@@ -51,6 +53,11 @@ object FilterSerializer {
     fun fromNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): TagFilter {
         val whitelist = nbt.getBoolean(KEY_WHITELIST)
         val matchNbt = nbt.getBoolean(KEY_MATCH_NBT)
+        val matchMode = if (nbt.contains(KEY_MATCH_MODE)) {
+            FilterMatchMode.valueOf(nbt.getString(KEY_MATCH_MODE))
+        } else {
+            FilterMatchMode.ANY
+        }
 
         val items = mutableListOf<ItemStack>()
         val list = nbt.getList(KEY_ITEMS, 10)
@@ -78,6 +85,6 @@ object FilterSerializer {
             }
         }
 
-        return TagFilter(items, whitelist, matchNbt, matchTags, matchModIds)
+        return TagFilter(items, whitelist, matchNbt, matchTags, matchModIds, matchMode)
     }
 }

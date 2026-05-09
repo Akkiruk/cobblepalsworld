@@ -10,6 +10,7 @@ import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ContainerFinder
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
+import com.cobblepalsworld.tag.TargetStrategy
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
 import net.minecraft.inventory.Inventory
@@ -51,8 +52,7 @@ object DistributorBehavior : TagBehavior {
         val targets = findTargetContainers(world, origin, tag, range)
         if (targets.isEmpty()) return null
 
-        val idx = roundRobinIndex.getOrDefault(entity.pokemon.uuid, 0) % targets.size
-        return targets[idx]
+        return selectTarget(world, entity.pokemon.uuid, targets, tag)
     }
 
     override fun doWork(
@@ -71,11 +71,14 @@ object DistributorBehavior : TagBehavior {
         depositItems(world, container, pokemonInv, tag, state)
         container.markDirty()
 
+        if (tag.settings.terminateAfterSuccess) {
+            return WorkResult.Done()
+        }
+
         // Advance round-robin
         val range = effectiveRange(tag, state)
         val targets = findTargetContainers(world, target, tag, range)
-        val currentIdx = roundRobinIndex.getOrDefault(entity.pokemon.uuid, 0)
-        roundRobinIndex[entity.pokemon.uuid] = (currentIdx + 1) % maxOf(1, targets.size)
+        advanceTargetIndex(entity.pokemon.uuid, tag, targets.size)
 
         // If still has items, go to next target
         val stillHasItems = (0 until pokemonInv.size()).any {
@@ -83,8 +86,7 @@ object DistributorBehavior : TagBehavior {
             !stack.isEmpty && FilterMatcher.matches(stack, tag.filter)
         }
         if (stillHasItems && targets.isNotEmpty()) {
-            val nextIdx = roundRobinIndex[entity.pokemon.uuid]!!
-            return WorkResult.MoveTo(targets[nextIdx % targets.size])
+            return WorkResult.MoveTo(selectTarget(world, entity.pokemon.uuid, targets, tag))
         }
 
         return WorkResult.Done()
@@ -100,7 +102,39 @@ object DistributorBehavior : TagBehavior {
 
     private fun findTargetContainers(world: World, origin: BlockPos, tag: TagInstance, range: Int): List<BlockPos> {
         val sourcePos = tag.boundPos
-        return ContainerFinder.findAllMatching(world, origin, range, setOfNotNull(sourcePos))
+        val explicitTargets = tag.settings.extraTargets
+            .filter { it.dimensionId == world.registryKey.value.toString() }
+            .map { it.pos }
+            .filter { it != sourcePos && ContainerFinder.isContainer(world, it) }
+            .distinct()
+
+        val targets = if (explicitTargets.isNotEmpty()) {
+            explicitTargets
+        } else {
+            ContainerFinder.findAllMatching(world, origin, range, setOfNotNull(sourcePos))
+        }
+
+        return when (tag.settings.targetStrategy) {
+            TargetStrategy.ROUND_ROBIN -> targets
+            TargetStrategy.NEAREST_FIRST -> targets.sortedBy { it.getSquaredDistance(origin) }
+            TargetStrategy.FURTHEST_FIRST -> targets.sortedByDescending { it.getSquaredDistance(origin) }
+            TargetStrategy.RANDOM -> targets.shuffled()
+        }
+    }
+
+    private fun selectTarget(world: World, pokemonId: UUID, targets: List<BlockPos>, tag: TagInstance): BlockPos {
+        if (tag.settings.targetStrategy == TargetStrategy.RANDOM) {
+            return targets[world.random.nextInt(targets.size)]
+        }
+
+        val index = roundRobinIndex.getOrDefault(pokemonId, 0) % maxOf(1, targets.size)
+        return targets[index]
+    }
+
+    private fun advanceTargetIndex(pokemonId: UUID, tag: TagInstance, targetCount: Int) {
+        if (targetCount <= 1 || tag.settings.targetStrategy == TargetStrategy.RANDOM) return
+        val currentIdx = roundRobinIndex.getOrDefault(pokemonId, 0)
+        roundRobinIndex[pokemonId] = (currentIdx + 1) % maxOf(1, targetCount)
     }
 
     private fun extractItems(

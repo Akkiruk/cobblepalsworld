@@ -24,6 +24,7 @@ enum class TagType(
     val id: String,
     val bindingMode: BindingMode = BindingMode.NONE,
     val usesFilter: Boolean = true,
+    val supportsTargetList: Boolean = false,
     val description: String,
     val color: Formatting = Formatting.WHITE,
     val arrivalParticle: ParticleEffect = ParticleTypes.HAPPY_VILLAGER,
@@ -93,6 +94,7 @@ enum class TagType(
     COURIER(
         id = "courier",
         bindingMode = BindingMode.CONTAINER,
+        supportsTargetList = true,
         description = "Carries items from nearby containers to a bound destination",
         color = Formatting.LIGHT_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
@@ -102,18 +104,36 @@ enum class TagType(
     STASHER(
         id = "stasher",
         bindingMode = BindingMode.CONTAINER,
+        supportsTargetList = true,
         description = "Distributes items from a source into nearby containers",
         color = Formatting.DARK_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
         workParticle = ParticleTypes.ENCHANT,
         workSound = SoundEvents.BLOCK_BARREL_OPEN
     ),
+    DROPPER(
+        id = "dropper",
+        bindingMode = BindingMode.POSITION,
+        description = "Drops matching items from containers at a bound location",
+        color = Formatting.DARK_GRAY,
+        arrivalParticle = ParticleTypes.SMOKE,
+        workParticle = ParticleTypes.SMOKE,
+        workSound = SoundEvents.ENTITY_ITEM_FRAME_REMOVE_ITEM
+    ),
+    PLAYER(
+        id = "player",
+        description = "Delivers matching items from containers into the owner's inventory",
+        color = Formatting.GOLD,
+        arrivalParticle = ParticleTypes.END_ROD,
+        workParticle = ParticleTypes.END_ROD,
+        workSound = SoundEvents.ENTITY_ITEM_PICKUP
+    ),
 
     // --- Placement / world building ---
     PLANTER(
         id = "planter",
         bindingMode = BindingMode.POSITION,
-        description = "Plants seeds, saplings, and flowers from containers",
+        description = "Places matching block items from containers at a bound location",
         color = Formatting.GREEN,
         arrivalParticle = ParticleTypes.HAPPY_VILLAGER,
         workParticle = ParticleTypes.COMPOSTER,
@@ -192,7 +212,6 @@ enum class TagType(
             put("distributor", STASHER)
             // Retired tags map to closest equivalent
             put("puller", COURIER)
-            put("dropper", STASHER)
         }
         fun fromId(id: String): TagType? = byId[id]
     }

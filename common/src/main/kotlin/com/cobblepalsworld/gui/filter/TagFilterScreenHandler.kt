@@ -2,6 +2,12 @@ package com.cobblepalsworld.gui.filter
 
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.tag.TagItem
+import com.cobblepalsworld.tag.TagType
+import com.cobblepalsworld.tag.TagSettings
+import com.cobblepalsworld.tag.TargetStrategy
+import com.cobblepalsworld.tag.RedstoneControlMode
+import com.cobblepalsworld.tag.ActivatorActionMode
+import com.cobblepalsworld.tag.filter.FilterMatchMode
 import com.cobblepalsworld.tag.filter.TagFilter
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
@@ -22,10 +28,14 @@ class TagFilterScreenHandler : ScreenHandler {
     private val matchTags: List<String>
     private val matchModIds: List<String>
 
+    companion object {
+        private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
+    }
+
     // Client constructor — used by ScreenHandlerType factory
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(2)
+        this.filterData = ArrayPropertyDelegate(9)
         this.itemSlot = -1
         this.trackedTagStack = null
         this.matchTags = emptyList()
@@ -36,7 +46,7 @@ class TagFilterScreenHandler : ScreenHandler {
     // Server constructor — used when opening menu from TagItem.use()
     constructor(syncId: Int, playerInventory: PlayerInventory, hand: Hand) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(2)
+        this.filterData = ArrayPropertyDelegate(9)
         this.itemSlot = if (hand == Hand.MAIN_HAND) playerInventory.selectedSlot else 40
 
         val stack = playerInventory.player.getStackInHand(hand)
@@ -44,16 +54,27 @@ class TagFilterScreenHandler : ScreenHandler {
         if (stack.item is TagItem) {
             val registries = playerInventory.player.world.registryManager
             val filter = TagItem.getFilter(stack, registries)
+            val settings = TagItem.getSettings(stack)
+            val tagType = (stack.item as TagItem).tagType
             this.matchTags = filter.matchTags
             this.matchModIds = filter.matchModIds
             filterData.set(0, if (filter.whitelist) 1 else 0)
             filterData.set(1, if (filter.matchNbt) 1 else 0)
+            filterData.set(2, filter.matchMode.ordinal)
+            filterData.set(3, settings.targetStrategy.ordinal)
+            filterData.set(4, settings.redstoneMode.ordinal)
+            filterData.set(5, settings.activatorMode.ordinal)
+            filterData.set(6, if (settings.terminateAfterSuccess) 1 else 0)
+            filterData.set(7, settings.regulatorAmount)
+            filterData.set(8, tagType.ordinal)
             for ((i, item) in filter.items.withIndex()) {
                 if (i < TagFilter.MAX_FILTER_SLOTS) filterInventory.setStack(i, item.copy())
             }
         } else {
             this.matchTags = emptyList()
             this.matchModIds = emptyList()
+            filterData.set(7, 64)
+            filterData.set(8, -1)
         }
         setupSlots(playerInventory)
     }
@@ -81,6 +102,13 @@ class TagFilterScreenHandler : ScreenHandler {
 
     val isWhitelist: Boolean get() = filterData.get(0) != 0
     val isMatchNbt: Boolean get() = filterData.get(1) != 0
+    val matchMode: FilterMatchMode get() = FilterMatchMode.entries.getOrElse(filterData.get(2)) { FilterMatchMode.ANY }
+    val targetStrategy: TargetStrategy get() = TargetStrategy.entries.getOrElse(filterData.get(3)) { TargetStrategy.ROUND_ROBIN }
+    val redstoneMode: RedstoneControlMode get() = RedstoneControlMode.entries.getOrElse(filterData.get(4)) { RedstoneControlMode.ALWAYS }
+    val activatorMode: ActivatorActionMode get() = ActivatorActionMode.entries.getOrElse(filterData.get(5)) { ActivatorActionMode.INTERACT_ONLY }
+    val terminateAfterSuccess: Boolean get() = filterData.get(6) != 0
+    val regulatorAmount: Int get() = filterData.get(7).coerceIn(1, 64)
+    val tagType: TagType? get() = TagType.entries.getOrNull(filterData.get(8))
 
     private val protectedScreenSlotIndex: Int
         get() = when (itemSlot) {
@@ -110,9 +138,23 @@ class TagFilterScreenHandler : ScreenHandler {
         when (id) {
             0 -> filterData.set(0, if (filterData.get(0) == 0) 1 else 0)
             1 -> filterData.set(1, if (filterData.get(1) == 0) 1 else 0)
+            2 -> filterData.set(2, (filterData.get(2) + 1) % FilterMatchMode.entries.size)
+            3 -> filterData.set(3, (filterData.get(3) + 1) % TargetStrategy.entries.size)
+            4 -> filterData.set(4, (filterData.get(4) + 1) % RedstoneControlMode.entries.size)
+            5 -> filterData.set(5, (filterData.get(5) + 1) % ActivatorActionMode.entries.size)
+            6 -> filterData.set(6, if (filterData.get(6) == 0) 1 else 0)
+            7 -> stepRegulator(-1)
+            8 -> stepRegulator(1)
             else -> return false
         }
         return true
+    }
+
+    private fun stepRegulator(direction: Int) {
+        val current = regulatorAmount
+        val index = REGULATOR_PRESETS.indexOf(current).let { if (it >= 0) it else REGULATOR_PRESETS.indexOfFirst { preset -> preset >= current }.coerceAtLeast(0) }
+        val nextIndex = (index + direction).coerceIn(0, REGULATOR_PRESETS.lastIndex)
+        filterData.set(7, REGULATOR_PRESETS[nextIndex])
     }
 
     // Shift-click from player inventory copies item into first empty ghost slot
@@ -140,8 +182,17 @@ class TagFilterScreenHandler : ScreenHandler {
                 val items = (0 until TagFilter.MAX_FILTER_SLOTS)
                     .map { filterInventory.getStack(it) }
                     .filter { !it.isEmpty }
-                val filter = TagFilter(items, isWhitelist, isMatchNbt, matchTags, matchModIds)
+                val filter = TagFilter(items, isWhitelist, isMatchNbt, matchTags, matchModIds, matchMode)
+                val existingSettings = TagItem.getSettings(stack)
+                val settings = existingSettings.copy(
+                    targetStrategy = targetStrategy,
+                    redstoneMode = redstoneMode,
+                    activatorMode = activatorMode,
+                    regulatorAmount = regulatorAmount,
+                    terminateAfterSuccess = terminateAfterSuccess
+                )
                 TagItem.setFilter(stack, filter, player.world.registryManager)
+                TagItem.setSettings(stack, settings)
             }
         }
     }

@@ -12,6 +12,7 @@ object ActivatorPlatformBridge {
         fun useItemOnBlock(player: ServerPlayerEntity, world: ServerWorld, stack: ItemStack, hitResult: BlockHitResult): Boolean
         fun useItem(player: ServerPlayerEntity, world: ServerWorld, stack: ItemStack): Boolean
         fun interactEntity(player: ServerPlayerEntity, target: Entity): Boolean
+        fun attackEntity(player: ServerPlayerEntity, target: Entity): Boolean
     }
 
     lateinit var hooks: Hooks
@@ -28,5 +29,9 @@ object ActivatorPlatformBridge {
 
     fun interactEntity(player: ServerPlayerEntity, target: Entity): Boolean {
         return hooks.interactEntity(player, target)
+    }
+
+    fun attackEntity(player: ServerPlayerEntity, target: Entity): Boolean {
+        return hooks.attackEntity(player, target)
     }
 }

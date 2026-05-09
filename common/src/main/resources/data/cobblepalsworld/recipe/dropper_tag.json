@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " R ",
+    "DND",
+    " R "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "D": { "item": "minecraft:dropper" },
+    "R": { "item": "minecraft:redstone" }
+  },
+  "result": {
+    "id": "cobblepalsworld:dropper_tag",
+    "count": 1
+  }
+}

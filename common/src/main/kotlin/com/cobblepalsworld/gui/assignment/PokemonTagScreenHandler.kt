@@ -90,6 +90,7 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val stack = ItemStack(item)
                 TagItem.setFilter(stack, existing.filter, playerInventory.player.world.registryManager)
                 existing.boundPos?.let { TagItem.setBoundPos(stack, it) }
+                TagItem.setSettings(stack, existing.settings)
                 tagInventory.setStack(0, stack)
             }
             for ((i, entry) in collapseAugmentsForDisplay(existing.augments).withIndex()) {
@@ -178,9 +179,10 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val filter = TagItem.getFilter(stack, player.world.registryManager)
                 val boundPos = TagItem.getBoundPos(stack)
                 val augments = readAugmentsFromSlots()
+                val settings = TagItem.getSettings(stack)
 
                 val oldTag = TagAssignmentManager.get(currentPokemonId)
-                val newTag = TagInstance(tagItem.tagType, filter, boundPos, augments)
+                val newTag = TagInstance(tagItem.tagType, filter, boundPos, augments, settings)
 
                 // If tag type changed or was re-configured, clean up old work state
                 if (oldTag != null && (oldTag.type != newTag.type || oldTag != newTag)) {

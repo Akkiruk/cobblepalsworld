@@ -99,8 +99,8 @@ object ContainerFinder {
     }
 
     /**
-     * Regulated deposit: only deposits enough of each item so the target reaches exactly
-     * the stack size limit (64) for that item. Prevents overfilling.
+     * Regulated deposit: only deposits enough of each item so the target reaches the
+     * configured amount for that item across the whole inventory. Prevents overfilling.
      */
     fun depositRegulated(world: World, containerPos: BlockPos, source: Inventory, tag: TagInstance) {
         val target = getInventoryAt(world, containerPos) ?: return
@@ -118,8 +118,8 @@ object ContainerFinder {
                 }
             }
 
-            // Only deposit enough to reach one full stack
-            val desiredTotal = stack.maxCount
+            // Only deposit enough to reach the configured total across the destination.
+            val desiredTotal = tag.settings.regulatorAmount.coerceAtLeast(1)
             val toDeposit = (desiredTotal - existingCount).coerceIn(0, stack.count)
             if (toDeposit <= 0) continue
 

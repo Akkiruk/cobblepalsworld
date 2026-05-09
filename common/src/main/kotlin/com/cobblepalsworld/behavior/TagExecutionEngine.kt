@@ -9,6 +9,7 @@ import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
 import com.cobblepalsworld.behavior.behaviors.DistributorBehavior
+import com.cobblepalsworld.behavior.behaviors.SenderBehavior
 import com.cobblepalsworld.behavior.behaviors.ShepherdBehavior
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
@@ -17,6 +18,7 @@ import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
+import com.cobblepalsworld.tag.RedstoneControlMode
 import com.cobblepalsworld.visual.WorkVisualHandler
 import net.minecraft.item.ItemStack
 import net.minecraft.server.world.ServerWorld
@@ -59,12 +61,11 @@ object TagExecutionEngine {
     fun tick(world: World, entity: PokemonEntity, pokemon: Pokemon, tag: TagInstance, origin: BlockPos) {
         if (!isTagEnabled(tag.type)) return
 
-        // Redstone augment: pause when pasture block receives redstone
-        if (tag.augments.isRedstoneControlled() && world.isReceivingRedstonePower(origin)) return
-
         val state = StateManager.getOrCreate(pokemon.uuid)
         state.lastSeenTick = world.time
         state.targetPos?.let { ClaimManager.touch(it, pokemon.uuid, world) }
+
+        if (!passesRedstoneGate(world, origin, tag, state)) return
 
         // --- Eco mode: idle workers tick at a reduced rate to save CPU ---
         if (state.phase == WorkerPhase.IDLE) {
@@ -104,6 +105,7 @@ object TagExecutionEngine {
         ClaimManager.releaseAll(pokemonId)
         StateManager.remove(pokemonId)
         BreakerBehavior.clearPastureOrigin(pokemonId)
+        SenderBehavior.cleanup(pokemonId)
         DistributorBehavior.cleanup(pokemonId)
         ShepherdBehavior.cleanup(pokemonId)
 
@@ -122,6 +124,21 @@ object TagExecutionEngine {
             }
             PastureWorkerManager.markDirtyNow(world)
         }
+    }
+
+    private fun passesRedstoneGate(world: World, origin: BlockPos, tag: TagInstance, state: WorkerState): Boolean {
+        if (!tag.augments.isRedstoneControlled()) return true
+
+        val powered = world.isReceivingRedstonePower(origin)
+        val shouldRun = when (tag.settings.redstoneMode) {
+            RedstoneControlMode.ALWAYS -> true
+            RedstoneControlMode.HIGH -> powered
+            RedstoneControlMode.LOW -> !powered
+            RedstoneControlMode.NEVER -> false
+            RedstoneControlMode.PULSE -> powered && !state.lastRedstonePower
+        }
+        state.lastRedstonePower = powered
+        return shouldRun
     }
 
     private fun tickIdle(

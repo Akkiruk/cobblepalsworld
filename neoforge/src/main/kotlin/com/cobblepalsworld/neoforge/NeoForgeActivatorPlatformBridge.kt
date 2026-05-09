@@ -28,4 +28,10 @@ object NeoForgeActivatorPlatformBridge : ActivatorPlatformBridge.Hooks {
     override fun interactEntity(player: ServerPlayerEntity, target: Entity): Boolean {
         return player.interact(target, Hand.MAIN_HAND).isAccepted
     }
+
+    override fun attackEntity(player: ServerPlayerEntity, target: Entity): Boolean {
+        if (!target.isAttackable) return false
+        player.attack(target)
+        return true
+    }
 }

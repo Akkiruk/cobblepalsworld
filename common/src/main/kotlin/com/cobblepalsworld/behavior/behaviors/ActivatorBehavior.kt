@@ -13,6 +13,7 @@ import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.platform.ActivatorPlatformBridge
+import com.cobblepalsworld.tag.ActivatorActionMode
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterMatcher
@@ -132,17 +133,22 @@ object ActivatorBehavior : TagBehavior {
 
             prepareFakePlayer(player, entity, heldStack)
 
-            if (tryUseOnBlocks(world, entity, player, heldStack, range)) {
+            if (allowsBlockUse(tag.settings.activatorMode) && tryUseOnBlocks(world, entity, player, heldStack, range)) {
                 syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)
                 return true
             }
 
-            if (tryUseOnEntities(world, entity, player, heldStack, range)) {
+            if (allowsEntityInteract(tag.settings.activatorMode) && tryUseOnEntities(world, entity, player, heldStack, range)) {
                 syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)
                 return true
             }
 
-            if (tryUseInAir(world, player, heldStack)) {
+            if (allowsEntityAttack(tag.settings.activatorMode) && tryAttackEntities(world, entity, player, heldStack, range)) {
+                syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)
+                return true
+            }
+
+            if (allowsAirUse(tag.settings.activatorMode) && tryUseInAir(world, player, heldStack)) {
                 syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)
                 return true
             }
@@ -215,6 +221,40 @@ object ActivatorBehavior : TagBehavior {
             false
         }
     }
+
+    private fun tryAttackEntities(
+        world: ServerWorld,
+        entity: PokemonEntity,
+        player: ServerPlayerEntity,
+        heldStack: ItemStack,
+        range: Int
+    ): Boolean {
+        val searchBox = Box(entity.blockPos).expand(range.toDouble())
+        val targets = world.getOtherEntities(entity, searchBox) {
+            it is LivingEntity && it.isAlive && !it.type.isIn(CobblePalsWorldTags.EntityTypes.ACTIVATOR_INTERACT_BLACKLIST)
+        }.sortedBy { it.squaredDistanceTo(entity) }
+
+        for (target in targets) {
+            try {
+                if (ActivatorPlatformBridge.attackEntity(player, target)) {
+                    return true
+                }
+            } catch (exception: Exception) {
+                blacklistItemFailure(heldStack, exception)
+                return false
+            }
+        }
+
+        return false
+    }
+
+    private fun allowsBlockUse(mode: ActivatorActionMode): Boolean = mode != ActivatorActionMode.ATTACK_ONLY
+
+    private fun allowsEntityInteract(mode: ActivatorActionMode): Boolean = mode != ActivatorActionMode.ATTACK_ONLY
+
+    private fun allowsEntityAttack(mode: ActivatorActionMode): Boolean = mode != ActivatorActionMode.INTERACT_ONLY
+
+    private fun allowsAirUse(mode: ActivatorActionMode): Boolean = mode != ActivatorActionMode.ATTACK_ONLY
 
     private fun prepareFakePlayer(player: ServerPlayerEntity, entity: PokemonEntity, heldStack: ItemStack) {
         clearFakePlayerInventory(player)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Added advanced tag settings for match-any/all filters, regulator amounts, redstone modes, activator action modes, and multi-target logistics routing.
+- Upgraded courier and stasher behaviors with explicit target lists, target strategies, and cross-dimensional courier delivery for bound remote targets.
+- Expanded planter into a general-purpose block placer, added activator attack behavior, and restored dedicated dropper and player delivery tags.
+
 ## 0.1.3
 
 - Fixed pasture orphan pruning so missing workers now clean up and drop carried items before their saved assignment record is removed.

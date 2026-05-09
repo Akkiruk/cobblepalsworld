@@ -28,8 +28,7 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
 /**
- * Planter: takes organic block items (seeds, saplings, flowers, mushrooms)
- * from nearby containers and plants them in the world.
+ * Placer: takes matching block items from nearby containers and places them in the world.
  *
  * Binding determines WHERE to plant, NOT the source.
  * - Bound → plants at/near the bound position
@@ -133,7 +132,7 @@ object PlacerBehavior : TagBehavior {
 
         for (slot in 0 until container.size()) {
             val stack = container.getStack(slot)
-            if (stack.isEmpty || !isPlantable(stack)) continue
+            if (stack.isEmpty || !isPlaceableBlock(stack)) continue
             if (!FilterMatcher.matches(stack, filter)) continue
 
             // Take one stack (or partial) and carry it
@@ -159,7 +158,7 @@ object PlacerBehavior : TagBehavior {
             val stack = pokemonInventory.getStack(slot)
             if (stack.isEmpty) continue
             val blockItem = stack.item as? BlockItem ?: continue
-            if (!isPlantable(stack)) continue
+            if (!isPlaceableBlock(stack)) continue
             if (!FilterMatcher.matches(stack, filter)) continue
 
             val blockState = blockItem.block.defaultState
@@ -191,7 +190,7 @@ object PlacerBehavior : TagBehavior {
     private fun hasBlockItems(inventory: net.minecraft.inventory.SimpleInventory, filter: TagFilter): Boolean {
         for (slot in 0 until inventory.size()) {
             val stack = inventory.getStack(slot)
-            if (!stack.isEmpty && isPlantable(stack) && FilterMatcher.matches(stack, filter)) return true
+            if (!stack.isEmpty && isPlaceableBlock(stack) && FilterMatcher.matches(stack, filter)) return true
         }
         return false
     }
@@ -200,18 +199,14 @@ object PlacerBehavior : TagBehavior {
         val inventory = ContainerFinder.getInventoryAt(world, pos) ?: return false
         for (slot in 0 until inventory.size()) {
             val stack = inventory.getStack(slot)
-            if (!stack.isEmpty && isPlantable(stack) && FilterMatcher.matches(stack, filter)) return true
+            if (!stack.isEmpty && isPlaceableBlock(stack) && FilterMatcher.matches(stack, filter)) return true
         }
         return false
     }
 
-    private fun isPlantable(stack: ItemStack): Boolean {
+    private fun isPlaceableBlock(stack: ItemStack): Boolean {
         val item = stack.item
-        if (item !is BlockItem) return false
-        val block = item.block
-        return block is CropBlock || block is SaplingBlock || block is FlowerBlock
-            || block is MushroomPlantBlock || block is SweetBerryBushBlock
-            || block is net.minecraft.block.FungusBlock
+        return item is BlockItem && item.block.defaultState.block !is net.minecraft.block.AirBlock
     }
 
     private fun hasAdjacentSolid(world: World, pos: BlockPos): Boolean {

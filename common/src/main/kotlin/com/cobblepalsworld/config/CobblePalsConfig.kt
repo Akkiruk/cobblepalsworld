@@ -53,6 +53,8 @@ data class CobblePalsConfig(
             "smelter" to TagConfig(enabled = true, range = 12, maxItemsPerTrip = 8),
             "courier" to TagConfig(enabled = true, range = 16),
             "stasher" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
+            "dropper" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
+            "player" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "planter" to TagConfig(enabled = true, range = 8),
             "illuminator" to TagConfig(enabled = true, range = 12),
             "activator" to TagConfig(enabled = true, range = 8),

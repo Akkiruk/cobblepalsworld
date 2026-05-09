@@ -8,6 +8,8 @@ import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
+import com.cobblepalsworld.tag.TagSettings
+import com.cobblepalsworld.tag.TagSettingsSerializer
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.filter.FilterSerializer
 import net.minecraft.item.ItemStack
@@ -30,6 +32,7 @@ class CobblePalsSaveData : PersistentState() {
             tagNbt.putString("Type", tag.type.id)
             tagNbt.put("Filter", FilterSerializer.toNbt(tag.filter, registries))
             tagNbt.put("Augments", AugmentSerializer.toNbt(tag.augments))
+            tagNbt.put("Settings", TagSettingsSerializer.toNbt(tag.settings))
             tag.boundPos?.let { pos ->
                 tagNbt.putInt("BoundX", pos.x)
                 tagNbt.putInt("BoundY", pos.y)
@@ -105,10 +108,15 @@ class CobblePalsSaveData : PersistentState() {
                         } else {
                             com.cobblepalsworld.augment.AugmentSet.EMPTY
                         }
+                        val settings = if (tagNbt.contains("Settings")) {
+                            TagSettingsSerializer.fromNbt(tagNbt.getCompound("Settings"))
+                        } else {
+                            TagSettings.EMPTY
+                        }
                         val boundPos = if (tagNbt.contains("BoundX")) {
                             BlockPos(tagNbt.getInt("BoundX"), tagNbt.getInt("BoundY"), tagNbt.getInt("BoundZ"))
                         } else null
-                        TagAssignmentManager.assign(uuid, TagInstance(type, filter, boundPos, augments))
+                        TagAssignmentManager.assign(uuid, TagInstance(type, filter, boundPos, augments, settings))
                         if (tagNbt.contains("PastureDimension")) {
                             val pasturePos = BlockPos(
                                 tagNbt.getInt("PastureX"),

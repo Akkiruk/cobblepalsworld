@@ -27,6 +27,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         private const val KEY_BOUND_X = "BoundX"
         private const val KEY_BOUND_Y = "BoundY"
         private const val KEY_BOUND_Z = "BoundZ"
+        private const val KEY_SETTINGS = "TagSettings"
 
         fun getFilter(stack: ItemStack, registries: RegistryWrapper.WrapperLookup): TagFilter {
             val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
@@ -80,6 +81,23 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
             }
         }
 
+        fun getSettings(stack: ItemStack): TagSettings {
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: return TagSettings.EMPTY
+            if (!nbt.contains(KEY_SETTINGS)) return TagSettings.EMPTY
+            return TagSettingsSerializer.fromNbt(nbt.getCompound(KEY_SETTINGS))
+        }
+
+        fun setSettings(stack: ItemStack, settings: TagSettings) {
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: NbtCompound()
+            nbt.put(KEY_SETTINGS, TagSettingsSerializer.toNbt(settings))
+            stack.set(
+                net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
+                net.minecraft.component.type.NbtComponent.of(nbt)
+            )
+        }
+
     }
 
     override fun useOnBlock(context: ItemUsageContext): ActionResult {
@@ -92,10 +110,16 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
 
         if (!world.isClient) {
             val stack = player.getStackInHand(context.hand)
+            val settings = getSettings(stack)
+            val dimensionId = world.registryKey.value.toString()
             when (tagType.bindingMode) {
                 BindingMode.NONE -> return ActionResult.PASS
                 BindingMode.POSITION -> {
                     setBoundPos(stack, pos)
+                    if (tagType.supportsTargetList) {
+                        val filteredTargets = settings.extraTargets.filterNot { it.dimensionId == dimensionId && it.pos == pos }
+                        setSettings(stack, settings.copy(extraTargets = filteredTargets))
+                    }
                     player.sendMessage(
                         Text.literal("Bound to ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
                         true
@@ -110,7 +134,33 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         return ActionResult.FAIL
                     }
 
+                    val currentBound = getBoundPos(stack)
+                    if (tagType.supportsTargetList && currentBound != null && currentBound != pos) {
+                        val existingIndex = settings.extraTargets.indexOfFirst { it.dimensionId == dimensionId && it.pos == pos }
+                        val updatedTargets = settings.extraTargets.toMutableList()
+                        if (existingIndex >= 0) {
+                            updatedTargets.removeAt(existingIndex)
+                            setSettings(stack, settings.copy(extraTargets = updatedTargets))
+                            player.sendMessage(
+                                Text.literal("Removed extra target at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.YELLOW),
+                                true
+                            )
+                        } else {
+                            updatedTargets += TagTarget(dimensionId, pos.toImmutable())
+                            setSettings(stack, settings.copy(extraTargets = updatedTargets))
+                            player.sendMessage(
+                                Text.literal("Added extra target at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
+                                true
+                            )
+                        }
+                        return ActionResult.SUCCESS
+                    }
+
                     setBoundPos(stack, pos)
+                    if (tagType.supportsTargetList) {
+                        val filteredTargets = settings.extraTargets.filterNot { it.dimensionId == dimensionId && it.pos == pos }
+                        setSettings(stack, settings.copy(extraTargets = filteredTargets))
+                    }
                     player.sendMessage(
                         Text.literal("Bound to container at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
                         true
@@ -134,6 +184,9 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                     val stack = user.getStackInHand(hand)
                     if (getBoundPos(stack) != null) {
                         clearBoundPos(stack)
+                        if (tagType.supportsTargetList) {
+                            setSettings(stack, getSettings(stack).copy(extraTargets = emptyList()))
+                        }
                         user.sendMessage(
                             Text.literal("Binding cleared").formatted(Formatting.YELLOW), true
                         )
@@ -165,6 +218,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         val filter = getFilter(stack, registries)
         val mode = if (filter.whitelist) "Whitelist" else "Blacklist"
         tooltip.add(Text.literal("Mode: $mode").formatted(Formatting.GRAY))
+        tooltip.add(Text.literal("Match: ${filter.matchMode.name.lowercase().replaceFirstChar(Char::titlecase)}").formatted(Formatting.DARK_GRAY))
         if (filter.items.isNotEmpty()) {
             tooltip.add(Text.literal("Filter: ${filter.items.size} item(s)").formatted(Formatting.DARK_GRAY))
         }
@@ -185,6 +239,11 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                 tooltip.add(Text.translatable("tooltip.cobblepalsworld.bind_hint").formatted(Formatting.YELLOW))
             }
             tooltip.add(Text.translatable("tooltip.cobblepalsworld.clear_hint").formatted(Formatting.DARK_GRAY))
+        }
+
+        val settings = getSettings(stack)
+        if (tagType.supportsTargetList && settings.extraTargets.isNotEmpty()) {
+            tooltip.add(Text.literal("Extra Targets: ${settings.extraTargets.size}").formatted(Formatting.AQUA))
         }
     }
 }

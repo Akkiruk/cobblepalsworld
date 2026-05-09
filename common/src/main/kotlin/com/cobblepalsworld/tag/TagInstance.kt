@@ -12,5 +12,6 @@ data class TagInstance(
     val type: TagType,
     val filter: TagFilter = TagFilter.EMPTY,
     val boundPos: BlockPos? = null,
-    val augments: AugmentSet = AugmentSet.EMPTY
+    val augments: AugmentSet = AugmentSet.EMPTY,
+    val settings: TagSettings = TagSettings.EMPTY
 )

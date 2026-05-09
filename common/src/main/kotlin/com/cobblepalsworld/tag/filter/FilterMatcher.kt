@@ -24,9 +24,15 @@ object FilterMatcher {
             return !filter.whitelist
         }
 
-        val matchFound = matchesItems(stack, filter)
-            || matchesTags(stack, filter)
-            || matchesModIds(stack, filter)
+        val matchChecks = buildList {
+            if (filter.items.isNotEmpty()) add(matchesItems(stack, filter))
+            if (filter.matchTags.isNotEmpty()) add(matchesTags(stack, filter))
+            if (filter.matchModIds.isNotEmpty()) add(matchesModIds(stack, filter))
+        }
+        val matchFound = when (filter.matchMode) {
+            FilterMatchMode.ANY -> matchChecks.any { it }
+            FilterMatchMode.ALL -> matchChecks.all { it }
+        }
 
         return if (filter.whitelist) matchFound else !matchFound
     }

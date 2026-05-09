@@ -46,6 +46,8 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(SmelterBehavior)
         TagBehaviorRegistry.register(SenderBehavior)      // Courier
         TagBehaviorRegistry.register(DistributorBehavior)  // Stasher
+        TagBehaviorRegistry.register(DropperBehavior)
+        TagBehaviorRegistry.register(PlayerBehavior)
         TagBehaviorRegistry.register(PlacerBehavior)       // Planter
         TagBehaviorRegistry.register(IlluminatorBehavior)
         TagBehaviorRegistry.register(ActivatorBehavior)

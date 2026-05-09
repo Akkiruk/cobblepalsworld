@@ -42,12 +42,16 @@ class WorkerState(val pokemonId: UUID) {
     /** The BlockPos that the behavior extracted items FROM. Excluded during deposit search. */
     var workSourcePos: BlockPos? = null
 
+    /** Tracks the previous redstone level for pulse-triggered tags. */
+    var lastRedstonePower: Boolean = false
+
     fun reset() {
         phase = WorkerPhase.IDLE
         targetPos = null
         depositPos = null
         arrivalTick = null
         workSourcePos = null
+        lastRedstonePower = false
         idleTicks = 0
         ecoMode = false
         ecoSkipCounter = 0
