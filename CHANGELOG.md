@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Fixed pasture orphan pruning so missing workers now clean up and drop carried items before their saved assignment record is removed.
+- Pruned unassigned carried inventories during periodic maintenance to keep stale runtime data from accumulating.
+- Hardened lookout redstone output cleanup so detector tags track the actual placed power block, not the lamp's transient lit state.
+
 ## 0.1.2
 
 - Fixed carried-item routing so vacuuming, extraction, and overflow handling no longer delete items when inventory capacity is tight.

@@ -58,16 +58,16 @@ object DetectorBehavior : TagBehavior {
             val lampPos = target.offset(dir)
             val lampState = world.getBlockState(lampPos)
             if (lampState.isOf(Blocks.REDSTONE_LAMP)) {
-                val isLit = lampState.get(net.minecraft.state.property.Properties.LIT)
                 // The power block goes on the opposite side of the lamp from the container
                 val powerPos = lampPos.offset(dir)
-                if (hasMatch && !isLit) {
+                val hasPowerBlock = world.getBlockState(powerPos).isOf(Blocks.REDSTONE_BLOCK)
+                if (hasMatch && !hasPowerBlock) {
                     // Place a redstone block to power the lamp persistently
                     val powerState = world.getBlockState(powerPos)
                     if (powerState.isAir || powerState.isReplaceable) {
                         world.setBlockState(powerPos, Blocks.REDSTONE_BLOCK.defaultState)
                     }
-                } else if (!hasMatch && isLit) {
+                } else if (!hasMatch && hasPowerBlock) {
                     // Remove the redstone block to unpower the lamp
                     if (world.getBlockState(powerPos).block is RedstoneBlock) {
                         world.setBlockState(powerPos, Blocks.AIR.defaultState)

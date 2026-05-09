@@ -26,17 +26,14 @@ object TagAssignmentManager {
         }
     }
 
-    fun removeOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
-        val removed = mutableSetOf<UUID>()
-        assignments.entries.removeIf { (pokemonId, record) ->
-            val binding = record.pastureBinding
-            val orphaned = binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
-            if (orphaned) {
-                removed += pokemonId
+    fun findOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
+        return assignments.entries.asSequence()
+            .filter { (pokemonId, record) ->
+                val binding = record.pastureBinding
+                binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
             }
-            orphaned
-        }
-        return removed
+            .map { it.key }
+            .toSet()
     }
 
     fun get(pokemonId: UUID): TagInstance? = assignments[pokemonId]?.tag

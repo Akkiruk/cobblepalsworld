@@ -41,6 +41,7 @@ object PastureWorkerManager {
             CobblePalsSaveData.markDirty(serverWorld)
             StateManager.pruneStale(world.time, STALE_ENTRY_TTL)
             ClaimManager.pruneStale(world.time, STALE_ENTRY_TTL)
+            InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
         }
 
         // Stagger pasture ticks — offset by position hash
@@ -54,16 +55,16 @@ object PastureWorkerManager {
             try { currentIds.add(t.pokemonId) } catch (_: Exception) {}
         }
         val prevIds = previousTethered.getOrPut(pos) { mutableSetOf() }
-        val orphanedAssignments = TagAssignmentManager.removeOrphansAt(serverWorld.registryKey.value.toString(), pos, currentIds)
-        orphanedAssignments.forEach { orphanedId ->
-            InventoryManager.remove(orphanedId)
-            StateManager.remove(orphanedId)
-            ClaimManager.releaseAll(orphanedId)
-        }
-        for (prevId in prevIds) {
-            if (prevId !in currentIds) {
-                TagExecutionEngine.cleanup(prevId, world, pos)
+        val orphanedAssignments = TagAssignmentManager.findOrphansAt(serverWorld.registryKey.value.toString(), pos, currentIds)
+        val missingIds = buildSet {
+            prevIds.forEach { prevId ->
+                if (prevId !in currentIds) add(prevId)
             }
+            addAll(orphanedAssignments)
+        }
+        for (missingId in missingIds) {
+            TagExecutionEngine.cleanup(missingId, world, pos)
+            TagAssignmentManager.remove(missingId)
         }
         prevIds.clear()
         prevIds.addAll(currentIds)

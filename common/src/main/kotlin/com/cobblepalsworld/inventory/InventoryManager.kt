@@ -39,5 +39,9 @@ object InventoryManager {
 
     fun forEach(action: (UUID, PokemonInventory) -> Unit) = inventories.forEach(action)
 
+    fun pruneStale(shouldKeep: (UUID, PokemonInventory) -> Boolean) {
+        inventories.entries.removeIf { (pokemonId, inventory) -> !shouldKeep(pokemonId, inventory) }
+    }
+
     fun clear() = inventories.clear()
 }
