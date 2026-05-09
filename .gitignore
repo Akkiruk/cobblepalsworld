@@ -4,6 +4,9 @@ build/
 common/build/
 fabric/build/
 neoforge/build/
+common/bin/
+fabric/bin/
+neoforge/bin/
 out/
 run/
 audits/
