@@ -37,6 +37,12 @@ class PokemonTagScreen(
         val sx = 121
         var sy = 17
 
+        if (handler.isManagedByCommandPost) {
+            context.drawText(textRenderer, Text.literal("Managed"), sx, sy, 0xE0A050, false)
+            context.drawText(textRenderer, Text.literal("by Post"), sx, sy + 9, 0xE0A050, false)
+            sy += 20
+        }
+
         // Phase indicator
         val phase = WorkerPhase.entries.getOrElse(handler.workerPhase) { WorkerPhase.IDLE }
         val (phaseColor, phaseLabel) = when (phase) {

@@ -22,5 +22,7 @@ object StateManager {
         states.remove(pokemonId)
     }
 
+    fun count(): Int = states.size
+
     fun clear() = states.clear()
 }

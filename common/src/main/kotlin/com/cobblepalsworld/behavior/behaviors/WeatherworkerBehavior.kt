@@ -34,7 +34,7 @@ object WeatherworkerBehavior : TagBehavior {
     ): BlockPos? {
         val range = effectiveRange(tag, state)
         // Find any growing crop in range
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { pos -> isGrowingCrop(world, pos) }
             ?.toImmutable()
     }
@@ -50,7 +50,7 @@ object WeatherworkerBehavior : TagBehavior {
         val random = world.random
 
         // Collect all growing crops in range
-        val crops = BlockPos.iterateOutwards(origin, range, range / 2, range)
+        val crops = BlockPos.iterateOutwards(origin, range, range, range)
             .filter { pos -> isGrowingCrop(world, pos) }
             .map { it.toImmutable() }
             .toList()

@@ -40,5 +40,7 @@ object ClaimManager {
         claims.entries.removeIf { (_, claim) -> currentTime - claim.lastTouchedTick > staleAfterTicks }
     }
 
+    fun count(): Int = claims.size
+
     fun clear() = claims.clear()
 }

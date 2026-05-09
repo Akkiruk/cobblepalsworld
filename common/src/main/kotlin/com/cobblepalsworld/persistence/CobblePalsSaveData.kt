@@ -6,6 +6,7 @@ import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
+import com.cobblepalsworld.pasture.ControllerBinding
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagSettings
@@ -27,7 +28,7 @@ class CobblePalsSaveData : PersistentState() {
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
         for ((uuid, record) in getAllAssignments()) {
-            val (tag, pastureBinding) = record
+            val (tag, pastureBinding, controllerBinding) = record
             val tagNbt = NbtCompound()
             tagNbt.putString("Type", tag.type.id)
             tagNbt.put("Filter", FilterSerializer.toNbt(tag.filter, registries))
@@ -43,6 +44,12 @@ class CobblePalsSaveData : PersistentState() {
                 tagNbt.putInt("PastureX", binding.pos.x)
                 tagNbt.putInt("PastureY", binding.pos.y)
                 tagNbt.putInt("PastureZ", binding.pos.z)
+            }
+            controllerBinding?.let { binding ->
+                tagNbt.putString("ControllerDimension", binding.dimensionId)
+                tagNbt.putInt("ControllerX", binding.pos.x)
+                tagNbt.putInt("ControllerY", binding.pos.y)
+                tagNbt.putInt("ControllerZ", binding.pos.z)
             }
             assignmentsNbt.put(uuid.toString(), tagNbt)
         }
@@ -71,9 +78,11 @@ class CobblePalsSaveData : PersistentState() {
         return nbt
     }
 
-    private fun getAllAssignments(): Map<UUID, Pair<TagInstance, com.cobblepalsworld.pasture.PastureBinding?>> {
-        val result = mutableMapOf<UUID, Pair<TagInstance, com.cobblepalsworld.pasture.PastureBinding?>>()
-        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding -> result[uuid] = tag to pastureBinding }
+    private fun getAllAssignments(): Map<UUID, Triple<TagInstance, com.cobblepalsworld.pasture.PastureBinding?, ControllerBinding?>> {
+        val result = mutableMapOf<UUID, Triple<TagInstance, com.cobblepalsworld.pasture.PastureBinding?, ControllerBinding?>>()
+        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding, controllerBinding ->
+            result[uuid] = Triple(tag, pastureBinding, controllerBinding)
+        }
         return result
     }
 
@@ -116,7 +125,17 @@ class CobblePalsSaveData : PersistentState() {
                         val boundPos = if (tagNbt.contains("BoundX")) {
                             BlockPos(tagNbt.getInt("BoundX"), tagNbt.getInt("BoundY"), tagNbt.getInt("BoundZ"))
                         } else null
-                        TagAssignmentManager.assign(uuid, TagInstance(type, filter, boundPos, augments, settings))
+                        val tag = TagInstance(type, filter, boundPos, augments, settings)
+                        if (tagNbt.contains("ControllerDimension")) {
+                            val controllerPos = BlockPos(
+                                tagNbt.getInt("ControllerX"),
+                                tagNbt.getInt("ControllerY"),
+                                tagNbt.getInt("ControllerZ")
+                            )
+                            TagAssignmentManager.assignFromController(uuid, tag, tagNbt.getString("ControllerDimension"), controllerPos)
+                        } else {
+                            TagAssignmentManager.assign(uuid, tag)
+                        }
                         if (tagNbt.contains("PastureDimension")) {
                             val pasturePos = BlockPos(
                                 tagNbt.getInt("PastureX"),

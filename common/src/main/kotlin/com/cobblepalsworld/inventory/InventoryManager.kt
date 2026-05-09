@@ -14,19 +14,13 @@ object InventoryManager {
             return PokemonInventory(pokemon.uuid, desiredSlots).also { inventories[pokemon.uuid] = it }
         }
 
-        if (desiredSlots <= current.size()) {
+        if (desiredSlots == current.size()) {
             return current
         }
 
-        val expanded = PokemonInventory(pokemon.uuid, desiredSlots)
-        for (slot in 0 until current.size()) {
-            val stack = current.getStack(slot)
-            if (!stack.isEmpty) {
-                expanded.setStack(slot, stack.copy())
-            }
-        }
-        inventories[pokemon.uuid] = expanded
-        return expanded
+        val resized = resizeInventory(pokemon.uuid, current, desiredSlots) ?: return current
+        inventories[pokemon.uuid] = resized
+        return resized
     }
 
     fun get(pokemonId: UUID): PokemonInventory? = inventories[pokemonId]
@@ -37,6 +31,8 @@ object InventoryManager {
         inventories[pokemonId] = inventory
     }
 
+    fun count(): Int = inventories.size
+
     fun forEach(action: (UUID, PokemonInventory) -> Unit) = inventories.forEach(action)
 
     fun pruneStale(shouldKeep: (UUID, PokemonInventory) -> Boolean) {
@@ -44,4 +40,18 @@ object InventoryManager {
     }
 
     fun clear() = inventories.clear()
+
+    private fun resizeInventory(pokemonId: UUID, current: PokemonInventory, desiredSlots: Int): PokemonInventory? {
+        val resized = PokemonInventory(pokemonId, desiredSlots)
+        for (slot in 0 until current.size()) {
+            val stack = current.getStack(slot)
+            if (stack.isEmpty) continue
+
+            val remainder = resized.insertStack(stack.copy())
+            if (!remainder.isEmpty) {
+                return null
+            }
+        }
+        return resized
+    }
 }

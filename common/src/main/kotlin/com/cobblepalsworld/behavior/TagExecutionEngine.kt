@@ -126,6 +126,15 @@ object TagExecutionEngine {
         }
     }
 
+    fun resetRuntimeState() {
+        StateManager.clear()
+        ClaimManager.clear()
+        BreakerBehavior.clearAllPastureOrigins()
+        SenderBehavior.clearAllRuntimeState()
+        DistributorBehavior.clearAllRuntimeState()
+        ShepherdBehavior.clearAllRuntimeState()
+    }
+
     private fun passesRedstoneGate(world: World, origin: BlockPos, tag: TagInstance, state: WorkerState): Boolean {
         if (!tag.augments.isRedstoneControlled()) return true
 

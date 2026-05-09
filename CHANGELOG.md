@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.8
+
+- Rebalanced Command Post worker dispatch so new assignments rotate more fairly across the linked pasture roster instead of always front-loading the same first few Pokemon.
+- Removed silent automatic relinking during runtime so a Command Post now stays unlinked until the player deliberately relinks it, preventing surprise pasture swaps.
+- Polished Command Post feedback with exact pasture link coordinates in chat plus clearer screen hints for missing links, missing job cards, waiting jobs, and ready versus busy workers.
+
+## 0.1.7
+
+- Reworked the old router into a Pokemon-first Command Post that links to a nearby pasture and assigns installed job cards to real tethered workers instead of executing automation on its own.
+- Added command-post assignment ownership so linked workers persist cleanly, release safely when the post is removed, and show as managed when opened in the per-Pokemon tag screen.
+- Rebuilt the Command Post UI around linked pasture status, on-duty worker counts, and relinking controls while keeping the existing saved block id for world compatibility.
+
+## 0.1.6
+
+- Restricted router module slots to tags the router can actually execute and added an explicit unsupported-module warning for older saved routers.
+- Added admin reset commands for runtime state and carried inventories, plus safe inventory shrinking when BST-based carry capacity drops.
+- Normalized the remaining half-height search paths so pasture and router scans now use the same full-volume search behavior.
+
 ## 0.1.5
 
 - Added a router block with its own inventory, module slots, upgrade slots, comparator support, hopper access, owner security, and ordered installed-module execution.

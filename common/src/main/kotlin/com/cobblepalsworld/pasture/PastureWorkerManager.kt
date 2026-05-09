@@ -172,13 +172,18 @@ object PastureWorkerManager {
         InventoryManager.clear()
         StateManager.clear()
         ClaimManager.clear()
-        // Reset per-world init state for potential re-start (singleplayer)
-        initializedWorlds.clear()
-        previousTethered.clear()
-        previouslyTagged.clear()
+        resetTransientState(clearInitialization = true)
     }
 
     fun markDirtyNow(world: World) {
         (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
+    }
+
+    fun resetTransientState(clearInitialization: Boolean = false) {
+        if (clearInitialization) {
+            initializedWorlds.clear()
+        }
+        previousTethered.clear()
+        previouslyTagged.clear()
     }
 }

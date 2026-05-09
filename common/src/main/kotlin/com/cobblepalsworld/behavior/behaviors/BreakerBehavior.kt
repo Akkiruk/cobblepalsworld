@@ -66,6 +66,10 @@ object BreakerBehavior : TagBehavior {
         pastureOrigins.remove(pokemonId)
     }
 
+    fun clearAllPastureOrigins() {
+        pastureOrigins.clear()
+    }
+
     private fun isBlockBanned(block: Block, pos: BlockPos, pokemonId: java.util.UUID): Boolean {
         if (block in BANNED_BLOCKS) return true
 
@@ -104,7 +108,7 @@ object BreakerBehavior : TagBehavior {
             ) boundPos else null
         }
 
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { pos ->
                 isBreakable(world, pos, pokemonId)
                     && matchesFilter(world.getBlockState(pos).block, tag.filter)

@@ -12,7 +12,6 @@ import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.item.ItemPlacementContext
 import net.minecraft.item.ItemStack
-import net.minecraft.screen.ScreenHandler
 import net.minecraft.state.StateManager
 import net.minecraft.state.property.Properties
 import net.minecraft.text.Text
@@ -23,11 +22,24 @@ import net.minecraft.util.hit.BlockHitResult
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.BlockView
 import net.minecraft.world.World
-import net.minecraft.inventory.Inventory
 
 class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
     companion object {
         val CODEC: MapCodec<RouterBlock> = createCodec(::RouterBlock)
+    }
+
+    private fun linkMessage(blockEntity: RouterBlockEntity, linked: Boolean): Text {
+        if (!linked) {
+            return Text.literal("No nearby pasture found for this Command Post.").formatted(Formatting.YELLOW)
+        }
+
+        val linkedPos = blockEntity.linkedPastureLocation()
+        return if (linkedPos != null) {
+            Text.literal("Command Post linked to pasture at ${linkedPos.x}, ${linkedPos.y}, ${linkedPos.z}.")
+                .formatted(Formatting.GREEN)
+        } else {
+            Text.literal("Command Post linked to a nearby pasture.").formatted(Formatting.GREEN)
+        }
     }
 
     init {
@@ -54,13 +66,18 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
         val blockEntity = world.getBlockEntity(pos) as? RouterBlockEntity ?: return ActionResult.PASS
         if (!blockEntity.canAccess(player)) {
             if (!world.isClient) {
-                player.sendMessage(Text.literal("This router is secured to another player.").formatted(Formatting.RED), true)
+                player.sendMessage(Text.literal("This command post is secured to another player.").formatted(Formatting.RED), true)
             }
             return ActionResult.SUCCESS
         }
 
         if (!world.isClient) {
-            player.openHandledScreen(blockEntity)
+            if (player.isSneaking) {
+                val linked = blockEntity.relinkToNearbyPasture(world)
+                player.sendMessage(linkMessage(blockEntity, linked), true)
+            } else {
+                player.openHandledScreen(blockEntity)
+            }
         }
         return ActionResult.SUCCESS
     }
@@ -68,12 +85,18 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
     override fun onPlaced(world: World, pos: BlockPos, state: BlockState, placer: LivingEntity?, itemStack: ItemStack) {
         super.onPlaced(world, pos, state, placer, itemStack)
         val player = placer as? PlayerEntity ?: return
-        (world.getBlockEntity(pos) as? RouterBlockEntity)?.setOwner(player)
+        val blockEntity = world.getBlockEntity(pos) as? RouterBlockEntity ?: return
+        blockEntity.setOwner(player)
+        if (!world.isClient) {
+            val linked = blockEntity.relinkToNearbyPasture(world)
+            player.sendMessage(linkMessage(blockEntity, linked), true)
+        }
     }
 
     override fun onStateReplaced(state: BlockState, world: World, pos: BlockPos, newState: BlockState, moved: Boolean) {
         if (!state.isOf(newState.block)) {
             (world.getBlockEntity(pos) as? RouterBlockEntity)?.let { router ->
+                (world as? net.minecraft.server.world.ServerWorld)?.let(router::clearControlledAssignments)
                 ItemScatterer.spawn(world, pos, router)
                 world.updateComparators(pos, this)
             }
@@ -85,7 +108,7 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
 
     override fun getComparatorOutput(state: BlockState, world: World, pos: BlockPos): Int {
         val inventory = world.getBlockEntity(pos) as? RouterBlockEntity ?: return 0
-        return ScreenHandler.calculateComparatorOutput(inventory as Inventory)
+        return inventory.comparatorOutput()
     }
 
     override fun emitsRedstonePower(state: BlockState): Boolean = true

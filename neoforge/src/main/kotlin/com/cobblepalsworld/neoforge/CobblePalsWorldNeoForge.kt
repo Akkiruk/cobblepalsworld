@@ -2,6 +2,7 @@ package com.cobblepalsworld.neoforge
 
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.CobblePalsWorldClient
+import com.cobblepalsworld.command.CobblePalsCommand
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.platform.ActivatorPlatformBridge
@@ -12,6 +13,7 @@ import net.neoforged.fml.loading.FMLEnvironment
 import net.neoforged.fml.loading.FMLPaths
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent
 import net.neoforged.neoforge.common.NeoForge
+import net.neoforged.neoforge.event.RegisterCommandsEvent
 import thedarkcolour.kotlinforforge.neoforge.forge.MOD_BUS
 
 @Mod(CobblePalsWorld.MODID)
@@ -20,6 +22,9 @@ object CobblePalsWorldNeoForge {
         ConfigManager.init(FMLPaths.CONFIGDIR.get())
         ActivatorPlatformBridge.hooks = NeoForgeActivatorPlatformBridge
         CobblePalsWorld.init()
+        NeoForge.EVENT_BUS.addListener { event: RegisterCommandsEvent ->
+            CobblePalsCommand.register(event.dispatcher)
+        }
 
         if (FMLEnvironment.dist.isClient) {
             MOD_BUS.addListener { _: FMLClientSetupEvent ->

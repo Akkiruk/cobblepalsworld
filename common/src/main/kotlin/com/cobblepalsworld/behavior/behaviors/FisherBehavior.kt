@@ -30,7 +30,7 @@ object FisherBehavior : TagBehavior {
         val range = effectiveRange(tag, state)
         val pokemonId = entity.pokemon.uuid
         // Find the nearest water-adjacent block (solid block next to water for standing)
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { pos ->
                 isWater(world, pos) && !ClaimManager.isClaimedByOther(pos, pokemonId, world)
             }?.toImmutable()

@@ -86,7 +86,7 @@ object IlluminatorBehavior : TagBehavior {
     }
 
     private fun findDarkSpot(world: World, origin: BlockPos, pokemonId: java.util.UUID, range: Int): BlockPos? {
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { pos ->
                 isDark(world, pos)
                     && world.getBlockState(pos).isReplaceable

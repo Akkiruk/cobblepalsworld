@@ -12,7 +12,7 @@ class WorkerState(val pokemonId: UUID) {
     var lastPathfindTick: Long = 0L
     var lastSeenTick: Long = 0L
 
-    // --- Eco mode (inspired by Modular Routers) ---
+    // --- Eco mode (skip full work scans after a worker has been idle for a while) ---
     /** Ticks since this worker last did useful work. Reset on any successful action. */
     var idleTicks: Int = 0
     /** When true, worker is in low-power mode and ticks at ecoTickRate instead of normal rate. */

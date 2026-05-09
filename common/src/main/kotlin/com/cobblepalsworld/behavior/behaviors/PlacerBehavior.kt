@@ -102,7 +102,7 @@ object PlacerBehavior : TagBehavior {
         }
 
         // Unbound → search outward from origin
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { isPlaceable(world, it, pokemonId) }
             ?.toImmutable()
     }

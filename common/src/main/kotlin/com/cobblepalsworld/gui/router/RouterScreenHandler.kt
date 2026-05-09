@@ -22,8 +22,9 @@ class RouterScreenHandler : ScreenHandler {
         const val MODULE_COLUMNS = 3
         const val MODULE_ROWS = 3
         const val PLAYER_INV_Y = 108
+        const val COMMAND_SLOT_COUNT = RouterBlockEntity.MODULE_SLOT_COUNT + RouterBlockEntity.UPGRADE_SLOT_COUNT
 
-        fun isBufferItem(stack: ItemStack): Boolean = stack.item !is TagItem && stack.item !is AugmentItem
+        fun isCommandCard(stack: ItemStack): Boolean = stack.item is TagItem
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
@@ -40,23 +41,19 @@ class RouterScreenHandler : ScreenHandler {
         setupSlots(playerInventory)
     }
 
-    val bufferCount: Int get() = routerData.get(0)
-    val bufferMax: Int get() = routerData.get(1)
-    val powered: Boolean get() = routerData.get(2) != 0
-    val cooldown: Int get() = routerData.get(3)
+    val linked: Boolean get() = routerData.get(0) != 0
+    val rosterCount: Int get() = routerData.get(1)
+    val assignedCount: Int get() = routerData.get(2)
+    val activeCount: Int get() = routerData.get(3)
 
     private fun setupSlots(playerInventory: PlayerInventory) {
         addProperties(routerData)
-
-        addSlot(object : Slot(routerInventory, RouterBlockEntity.BUFFER_SLOT, 82, 20) {
-            override fun canInsert(stack: ItemStack): Boolean = isBufferItem(stack)
-        })
 
         for (row in 0 until MODULE_ROWS) {
             for (col in 0 until MODULE_COLUMNS) {
                 val slotIndex = RouterBlockEntity.MODULE_SLOT_START + row * MODULE_COLUMNS + col
                 addSlot(object : Slot(routerInventory, slotIndex, 26 + col * 18, 20 + row * 18) {
-                    override fun canInsert(stack: ItemStack): Boolean = stack.item is TagItem
+                    override fun canInsert(stack: ItemStack): Boolean = isCommandCard(stack)
                     override fun getMaxItemCount(): Int = 1
                 })
             }
@@ -87,15 +84,15 @@ class RouterScreenHandler : ScreenHandler {
         val original = slot.stack
         val moved = original.copy()
 
-        if (slotIndex < RouterBlockEntity.TOTAL_SLOTS) {
-            if (!insertItem(original, RouterBlockEntity.TOTAL_SLOTS, slots.size, true)) {
+        if (slotIndex < COMMAND_SLOT_COUNT) {
+            if (!insertItem(original, COMMAND_SLOT_COUNT, slots.size, true)) {
                 return ItemStack.EMPTY
             }
         } else {
             val inserted = when {
-                original.item is TagItem -> insertItem(original, RouterBlockEntity.MODULE_SLOT_START, RouterBlockEntity.MODULE_SLOT_END, false)
-                original.item is AugmentItem -> insertItem(original, RouterBlockEntity.UPGRADE_SLOT_START, RouterBlockEntity.UPGRADE_SLOT_END, false)
-                else -> insertItem(original, RouterBlockEntity.BUFFER_SLOT, RouterBlockEntity.BUFFER_SLOT + 1, false)
+                isCommandCard(original) -> insertItem(original, 0, RouterBlockEntity.MODULE_SLOT_COUNT, false)
+                original.item is AugmentItem -> insertItem(original, RouterBlockEntity.MODULE_SLOT_COUNT, COMMAND_SLOT_COUNT, false)
+                else -> false
             }
             if (!inserted) {
                 return ItemStack.EMPTY
@@ -110,6 +107,5 @@ class RouterScreenHandler : ScreenHandler {
 
         return moved
     }
-
     override fun canUse(player: PlayerEntity): Boolean = routerInventory.canPlayerUse(player)
 }

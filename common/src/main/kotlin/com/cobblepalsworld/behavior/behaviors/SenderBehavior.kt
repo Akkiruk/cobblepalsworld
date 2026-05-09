@@ -246,6 +246,11 @@ object SenderBehavior : TagBehavior {
         selectedRemoteTargets.remove(pokemonId)
     }
 
+    fun clearAllRuntimeState() {
+        targetCursor.clear()
+        selectedRemoteTargets.clear()
+    }
+
     private fun resolveWorld(world: ServerWorld, dimensionId: String): ServerWorld? {
         val id = Identifier.tryParse(dimensionId) ?: return null
         return world.server.getWorld(RegistryKey.of(RegistryKeys.WORLD, id))

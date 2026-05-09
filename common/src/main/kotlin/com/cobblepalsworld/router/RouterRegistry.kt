@@ -17,6 +17,7 @@ object RouterRegistry {
     private val ITEMS = DeferredRegister.create(CobblePalsWorld.MODID, RegistryKeys.ITEM)
     private val BLOCK_ENTITIES = DeferredRegister.create(CobblePalsWorld.MODID, RegistryKeys.BLOCK_ENTITY_TYPE)
 
+    // Keep the router id so existing worlds upgrade in place to the Command Post block.
     val ROUTER: RegistrySupplier<RouterBlock> = BLOCKS.register("router") {
         RouterBlock(
             AbstractBlock.Settings.create()

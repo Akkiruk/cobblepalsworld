@@ -30,7 +30,7 @@ object HarvesterBehavior : TagBehavior {
     ): BlockPos? {
         val range = effectiveRange(tag, state)
         val pokemonId = entity.pokemon.uuid
-        return BlockPos.iterateOutwards(origin, range, range / 2, range)
+        return BlockPos.iterateOutwards(origin, range, range, range)
             .firstOrNull { pos ->
                 isMatureCrop(world, pos) && !ClaimManager.isClaimedByOther(pos, pokemonId, world)
             }?.toImmutable()

@@ -107,6 +107,10 @@ object ShepherdBehavior : TagBehavior {
         recentlyFed.entries.removeIf { it.value < cutoff }
     }
 
+    fun clearAllRuntimeState() {
+        recentlyFed.clear()
+    }
+
     private fun findBreedableAnimal(world: World, center: BlockPos, range: Int): AnimalEntity? {
         val box = Box(center).expand(range.toDouble())
         return world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }

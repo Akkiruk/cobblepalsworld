@@ -166,7 +166,7 @@ object ActivatorBehavior : TagBehavior {
     ): Boolean {
         val origin = entity.blockPos
 
-        for (pos in BlockPos.iterateOutwards(origin, range, maxOf(1, range / 2), range)) {
+        for (pos in BlockPos.iterateOutwards(origin, range, range, range)) {
             val state = world.getBlockState(pos)
             if (state.isAir || state.block in runtimeBlockBlacklist) continue
 

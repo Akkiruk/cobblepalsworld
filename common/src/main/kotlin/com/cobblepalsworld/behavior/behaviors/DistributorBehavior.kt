@@ -100,6 +100,10 @@ object DistributorBehavior : TagBehavior {
         roundRobinIndex.remove(pokemonId)
     }
 
+    fun clearAllRuntimeState() {
+        roundRobinIndex.clear()
+    }
+
     private fun findTargetContainers(world: World, origin: BlockPos, tag: TagInstance, range: Int): List<BlockPos> {
         val sourcePos = tag.boundPos
         val explicitTargets = tag.settings.extraTargets

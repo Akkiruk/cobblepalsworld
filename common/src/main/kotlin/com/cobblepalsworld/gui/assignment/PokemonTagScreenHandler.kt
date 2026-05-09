@@ -33,6 +33,7 @@ class PokemonTagScreenHandler : ScreenHandler {
     val carryMax: Int get() = invData.get(1)
     val workerPhase: Int get() = invData.get(2)
     val isEcoMode: Boolean get() = invData.get(3) != 0
+    val isManagedByCommandPost: Boolean get() = invData.get(4) != 0
 
     companion object {
         const val AUGMENT_SLOT_COUNT = AugmentSet.MAX_AUGMENT_SLOTS // 3
@@ -50,7 +51,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.augmentInventory = SimpleInventory(AUGMENT_SLOT_COUNT)
         this.pokemonDisplayInventory = SimpleInventory(9)
         this.pokemonId = null
-        this.invData = ArrayPropertyDelegate(4)
+        this.invData = ArrayPropertyDelegate(5)
         setupSlots(playerInventory)
     }
 
@@ -64,16 +65,18 @@ class PokemonTagScreenHandler : ScreenHandler {
             override fun get(index: Int): Int {
                 val pokemonInv = InventoryManager.get(pokemonId)
                 val workerState = StateManager.get(pokemonId)
+                val isManagedByCommandPost = TagAssignmentManager.getControllerBinding(pokemonId) != null
                 return when (index) {
                     0 -> pokemonInv?.let { inv -> (0 until inv.size()).count { !inv.getStack(it).isEmpty } } ?: 0
                     1 -> pokemonInv?.size() ?: 0
                     2 -> workerState?.phase?.ordinal ?: 0
                     3 -> if (workerState?.ecoMode == true) 1 else 0
+                    4 -> if (isManagedByCommandPost) 1 else 0
                     else -> 0
                 }
             }
             override fun set(index: Int, value: Int) {}
-            override fun size(): Int = 4
+            override fun size(): Int = 5
         }
 
         val pokemonInv = InventoryManager.get(pokemonId)
@@ -173,6 +176,14 @@ class PokemonTagScreenHandler : ScreenHandler {
         super.onClosed(player)
         val currentPokemonId = pokemonId
         if (!player.world.isClient && currentPokemonId != null) {
+            if (TagAssignmentManager.getControllerBinding(currentPokemonId) != null) {
+                player.sendMessage(
+                    net.minecraft.text.Text.literal("This Pokemon is currently managed by a linked Command Post.")
+                        .formatted(net.minecraft.util.Formatting.YELLOW),
+                    true
+                )
+                return
+            }
             val stack = tagInventory.getStack(0)
             if (!stack.isEmpty && stack.item is TagItem) {
                 val tagItem = stack.item as TagItem
