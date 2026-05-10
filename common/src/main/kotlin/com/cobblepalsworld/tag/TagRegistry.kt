@@ -6,6 +6,7 @@ import com.cobblepalsworld.router.RouterRegistry
 import dev.architectury.registry.CreativeTabRegistry
 import dev.architectury.registry.registries.DeferredRegister
 import dev.architectury.registry.registries.RegistrySupplier
+import net.minecraft.inventory.Inventory
 import net.minecraft.item.Item
 import net.minecraft.item.ItemGroup
 import net.minecraft.item.ItemStack
@@ -22,6 +23,10 @@ object TagRegistry {
     private val TABS = DeferredRegister.create(CobblePalsWorld.MODID, RegistryKeys.ITEM_GROUP)
 
     private val registered = mutableMapOf<TagType, RegistrySupplier<TagItem>>()
+    private val legacyItemIds = mapOf(
+        TagType.COURIER to listOf("courier"),
+        TagType.STASHER to listOf("stasher")
+    )
 
     val TAB: RegistrySupplier<ItemGroup> = TABS.register("cobblepalsworld") {
         CreativeTabRegistry.create {
@@ -41,6 +46,12 @@ object TagRegistry {
                 TagItem(type, Item.Settings().maxCount(1))
             }
             registered[type] = supplier
+
+            legacyItemIds[type].orEmpty().forEach { legacyId ->
+                ITEMS.register(legacyId + "_tag") {
+                    TagItem(type, Item.Settings().maxCount(1), isCanonicalItem = false)
+                }
+            }
         }
         ITEMS.register()
         TABS.register()
@@ -49,4 +60,21 @@ object TagRegistry {
     fun getItem(type: TagType): TagItem? = registered[type]?.get()
 
     fun allItems(): List<RegistrySupplier<TagItem>> = registered.values.toList()
+
+    fun normalizeStack(stack: ItemStack): ItemStack {
+        val tagItem = stack.item as? TagItem ?: return stack
+        if (tagItem.isCanonicalItem) return stack
+
+        val canonicalItem = getItem(tagItem.tagType) ?: return stack
+        return stack.copyComponentsToNewStack(canonicalItem, stack.count)
+    }
+
+    fun normalizeInventorySlot(inventory: Inventory, slot: Int): ItemStack {
+        val stack = inventory.getStack(slot)
+        val normalized = normalizeStack(stack)
+        if (normalized.item !== stack.item) {
+            inventory.setStack(slot, normalized)
+        }
+        return normalized
+    }
 }

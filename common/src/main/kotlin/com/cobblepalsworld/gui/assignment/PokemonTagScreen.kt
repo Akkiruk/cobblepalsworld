@@ -2,6 +2,8 @@ package com.cobblepalsworld.gui.assignment
 
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.tag.TagItem
+import com.cobblepalsworld.tag.RedstoneControlMode
+import com.cobblepalsworld.tag.TagType
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.ingame.HandledScreen
 import net.minecraft.entity.player.PlayerInventory
@@ -81,12 +83,17 @@ class PokemonTagScreen(
             val tagItem = tagStack.item as TagItem
 
             if (tagItem.tagType.supportsBinding) {
+                val boundArea = TagItem.getBoundArea(tagStack)
                 val boundPos = TagItem.getBoundPos(tagStack)
-                if (boundPos != null) {
+                if (boundArea != null) {
+                    context.drawText(textRenderer, Text.literal("${boundArea.width()}x${boundArea.depth()}"), sx, sy, 0x50C864, false)
+                    context.drawText(textRenderer, Text.literal("area"), sx, sy + 9, 0x50C864, false)
+                } else if (boundPos != null) {
                     context.drawText(textRenderer, Text.literal("${boundPos.x},${boundPos.y}"), sx, sy, 0x50C864, false)
                     context.drawText(textRenderer, Text.literal(",${boundPos.z}"), sx, sy + 9, 0x50C864, false)
                 } else {
-                    context.drawText(textRenderer, Text.literal("Unbound"), sx, sy, 0x504848, false)
+                    val label = if (tagItem.tagType == TagType.BREAKER || tagItem.tagType == TagType.HARVESTER) "Unselected" else "Unbound"
+                    context.drawText(textRenderer, Text.literal(label), sx, sy, 0x504848, false)
                 }
                 sy += 20
             } else {
@@ -97,11 +104,21 @@ class PokemonTagScreen(
             if (registries != null) {
                 val filter = TagItem.getFilter(tagStack, registries)
                 val filterText = if (filter.items.isEmpty()) {
-                    if (filter.whitelist) "No filter" else "All"
+                    if (filter.whitelist) "Allow none" else "Allow all"
                 } else {
-                    "${filter.items.size} filter"
+                    "${if (filter.whitelist) "Allow" else "Block"} ${filter.items.size}"
                 }
                 context.drawText(textRenderer, Text.literal(filterText), sx, sy, 0x707078, false)
+
+                val settings = TagItem.getSettings(tagStack)
+                val statusText = when {
+                    settings.redstoneMode != RedstoneControlMode.ALWAYS -> compactValue(settings.redstoneMode.id)
+                    tagItem.tagType.supportsTargetList -> compactValue(settings.targetStrategy.id)
+                    else -> null
+                }
+                if (statusText != null) {
+                    context.drawText(textRenderer, Text.literal(statusText), sx, sy + 9, 0x6060A0, false)
+                }
             }
         }
     }
@@ -110,4 +127,7 @@ class PokemonTagScreen(
         super.render(context, mouseX, mouseY, delta)
         drawMouseoverTooltip(context, mouseX, mouseY)
     }
+
+    private fun compactValue(value: String): String =
+        value.split('_').joinToString(" ") { token -> token.replaceFirstChar(Char::titlecase) }
 }

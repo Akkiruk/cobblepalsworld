@@ -19,6 +19,7 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Box
 import net.minecraft.world.World
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Feeds and breeds animals near a bound pen area.
@@ -31,9 +32,14 @@ object ShepherdBehavior : TagBehavior {
     override val tagType = TagType.SHEPHERD
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
     override val handlesOwnInventory = true
+    override fun arrivalDelayTicks(tag: TagInstance, state: WorkerState): Long = 0L
+    override fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long = 40L
+
+    private const val FEED_RANGE = 3.0
 
     // Track which animals we've recently fed to avoid feeding the same one twice
     private val recentlyFed = mutableMapOf<UUID, Long>()
+    private val trackedAnimals = ConcurrentHashMap<UUID, UUID>()
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
@@ -49,12 +55,15 @@ object ShepherdBehavior : TagBehavior {
         if (hasFood) {
             // Phase 2: find a breedable animal
             val penArea = tag.boundPos ?: origin
-            val animal = findBreedableAnimal(world, penArea, range)
-            return animal?.blockPos
+            resolveTrackedAnimal(world, entity.pokemon.uuid, penArea, range)?.let { return it.blockPos.toImmutable() }
+
+            val animal = findBreedableAnimal(world, penArea, range) ?: return null
+            trackedAnimals[entity.pokemon.uuid] = animal.uuid
+            return animal.blockPos.toImmutable()
         }
 
         // Phase 1: find container with breeding food
-        return findFoodContainer(world, origin, tag, range)
+        return findFoodContainer(world, origin, tag, state, range)
     }
 
     override fun doWork(
@@ -69,26 +78,30 @@ object ShepherdBehavior : TagBehavior {
             return extractFood(world, target, pokemonInv)
         }
 
-        // Near animal → feed it
-        val range = 3.0
-        val box = Box(target).expand(range)
-        val animal = world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }
-            .filter { canBreed(it, world) }
-            .minByOrNull { it.squaredDistanceTo(entity) }
-
-        if (animal != null) {
-            // Find matching food in inventory
-            for (slot in 0 until pokemonInv.size()) {
-                val stack = pokemonInv.getStack(slot)
-                if (stack.isEmpty || !animal.isBreedingItem(stack)) continue
-
-                animal.lovePlayer(null)
-                recentlyFed[animal.uuid] = world.time
-                stack.decrement(1)
-                if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
-                PastureWorkerManager.markDirtyNow(world)
-                break
+        val animal = resolveTrackedAnimal(world, entity.pokemon.uuid, target, effectiveRange(tag, state))
+            ?: findBreedableAnimal(world, target, FEED_RANGE.toInt())
+            ?: run {
+                trackedAnimals.remove(entity.pokemon.uuid)
+                return WorkResult.Done()
             }
+
+        trackedAnimals[entity.pokemon.uuid] = animal.uuid
+        if (animal.squaredDistanceTo(entity) > FEED_RANGE * FEED_RANGE) {
+            return WorkResult.MoveTo(animal.blockPos.toImmutable())
+        }
+
+        // Find matching food in inventory
+        for (slot in 0 until pokemonInv.size()) {
+            val stack = pokemonInv.getStack(slot)
+            if (stack.isEmpty || !animal.isBreedingItem(stack)) continue
+
+            animal.lovePlayer(null)
+            recentlyFed[animal.uuid] = world.time
+            trackedAnimals.remove(entity.pokemon.uuid)
+            stack.decrement(1)
+            if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
+            PastureWorkerManager.markDirtyNow(world)
+            break
         }
 
         return WorkResult.Done()
@@ -97,11 +110,13 @@ object ShepherdBehavior : TagBehavior {
     override fun isTargetValid(world: World, target: BlockPos, tag: TagInstance): Boolean {
         // Valid if it's a container or there are animals nearby
         if (ContainerFinder.isContainer(world, target)) return true
-        val box = Box(target).expand(3.0)
-        return world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }.isNotEmpty()
+        val box = Box(target).expand(FEED_RANGE)
+        return world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }
+            .any { canBreed(it, world) }
     }
 
     fun cleanup(pokemonId: UUID) {
+        trackedAnimals.remove(pokemonId)
         // Clean old entries periodically
         val cutoff = recentlyFed.values.minOrNull()?.let { it + 6000 } ?: return
         recentlyFed.entries.removeIf { it.value < cutoff }
@@ -109,13 +124,22 @@ object ShepherdBehavior : TagBehavior {
 
     fun clearAllRuntimeState() {
         recentlyFed.clear()
+        trackedAnimals.clear()
     }
 
     private fun findBreedableAnimal(world: World, center: BlockPos, range: Int): AnimalEntity? {
         val box = Box(center).expand(range.toDouble())
-        return world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }
-            .filter { canBreed(it, world) }
-            .minByOrNull { it.squaredDistanceTo(center.x + 0.5, center.y + 0.5, center.z + 0.5) }
+        var nearest: AnimalEntity? = null
+        var nearestDistance = Double.MAX_VALUE
+        for (animal in world.getEntitiesByClass(AnimalEntity::class.java, box) { it.isAlive }) {
+            if (!canBreed(animal, world)) continue
+            val distance = animal.squaredDistanceTo(center.x + 0.5, center.y + 0.5, center.z + 0.5)
+            if (distance < nearestDistance) {
+                nearest = animal
+                nearestDistance = distance
+            }
+        }
+        return nearest
     }
 
     private fun canBreed(animal: AnimalEntity, world: World): Boolean {
@@ -127,9 +151,23 @@ object ShepherdBehavior : TagBehavior {
         return world.time - lastFed > 6000 // 5 minutes cooldown
     }
 
-    private fun findFoodContainer(world: World, origin: BlockPos, tag: TagInstance, range: Int): BlockPos? {
+    private fun resolveTrackedAnimal(world: World, pokemonId: UUID, center: BlockPos, range: Int): AnimalEntity? {
+        val serverWorld = world as? ServerWorld ?: return null
+        val trackedId = trackedAnimals[pokemonId] ?: return null
+        val animal = serverWorld.getEntity(trackedId) as? AnimalEntity ?: run {
+            trackedAnimals.remove(pokemonId)
+            return null
+        }
+        if (!animal.isAlive || !canBreed(animal, world) || animal.squaredDistanceTo(center.x + 0.5, center.y + 0.5, center.z + 0.5) > range.toDouble() * range) {
+            trackedAnimals.remove(pokemonId)
+            return null
+        }
+        return animal
+    }
+
+    private fun findFoodContainer(world: World, origin: BlockPos, tag: TagInstance, state: WorkerState, range: Int): BlockPos? {
         val exclude = mutableSetOf(origin)
-        return ContainerFinder.findClosestMatching(world, origin, range, exclude) { _, pos ->
+        return ContainerFinder.findControllerFirstCachedMatching(world, origin, tag, state, range, exclude) { _, pos ->
             containerHasFood(world, pos)
         }
     }

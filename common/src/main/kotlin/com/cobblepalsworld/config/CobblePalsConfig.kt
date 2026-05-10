@@ -8,6 +8,7 @@ data class CobblePalsConfig(
 ) {
     data class GeneralConfig(
         val tickInterval: Int = 5,
+        val idleSearchRetryTicks: Int = 20,
         val maxWorkersPerPasture: Int = 6,
         val inventoryBstDivisor: Int = 100,
         val inventoryMinSlots: Int = 3,
@@ -23,6 +24,7 @@ data class CobblePalsConfig(
     ) {
         fun validated() = GeneralConfig(
             tickInterval = tickInterval.coerceAtLeast(1),
+            idleSearchRetryTicks = idleSearchRetryTicks.coerceAtLeast(tickInterval.coerceAtLeast(1) * 4),
             maxWorkersPerPasture = maxWorkersPerPasture.coerceAtLeast(1),
             inventoryBstDivisor = inventoryBstDivisor.coerceAtLeast(1),
             inventoryMinSlots = inventoryMinSlots.coerceAtLeast(1),
@@ -31,7 +33,7 @@ data class CobblePalsConfig(
             arrivalDelayTicks = arrivalDelayTicks.coerceAtLeast(0),
             ecoTimeoutTicks = ecoTimeoutTicks.coerceAtLeast(1),
             ecoTickMultiplier = ecoTickMultiplier.coerceAtLeast(1),
-            containerCacheTicks = containerCacheTicks.coerceAtLeast(1)
+            containerCacheTicks = containerCacheTicks.coerceAtLeast(200)
         )
     }
 
@@ -41,29 +43,39 @@ data class CobblePalsConfig(
         val maxItemsPerTrip: Int = 64
     )
 
-    fun getTagConfig(type: TagType): TagConfig = tags.getOrDefault(type.id, TAG_DEFAULTS[type.id] ?: TagConfig())
+    fun getTagConfig(type: TagType): TagConfig {
+        val direct = tags[type.id]
+        if (direct != null) return direct
+
+        val legacy = when (type) {
+            TagType.COURIER -> tags["courier"]
+            TagType.STASHER -> tags["stasher"]
+            else -> null
+        }
+        if (legacy != null) return legacy
+
+        return TAG_DEFAULTS[type.id] ?: when (type) {
+            TagType.COURIER -> TAG_DEFAULTS["courier"]
+            TagType.STASHER -> TAG_DEFAULTS["stasher"]
+            else -> null
+        } ?: TagConfig()
+    }
 
     companion object {
         val TAG_DEFAULTS = mapOf(
             "breaker" to TagConfig(enabled = true, range = 8),
             "guardian" to TagConfig(enabled = true, range = 12),
             "harvester" to TagConfig(enabled = true, range = 8),
-            "fisher" to TagConfig(enabled = true, range = 10),
             "vacuum" to TagConfig(enabled = true, range = 8),
-            "smelter" to TagConfig(enabled = true, range = 12, maxItemsPerTrip = 8),
+            "sender" to TagConfig(enabled = true, range = 16),
             "courier" to TagConfig(enabled = true, range = 16),
+            "puller" to TagConfig(enabled = true, range = 16),
+            "distributor" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "stasher" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "dropper" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
-            "flinger" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "void" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
-            "player" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
-            "planter" to TagConfig(enabled = true, range = 8),
-            "illuminator" to TagConfig(enabled = true, range = 12),
             "activator" to TagConfig(enabled = true, range = 8),
-            "shepherd" to TagConfig(enabled = true, range = 12),
-            "lookout" to TagConfig(enabled = true, range = 16),
-            "scout" to TagConfig(enabled = true, range = 16),
-            "weatherworker" to TagConfig(enabled = true, range = 8)
+            "shepherd" to TagConfig(enabled = true, range = 12)
         )
 
         fun withDefaults(): CobblePalsConfig {

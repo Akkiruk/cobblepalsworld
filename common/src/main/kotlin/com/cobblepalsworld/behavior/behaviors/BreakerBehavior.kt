@@ -8,14 +8,13 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
-import com.cobblepalsworld.tag.filter.FilterMatcher
-import com.cobblepalsworld.tag.filter.TagFilter
 import net.minecraft.block.Block
 import net.minecraft.block.BlockState
 import net.minecraft.block.Blocks
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items
 import net.minecraft.registry.Registries
+import net.minecraft.registry.tag.BlockTags
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
@@ -24,6 +23,8 @@ import net.minecraft.world.World
 object BreakerBehavior : TagBehavior {
     override val tagType = TagType.BREAKER
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
+    override fun arrivalDelayTicks(tag: TagInstance, state: WorkerState): Long = 0L
+    override fun cooldownTicks(tag: TagInstance, state: WorkerState): Long = 1L
 
     // Blocks that must NEVER be broken — exploit prevention + world protection
     private val BANNED_BLOCKS: Set<Block> = setOf(
@@ -96,24 +97,12 @@ object BreakerBehavior : TagBehavior {
         tag: TagInstance, state: WorkerState
     ): BlockPos? {
         val pokemonId = entity.pokemon.uuid
-        val range = effectiveRange(tag, state)
         setPastureOrigin(pokemonId, origin)
 
-        // Bound breaker: only break the specific bound block (if valid)
-        val boundPos = tag.boundPos
-        if (boundPos != null) {
-            return if (isBreakable(world, boundPos, pokemonId)
-                && matchesFilter(world.getBlockState(boundPos).block, tag.filter)
-                && !ClaimManager.isClaimedByOther(boundPos, pokemonId, world)
-            ) boundPos else null
-        }
-
-        return BlockPos.iterateOutwards(origin, range, range, range)
-            .firstOrNull { pos ->
-                isBreakable(world, pos, pokemonId)
-                    && matchesFilter(world.getBlockState(pos).block, tag.filter)
-                    && !ClaimManager.isClaimedByOther(pos, pokemonId, world)
-            }?.toImmutable()
+        val boundPos = tag.boundPos ?: return null
+        return if (isBreakable(world, boundPos, pokemonId)
+            && !ClaimManager.isClaimedByOther(boundPos, pokemonId, world)
+        ) boundPos.toImmutable() else null
     }
 
     override fun doWork(
@@ -127,7 +116,7 @@ object BreakerBehavior : TagBehavior {
         if (isBlockBanned(blockState.block, target, entity.pokemon.uuid)) return WorkResult.Done()
 
         val serverWorld = world as? ServerWorld ?: return WorkResult.Done()
-        val toolStack = ItemStack(Items.NETHERITE_PICKAXE)
+        val toolStack = miningToolFor(blockState)
         val drops = Block.getDroppedStacks(
             blockState, serverWorld, target,
             world.getBlockEntity(target),
@@ -139,12 +128,16 @@ object BreakerBehavior : TagBehavior {
     }
 
     override fun isTargetValid(world: World, target: BlockPos, tag: TagInstance): Boolean {
-        val blockState = world.getBlockState(target)
-        return !blockState.isAir && matchesFilter(blockState.block, tag.filter)
+        return !world.getBlockState(target).isAir
     }
 
-    private fun matchesFilter(block: Block, filter: TagFilter): Boolean {
-        val blockItem = block.asItem() ?: return false
-        return FilterMatcher.matches(ItemStack(blockItem), filter)
+    private fun miningToolFor(blockState: BlockState): ItemStack {
+        return when {
+            blockState.isIn(BlockTags.AXE_MINEABLE) -> ItemStack(Items.NETHERITE_AXE)
+            blockState.isIn(BlockTags.SHOVEL_MINEABLE) -> ItemStack(Items.NETHERITE_SHOVEL)
+            blockState.isIn(BlockTags.HOE_MINEABLE) -> ItemStack(Items.NETHERITE_HOE)
+            blockState.isOf(Blocks.COBWEB) -> ItemStack(Items.NETHERITE_SWORD)
+            else -> ItemStack(Items.NETHERITE_PICKAXE)
+        }
     }
 }

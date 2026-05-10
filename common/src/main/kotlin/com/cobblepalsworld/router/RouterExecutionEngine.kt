@@ -18,54 +18,81 @@ object RouterExecutionEngine {
     private const val BASE_COOLDOWN = 20
 
     fun tick(world: ServerWorld, pos: BlockPos, _state: net.minecraft.block.BlockState, router: RouterBlockEntity) {
-        if (router.cooldownTicks > 0) {
-            router.cooldownTicks -= 1
-            return
+        val dimensionId = world.registryKey.value.toString()
+        val augments = router.installedAugments()
+        val tasksBySlot = buildTasksBySlot(world, router, augments)
+        val workerTasksBySlot = tasksBySlot.filterValues { !it.type.controllerNative }
+        var changed = cleanupControllerNativeAssignments(world, router, tasksBySlot)
+        RouterModuleExecutor.tick(world, router, tasksBySlot)
+
+        val controllerNativeAssignedCount = tasksBySlot.values.count { it.type.controllerNative }
+        val controllerNativeActiveCount = tasksBySlot.entries.count { (slotIndex, tag) ->
+            tag.type.controllerNative && RouterModuleExecutor.wasRecentlyActive(router, slotIndex, world.time)
         }
 
-        val linkedPasture = router.linkedPasture(world) ?: run {
-            val controlled = TagAssignmentManager.findControlledBy(world.registryKey.value.toString(), pos)
-            val changed = releaseControlledWorkers(world, router, router.linkedPastureAnchor(), controlled)
+        val linkedPasture = router.linkedPasture(world)
+        if (linkedPasture == null) {
+            if (releaseControlledWorkers(world, router, router.linkedPastureAnchor(), controlledWorkerIds(dimensionId, pos))) {
+                changed = true
+            }
             router.clearAssignedWorkers()
             router.unlinkPasture()
-            router.updateStatus(false, 0, 0, 0)
-            router.updatePowered(false)
-            router.cooldownTicks = BASE_COOLDOWN
+            router.updateStatus(false, 0, controllerNativeAssignedCount, controllerNativeActiveCount)
+            router.updatePowered(controllerNativeActiveCount > 0)
+            router.cooldownTicks = 0
             if (changed) {
                 CobblePalsSaveData.markDirty(world)
             }
             return
         }
 
-        val dimensionId = world.registryKey.value.toString()
         val pasturePos = linkedPasture.pos.toImmutable()
-        val augments = router.installedAugments()
-        val tasksBySlot = buildMap {
-            for (slotIndex in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
-                val tag = router.tagInModuleSlot(slotIndex, world.registryManager, augments) ?: continue
-                put(slotIndex, tag)
-            }
-        }
         val roster = collectRoster(linkedPasture)
+
+        if (router.cooldownTicks > 0) {
+            router.cooldownTicks -= 1
+            val assignedWorkerCount = workerTasksBySlot.keys.count { router.assignedWorker(it) != null }
+            val activeWorkerCount = workerTasksBySlot.keys.count { slotIndex ->
+                val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
+                StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
+            }
+            router.updateStatus(true, roster.size, controllerNativeAssignedCount + assignedWorkerCount, controllerNativeActiveCount + activeWorkerCount)
+            router.updatePowered(controllerNativeActiveCount + activeWorkerCount > 0)
+            if (changed) {
+                CobblePalsSaveData.markDirty(world)
+            }
+            return
+        }
+
         val manualAssignments = roster.count { candidate ->
             TagAssignmentManager.has(candidate.pokemonId) && TagAssignmentManager.getControllerBinding(candidate.pokemonId) == null
         }
         val maxAssignableWorkers = (ConfigManager.config.general.maxWorkersPerPasture - manualAssignments).coerceAtLeast(0)
-        val controlledBefore = TagAssignmentManager.findControlledBy(dimensionId, pos)
+        val controlledBefore = controlledWorkerIds(dimensionId, pos)
         val rosterById = roster.associateBy { it.pokemonId }
         val claimed = mutableSetOf<UUID>()
         val controlledThisTick = mutableSetOf<UUID>()
 
-        var assignedCount = 0
-        var activeCount = 0
-        var changed = false
+        var assignedWorkerCount = 0
+        var activeWorkerCount = 0
 
         for (slotIndex in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
             val tag = tasksBySlot[slotIndex]
-            if (tag == null || assignedCount >= maxAssignableWorkers) {
+            if (tag?.type?.controllerNative == true) {
                 if (router.assignedWorker(slotIndex) != null) {
                     router.setAssignedWorker(slotIndex, null)
                     changed = true
+                }
+                continue
+            }
+
+            if (tag == null || assignedWorkerCount >= maxAssignableWorkers) {
+                if (router.assignedWorker(slotIndex) != null) {
+                    router.setAssignedWorker(slotIndex, null)
+                    changed = true
+                }
+                if (tag == null) {
+                    router.clearModuleRuntime(slotIndex)
                 }
                 continue
             }
@@ -102,9 +129,9 @@ object RouterExecutionEngine {
                 changed = true
             }
 
-            assignedCount += 1
-            if (StateManager.get(chosen.pokemonId)?.phase != WorkerPhase.IDLE) {
-                activeCount += 1
+            assignedWorkerCount += 1
+            if (StateManager.get(chosen.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) {
+                activeWorkerCount += 1
             }
         }
 
@@ -112,6 +139,8 @@ object RouterExecutionEngine {
             changed = true
         }
 
+        val assignedCount = controllerNativeAssignedCount + assignedWorkerCount
+        val activeCount = controllerNativeActiveCount + activeWorkerCount
         router.updateStatus(true, roster.size, assignedCount, activeCount)
         router.updatePowered(activeCount > 0)
         router.cooldownTicks = BASE_COOLDOWN
@@ -119,6 +148,49 @@ object RouterExecutionEngine {
         if (changed) {
             CobblePalsSaveData.markDirty(world)
         }
+    }
+
+    private fun buildTasksBySlot(world: ServerWorld, router: RouterBlockEntity, augments: com.cobblepalsworld.augment.AugmentSet): Map<Int, TagInstance> {
+        return buildMap {
+            for (slotIndex in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
+                val tag = router.tagInModuleSlot(slotIndex, world.registryManager, augments) ?: continue
+                if (!ConfigManager.config.getTagConfig(tag.type).enabled) continue
+                put(slotIndex, tag)
+            }
+        }
+    }
+
+    private fun cleanupControllerNativeAssignments(world: ServerWorld, router: RouterBlockEntity, tasksBySlot: Map<Int, TagInstance>): Boolean {
+        var changed = false
+
+        for (slotIndex in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
+            val tag = tasksBySlot[slotIndex]
+            if ((tag == null || tag.type.controllerNative) && router.assignedWorker(slotIndex) != null) {
+                router.setAssignedWorker(slotIndex, null)
+                changed = true
+            }
+        }
+
+        val dimensionId = world.registryKey.value.toString()
+        val cleanupPos = router.linkedPastureAnchor()
+        for (pokemonId in TagAssignmentManager.findControlledBy(dimensionId, router.pos)) {
+            val tag = TagAssignmentManager.get(pokemonId) ?: continue
+            if (!tag.type.controllerNative) continue
+
+            if (TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, router.pos) != null) {
+                TagExecutionEngine.cleanup(pokemonId, world, cleanupPos)
+                changed = true
+            }
+        }
+
+        return changed
+    }
+
+    private fun controlledWorkerIds(dimensionId: String, pos: BlockPos): Set<UUID> {
+        return TagAssignmentManager.findControlledBy(dimensionId, pos)
+            .filterTo(mutableSetOf()) { pokemonId ->
+                TagAssignmentManager.get(pokemonId)?.type?.controllerNative != true
+            }
     }
 
     private fun collectRoster(pasture: PokemonPastureBlockEntity): List<WorkerCandidate> {

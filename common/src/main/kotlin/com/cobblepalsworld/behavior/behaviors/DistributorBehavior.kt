@@ -20,9 +20,7 @@ import net.minecraft.world.World
 import java.util.UUID
 
 /**
- * Round-robin distributes items from a source into multiple target containers.
- * Binds to a source container. Finds all other containers in range as targets.
- * Cycles through targets distributing matching items evenly.
+ * Round-robin distributes items from the Command Post buffer into multiple target containers.
  */
 object DistributorBehavior : TagBehavior {
     override val tagType = TagType.STASHER
@@ -31,6 +29,8 @@ object DistributorBehavior : TagBehavior {
 
     // Track round-robin index per Pokémon
     private val roundRobinIndex = mutableMapOf<UUID, Int>()
+
+    private fun sourceContainerPos(tag: TagInstance): BlockPos? = tag.controllerPos
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
@@ -43,8 +43,8 @@ object DistributorBehavior : TagBehavior {
 
         // Phase 1: No items → go to source container to pull
         if (!hasItems) {
-            val sourcePos = tag.boundPos ?: return null
-            if (!ContainerFinder.isContainer(world, sourcePos)) return null
+            val sourcePos = sourceContainerPos(tag) ?: return null
+            if (!ContainerFinder.isContainer(world, sourcePos) || !containerHasMatchingItems(world, sourcePos, tag)) return null
             return sourcePos
         }
 
@@ -63,7 +63,7 @@ object DistributorBehavior : TagBehavior {
         val container = ContainerFinder.getInventoryAt(world, target) ?: return WorkResult.Done()
 
         // At source → extract items
-        if (tag.boundPos != null && target == tag.boundPos) {
+        if (target == sourceContainerPos(tag)) {
             return extractItems(world, container, pokemonInv, tag, state)
         }
 
@@ -105,10 +105,15 @@ object DistributorBehavior : TagBehavior {
     }
 
     private fun findTargetContainers(world: World, origin: BlockPos, tag: TagInstance, range: Int): List<BlockPos> {
-        val sourcePos = tag.boundPos
-        val explicitTargets = tag.settings.extraTargets
-            .filter { it.dimensionId == world.registryKey.value.toString() }
-            .map { it.pos }
+        val sourcePos = sourceContainerPos(tag)
+        val explicitTargets = buildList {
+            tag.boundPos?.let { add(it) }
+            addAll(
+                tag.settings.extraTargets
+                    .filter { it.dimensionId == world.registryKey.value.toString() }
+                    .map { it.pos }
+            )
+        }
             .filter { it != sourcePos && ContainerFinder.isContainer(world, it) }
             .distinct()
 
@@ -203,5 +208,16 @@ object DistributorBehavior : TagBehavior {
         if (changed) {
             PastureWorkerManager.markDirtyNow(world)
         }
+    }
+
+    private fun containerHasMatchingItems(world: World, pos: BlockPos, tag: TagInstance): Boolean {
+        val inventory = ContainerFinder.getInventoryAt(world, pos) ?: return false
+        for (slot in 0 until inventory.size()) {
+            val stack = inventory.getStack(slot)
+            if (!stack.isEmpty && FilterMatcher.matches(stack, tag.filter)) {
+                return true
+            }
+        }
+        return false
     }
 }

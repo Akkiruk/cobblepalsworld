@@ -1,5 +1,8 @@
 package com.cobblepalsworld.navigation
 
+import com.cobblepalsworld.behavior.state.WorkerState
+import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.filter.FilterMatcher
 import net.minecraft.block.ChestBlock
@@ -63,7 +66,7 @@ object ContainerFinder {
     }
 
     fun isContainer(world: World, pos: BlockPos): Boolean {
-        return world.getBlockEntity(pos) is Inventory
+        return getInventoryAt(world, pos) != null
     }
 
     /**
@@ -72,6 +75,9 @@ object ContainerFinder {
      */
     fun getInventoryAt(world: World, pos: BlockPos): Inventory? {
         val blockEntity = world.getBlockEntity(pos)
+        if (blockEntity is RouterBlockEntity) {
+            return blockEntity.storageInventory()
+        }
         if (blockEntity is ChestBlockEntity) {
             val state = world.getBlockState(pos)
             val block = state.block
@@ -80,6 +86,71 @@ object ContainerFinder {
             }
         }
         return blockEntity as? Inventory
+    }
+
+    fun controllerBufferPos(world: World, tag: TagInstance): BlockPos? {
+        val controllerPos = tag.controllerPos?.toImmutable() ?: return null
+        return if (getInventoryAt(world, controllerPos) != null) controllerPos else null
+    }
+
+    fun hasSpace(inventory: Inventory): Boolean {
+        for (slot in 0 until inventory.size()) {
+            val stack = inventory.getStack(slot)
+            if (stack.isEmpty || stack.count < stack.maxCount) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun findControllerFirstMatching(
+        world: World,
+        origin: BlockPos,
+        tag: TagInstance,
+        range: Int = 16,
+        exclude: Set<BlockPos> = emptySet(),
+        predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
+    ): BlockPos? {
+        val controllerPos = controllerBufferPos(world, tag)
+        if (controllerPos != null && controllerPos !in exclude) {
+            val inventory = getInventoryAt(world, controllerPos)
+            if (inventory != null && predicate(inventory, controllerPos)) {
+                return controllerPos
+            }
+        }
+
+        return findClosestMatching(world, origin, range, exclude, predicate)
+    }
+
+    fun findControllerFirstCachedMatching(
+        world: World,
+        origin: BlockPos,
+        tag: TagInstance,
+        state: WorkerState,
+        range: Int = 16,
+        exclude: Set<BlockPos> = emptySet(),
+        predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
+    ): BlockPos? {
+        val cacheTtl = ConfigManager.config.general.containerCacheTicks.toLong()
+        val cachedPos = state.cachedSourceContainerPos
+        if (cachedPos != null
+            && cachedPos !in exclude
+            && world.time - state.sourceContainerCacheTime < cacheTtl
+        ) {
+            val cachedInventory = getInventoryAt(world, cachedPos)
+            if (cachedInventory != null && predicate(cachedInventory, cachedPos)) {
+                return cachedPos
+            }
+        }
+
+        val foundPos = findControllerFirstMatching(world, origin, tag, range, exclude, predicate)
+        if (foundPos != null) {
+            state.cachedSourceContainerPos = foundPos
+            state.sourceContainerCacheTime = world.time
+        } else if (cachedPos != null && world.time - state.sourceContainerCacheTime >= cacheTtl) {
+            state.cachedSourceContainerPos = null
+        }
+        return foundPos
     }
 
     /**

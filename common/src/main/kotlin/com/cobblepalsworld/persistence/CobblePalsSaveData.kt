@@ -39,6 +39,14 @@ class CobblePalsSaveData : PersistentState() {
                 tagNbt.putInt("BoundY", pos.y)
                 tagNbt.putInt("BoundZ", pos.z)
             }
+            tag.boundArea?.let { area ->
+                tagNbt.putInt("AreaMinX", area.min.x)
+                tagNbt.putInt("AreaMinY", area.min.y)
+                tagNbt.putInt("AreaMinZ", area.min.z)
+                tagNbt.putInt("AreaMaxX", area.max.x)
+                tagNbt.putInt("AreaMaxY", area.max.y)
+                tagNbt.putInt("AreaMaxZ", area.max.z)
+            }
             pastureBinding?.let { binding ->
                 tagNbt.putString("PastureDimension", binding.dimensionId)
                 tagNbt.putInt("PastureX", binding.pos.x)
@@ -125,7 +133,20 @@ class CobblePalsSaveData : PersistentState() {
                         val boundPos = if (tagNbt.contains("BoundX")) {
                             BlockPos(tagNbt.getInt("BoundX"), tagNbt.getInt("BoundY"), tagNbt.getInt("BoundZ"))
                         } else null
-                        val tag = TagInstance(type, filter, boundPos, augments, settings)
+                        val boundArea = if (tagNbt.contains("AreaMinX") && tagNbt.contains("AreaMaxX")) {
+                            com.cobblepalsworld.tag.BoundArea(
+                                BlockPos(tagNbt.getInt("AreaMinX"), tagNbt.getInt("AreaMinY"), tagNbt.getInt("AreaMinZ")),
+                                BlockPos(tagNbt.getInt("AreaMaxX"), tagNbt.getInt("AreaMaxY"), tagNbt.getInt("AreaMaxZ"))
+                            )
+                        } else null
+                        val tag = TagInstance(
+                            type = type,
+                            filter = filter,
+                            boundPos = boundPos,
+                            boundArea = boundArea,
+                            augments = augments,
+                            settings = settings
+                        )
                         if (tagNbt.contains("ControllerDimension")) {
                             val controllerPos = BlockPos(
                                 tagNbt.getInt("ControllerX"),

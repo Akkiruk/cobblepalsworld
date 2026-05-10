@@ -25,6 +25,12 @@ object ConfigManager {
                 config = gson.fromJson(json, CobblePalsConfig::class.java) ?: CobblePalsConfig.withDefaults()
                 // Validate numeric constraints to prevent division-by-zero / modulo-by-zero
                 config = config.copy(general = config.general.validated())
+                if (!config.tags.containsKey("sender") && config.tags.containsKey("courier")) {
+                    config.tags["sender"] = config.tags["courier"]!!
+                }
+                if (!config.tags.containsKey("distributor") && config.tags.containsKey("stasher")) {
+                    config.tags["distributor"] = config.tags["stasher"]!!
+                }
                 // Fill in defaults for any new tag types not yet in the config file
                 for ((id, defaults) in CobblePalsConfig.TAG_DEFAULTS) {
                     config.tags.putIfAbsent(id, defaults)

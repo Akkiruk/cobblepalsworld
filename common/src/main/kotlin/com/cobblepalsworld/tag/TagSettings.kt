@@ -28,16 +28,6 @@ enum class TargetStrategy(val id: String) {
     }
 }
 
-enum class ActivatorActionMode(val id: String) {
-    INTERACT_ONLY("interact_only"),
-    ATTACK_ONLY("attack_only"),
-    INTERACT_THEN_ATTACK("interact_then_attack");
-
-    companion object {
-        fun fromId(id: String): ActivatorActionMode = entries.firstOrNull { it.id == id } ?: INTERACT_ONLY
-    }
-}
-
 data class TagTarget(
     val dimensionId: String,
     val pos: BlockPos
@@ -47,7 +37,6 @@ data class TagSettings(
     val extraTargets: List<TagTarget> = emptyList(),
     val targetStrategy: TargetStrategy = TargetStrategy.ROUND_ROBIN,
     val redstoneMode: RedstoneControlMode = RedstoneControlMode.ALWAYS,
-    val activatorMode: ActivatorActionMode = ActivatorActionMode.INTERACT_ONLY,
     val regulatorAmount: Int = 64,
     val terminateAfterSuccess: Boolean = false
 ) {
@@ -60,7 +49,6 @@ object TagSettingsSerializer {
     private const val KEY_EXTRA_TARGETS = "ExtraTargets"
     private const val KEY_TARGET_STRATEGY = "TargetStrategy"
     private const val KEY_REDSTONE_MODE = "RedstoneMode"
-    private const val KEY_ACTIVATOR_MODE = "ActivatorMode"
     private const val KEY_REGULATOR_AMOUNT = "RegulatorAmount"
     private const val KEY_TERMINATE = "TerminateAfterSuccess"
 
@@ -68,7 +56,6 @@ object TagSettingsSerializer {
         val nbt = NbtCompound()
         nbt.putString(KEY_TARGET_STRATEGY, settings.targetStrategy.id)
         nbt.putString(KEY_REDSTONE_MODE, settings.redstoneMode.id)
-        nbt.putString(KEY_ACTIVATOR_MODE, settings.activatorMode.id)
         nbt.putInt(KEY_REGULATOR_AMOUNT, settings.regulatorAmount)
         nbt.putBoolean(KEY_TERMINATE, settings.terminateAfterSuccess)
 
@@ -106,7 +93,6 @@ object TagSettingsSerializer {
             extraTargets = extraTargets,
             targetStrategy = TargetStrategy.fromId(nbt.getString(KEY_TARGET_STRATEGY)),
             redstoneMode = RedstoneControlMode.fromId(nbt.getString(KEY_REDSTONE_MODE)),
-            activatorMode = ActivatorActionMode.fromId(nbt.getString(KEY_ACTIVATOR_MODE)),
             regulatorAmount = if (nbt.contains(KEY_REGULATOR_AMOUNT)) nbt.getInt(KEY_REGULATOR_AMOUNT).coerceIn(1, 64) else 64,
             terminateAfterSuccess = nbt.getBoolean(KEY_TERMINATE)
         )

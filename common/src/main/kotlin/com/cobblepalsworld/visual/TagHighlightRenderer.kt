@@ -23,8 +23,13 @@ object TagHighlightRenderer {
         val entries = mutableListOf<HighlightEntry>()
         for (stack in listOf(player.mainHandStack, player.offHandStack)) {
             val item = stack.item as? TagItem ?: continue
-            val pos = TagItem.getBoundPos(stack) ?: continue
             val c = item.tagType.color.colorValue ?: continue
+            val area = TagItem.getBoundArea(stack)
+            if (area != null) {
+                entries += HighlightEntry(area.toBox().expand(0.002), c)
+                continue
+            }
+            val pos = TagItem.getBoundPos(stack) ?: TagItem.getPendingAreaStart(stack) ?: continue
             entries += HighlightEntry(Box(pos).expand(0.002), c)
         }
         if (entries.isEmpty()) return

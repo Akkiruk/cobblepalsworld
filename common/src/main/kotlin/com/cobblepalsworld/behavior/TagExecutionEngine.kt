@@ -9,6 +9,7 @@ import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
 import com.cobblepalsworld.behavior.behaviors.DistributorBehavior
+import com.cobblepalsworld.behavior.behaviors.GuardianBehavior
 import com.cobblepalsworld.behavior.behaviors.SenderBehavior
 import com.cobblepalsworld.behavior.behaviors.ShepherdBehavior
 import com.cobblepalsworld.inventory.InventoryManager
@@ -31,12 +32,16 @@ object TagExecutionEngine {
     // --- Compiled cache helpers (avoid recomputing every tick) ---
 
     /** Get or compute the effective cooldown for this tag. Cached on WorkerState. */
-    private fun effectiveCooldown(tag: TagInstance, state: WorkerState): Long {
+    fun defaultCooldownTicks(tag: TagInstance, state: WorkerState): Long {
         if (state.cachedCooldown < 0) {
             state.cachedCooldown = (config.workCooldownTicks * tag.augments.speedMultiplier()).toLong().coerceAtLeast(5)
         }
         return state.cachedCooldown
     }
+
+    fun defaultArrivalDelayTicks(): Long = config.arrivalDelayTicks.toLong()
+
+    fun defaultIdleRetryTicks(): Long = config.idleSearchRetryTicks.toLong()
 
     /** Get or compute the effective search range. Cached on WorkerState. */
     fun effectiveRange(tag: TagInstance, state: WorkerState): Int {
@@ -97,7 +102,7 @@ object TagExecutionEngine {
             WorkerPhase.NAVIGATING -> tickNavigating(world, entity, tag, behavior, state)
             WorkerPhase.ARRIVING -> tickArriving(world, entity, tag, behavior, state)
             WorkerPhase.WORKING -> tickWorking(world, entity, pokemon, tag, behavior, state, origin)
-            WorkerPhase.DEPOSITING -> tickDepositing(world, entity, pokemon, tag, state, origin)
+            WorkerPhase.DEPOSITING -> tickDepositing(world, entity, pokemon, tag, behavior, state, origin)
         }
     }
 
@@ -105,6 +110,7 @@ object TagExecutionEngine {
         ClaimManager.releaseAll(pokemonId)
         StateManager.remove(pokemonId)
         BreakerBehavior.clearPastureOrigin(pokemonId)
+        GuardianBehavior.cleanup(pokemonId)
         SenderBehavior.cleanup(pokemonId)
         DistributorBehavior.cleanup(pokemonId)
         ShepherdBehavior.cleanup(pokemonId)
@@ -130,6 +136,7 @@ object TagExecutionEngine {
         StateManager.clear()
         ClaimManager.clear()
         BreakerBehavior.clearAllPastureOrigins()
+        GuardianBehavior.clearAllRuntimeState()
         SenderBehavior.clearAllRuntimeState()
         DistributorBehavior.clearAllRuntimeState()
         ShepherdBehavior.clearAllRuntimeState()
@@ -162,6 +169,13 @@ object TagExecutionEngine {
             return
         }
 
+        if (world.time < state.nextTargetSearchTick) {
+            if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
+                NavigationHelper.navigateTo(entity, origin, state)
+            }
+            return
+        }
+
         // Deposit-first: if Pokémon still has items, deposit before finding new work
         // Exception: dual-phase behaviors handle their own inventory (items are in-transit)
         val existingInv = InventoryManager.get(pokemon.uuid)
@@ -172,6 +186,7 @@ object TagExecutionEngine {
 
         val target = behavior.findTarget(world, origin, entity, tag, state)
         if (target == null) {
+            state.nextTargetSearchTick = world.time + behavior.idleRetryTicks(tag, state)
             // No work found — stay idle (eco mode will kick in via tick counter)
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 NavigationHelper.navigateTo(entity, origin, state)
@@ -181,6 +196,7 @@ object TagExecutionEngine {
         // Found work — check claim first, then exit eco mode
         if (ClaimManager.isClaimedByOther(target, pokemon.uuid, world)) return
         state.markDidWork()
+        state.nextTargetSearchTick = 0L
 
         ClaimManager.claim(target, pokemon.uuid, world)
         state.targetPos = target
@@ -200,7 +216,7 @@ object TagExecutionEngine {
             return
         }
 
-        if (NavigationHelper.isAtPosition(entity, target)) {
+        if (NavigationHelper.isAtPosition(entity, target, behavior.arrivalTolerance(tag, state))) {
             NavigationHelper.stopNavigation(entity)
             state.arrivalTick = world.time
             state.phase = WorkerPhase.ARRIVING
@@ -221,7 +237,7 @@ object TagExecutionEngine {
         }
 
         val arrived = state.arrivalTick ?: run { state.arrivalTick = world.time; return }
-        if (world.time - arrived < config.arrivalDelayTicks) return
+        if (world.time - arrived < behavior.arrivalDelayTicks(tag, state)) return
 
         state.arrivalTick = null
         state.phase = WorkerPhase.WORKING
@@ -247,7 +263,7 @@ object TagExecutionEngine {
                     state.phase = WorkerPhase.DEPOSITING
                 } else {
                     resetToIdle(state)
-                    state.cooldownUntil = world.time + effectiveCooldown(tag, state)
+                    state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
                 }
             }
             is WorkResult.MoveTo -> {
@@ -259,7 +275,7 @@ object TagExecutionEngine {
             }
             is WorkResult.Repeat -> {
                 state.arrivalTick = null
-                state.cooldownUntil = world.time + effectiveCooldown(tag, state)
+                state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
                 state.phase = WorkerPhase.IDLE
             }
             is WorkResult.Continue -> { /* stay in WORKING */ }
@@ -268,54 +284,71 @@ object TagExecutionEngine {
 
     private fun tickDepositing(
         world: World, entity: PokemonEntity, pokemon: Pokemon,
-        tag: TagInstance, state: WorkerState, origin: BlockPos
+        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
     ) {
         val inventory = InventoryManager.get(pokemon.uuid)
         if (inventory == null || inventory.isEmpty) {
             resetToIdle(state)
-            state.cooldownUntil = world.time + effectiveCooldown(tag, state)
+            state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
             return
         }
 
         if (state.depositPos == null) {
             val searchRange = effectiveRange(tag, state)
+            val controllerPos = ContainerFinder.controllerBufferPos(world, tag)
 
             // Build exclusion set: never deposit back to source or the pasture block itself
             val excludePositions = mutableSetOf(origin)
-            state.workSourcePos?.let { excludePositions.add(it) }
+            state.workSourcePos
+                ?.takeUnless { it == controllerPos }
+                ?.let { excludePositions.add(it) }
 
-            // Container cache: reuse recently-found container position if still valid
-            val cached = state.cachedContainerPos
-            if (cached != null
-                && cached !in excludePositions
-                && world.time - state.containerCacheTime < config.containerCacheTicks
-                && ContainerFinder.isContainer(world, cached)
-            ) {
-                state.depositPos = cached
+            val controllerInventory = controllerPos?.let { ContainerFinder.getInventoryAt(world, it) }
+            val controllerHasSpace = controllerPos != null
+                && controllerPos !in excludePositions
+                && controllerInventory != null
+                && ContainerFinder.hasSpace(controllerInventory)
+
+            if (controllerHasSpace) {
+                state.depositPos = controllerPos
+                state.cachedContainerPos = controllerPos
+                state.containerCacheTime = world.time
             } else {
-                val foundContainer = ContainerFinder.findClosestExcluding(world, origin, searchRange, excludePositions)
+                // Container cache: reuse recently-found container position if still valid
+                val cached = state.cachedContainerPos
+                if (cached != null
+                    && cached !in excludePositions
+                    && world.time - state.containerCacheTime < config.containerCacheTicks
+                    && ContainerFinder.isContainer(world, cached)
+                ) {
+                    state.depositPos = cached
+                } else {
+                    val foundContainer = ContainerFinder.findControllerFirstMatching(world, origin, tag, searchRange, excludePositions) { inventory, _ ->
+                        ContainerFinder.hasSpace(inventory)
+                    }
 
-                if (foundContainer != null) {
-                    state.depositPos = foundContainer
-                    // Cache for future deposit trips
-                    state.cachedContainerPos = foundContainer
-                    state.containerCacheTime = world.time
-                } else if (tag.augments.canPushToEntities()) {
-                    val entityInv = ContainerFinder.findClosestEntityInventory(world, origin, searchRange)
-                    if (entityInv != null) {
-                        ContainerFinder.depositIntoEntity(entityInv, inventory)
-                        WorkVisualHandler.onDeposit(world, entity, origin)
+                    if (foundContainer != null) {
+                        state.depositPos = foundContainer
+                        // Cache for future deposit trips
+                        state.cachedContainerPos = foundContainer
+                        state.containerCacheTime = world.time
+                    } else if (tag.augments.canPushToEntities()) {
+                        val entityInv = ContainerFinder.findClosestEntityInventory(world, origin, searchRange)
+                        if (entityInv != null) {
+                            ContainerFinder.depositIntoEntity(entityInv, inventory)
+                            WorkVisualHandler.onDeposit(world, entity, origin)
+                            resetToIdle(state)
+                            state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
+                            return
+                        }
+                        dropAllItems(world, entity, inventory)
                         resetToIdle(state)
-                        state.cooldownUntil = world.time + effectiveCooldown(tag, state)
+                        return
+                    } else {
+                        dropAllItems(world, entity, inventory)
+                        resetToIdle(state)
                         return
                     }
-                    dropAllItems(world, entity, inventory)
-                    resetToIdle(state)
-                    return
-                } else {
-                    dropAllItems(world, entity, inventory)
-                    resetToIdle(state)
-                    return
                 }
             }
         }
@@ -331,7 +364,7 @@ object TagExecutionEngine {
             WorkVisualHandler.onDeposit(world, entity, depositPos)
             state.depositPos = null
             resetToIdle(state)
-            state.cooldownUntil = world.time + effectiveCooldown(tag, state)
+            state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
         } else {
             NavigationHelper.navigateTo(entity, depositPos, state)
         }

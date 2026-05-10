@@ -6,7 +6,7 @@ import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.util.math.BlockPos
 
 object NavigationHelper {
-    private const val PATHFIND_THROTTLE_TICKS = 5L
+    private const val PATHFIND_THROTTLE_TICKS = 10L
     private const val WALK_SPEED = 0.35
     private const val DEFAULT_ARRIVAL_TOLERANCE = 3.0
 

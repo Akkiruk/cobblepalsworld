@@ -6,6 +6,7 @@ import com.cobblepalsworld.behavior.WorkResult
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.navigation.ClaimManager
+import com.cobblepalsworld.tag.BoundArea
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import net.minecraft.block.*
@@ -23,17 +24,28 @@ import net.minecraft.world.World
 object HarvesterBehavior : TagBehavior {
     override val tagType = TagType.HARVESTER
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
+    override fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long = 30L
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
         tag: TagInstance, state: WorkerState
     ): BlockPos? {
-        val range = effectiveRange(tag, state)
         val pokemonId = entity.pokemon.uuid
-        return BlockPos.iterateOutwards(origin, range, range, range)
-            .firstOrNull { pos ->
-                isMatureCrop(world, pos) && !ClaimManager.isClaimedByOther(pos, pokemonId, world)
-            }?.toImmutable()
+        val area = harvestArea(tag) ?: return null
+        val volume = area.volume()
+        if (volume <= 0) return null
+
+        val startCursor = Math.floorMod(state.searchCursor, volume)
+        for (offset in 0 until volume) {
+            val index = (startCursor + offset) % volume
+            val pos = area.positionAt(index)
+            if (isMatureCrop(world, pos) && !ClaimManager.isClaimedByOther(pos, pokemonId, world)) {
+                state.searchCursor = (index + 1) % volume
+                return pos.toImmutable()
+            }
+        }
+
+        return null
     }
 
     override fun doWork(
@@ -129,5 +141,9 @@ object HarvesterBehavior : TagBehavior {
             }
         }
         drops.removeAll { it.isEmpty }
+    }
+
+    private fun harvestArea(tag: TagInstance): BoundArea? {
+        return tag.boundArea ?: tag.boundPos?.let { BoundArea.of(it, it) }
     }
 }

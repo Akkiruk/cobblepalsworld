@@ -93,6 +93,7 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val stack = ItemStack(item)
                 TagItem.setFilter(stack, existing.filter, playerInventory.player.world.registryManager)
                 existing.boundPos?.let { TagItem.setBoundPos(stack, it) }
+                existing.boundArea?.let { TagItem.setBoundArea(stack, it) }
                 TagItem.setSettings(stack, existing.settings)
                 tagInventory.setStack(0, stack)
             }
@@ -161,7 +162,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         if (!slot.hasStack()) return ItemStack.EMPTY
         val stack = slot.stack
         if (stack.item is TagItem && slots[TAG_SLOT].stack.isEmpty) {
-            slots[TAG_SLOT].stack = stack.split(1)
+            slots[TAG_SLOT].stack = TagRegistry.normalizeStack(stack.split(1))
             slot.markDirty()
         } else if (stack.item is AugmentItem) {
             insertAugmentLevels(stack)
@@ -186,14 +187,26 @@ class PokemonTagScreenHandler : ScreenHandler {
             }
             val stack = tagInventory.getStack(0)
             if (!stack.isEmpty && stack.item is TagItem) {
-                val tagItem = stack.item as TagItem
-                val filter = TagItem.getFilter(stack, player.world.registryManager)
-                val boundPos = TagItem.getBoundPos(stack)
+                val normalizedStack = TagRegistry.normalizeStack(stack)
+                if (normalizedStack.item !== stack.item) {
+                    tagInventory.setStack(0, normalizedStack)
+                }
+                val tagItem = normalizedStack.item as TagItem
+                val filter = TagItem.getFilter(normalizedStack, player.world.registryManager)
+                val boundPos = TagItem.getBoundPos(normalizedStack)
+                val boundArea = TagItem.getBoundArea(normalizedStack)
                 val augments = readAugmentsFromSlots()
-                val settings = TagItem.getSettings(stack)
+                val settings = TagItem.getSettings(normalizedStack)
 
                 val oldTag = TagAssignmentManager.get(currentPokemonId)
-                val newTag = TagInstance(tagItem.tagType, filter, boundPos, augments, settings)
+                val newTag = TagInstance(
+                    type = tagItem.tagType,
+                    filter = filter,
+                    boundPos = boundPos,
+                    boundArea = boundArea,
+                    augments = augments,
+                    settings = settings
+                )
 
                 // If tag type changed or was re-configured, clean up old work state
                 if (oldTag != null && (oldTag.type != newTag.type || oldTag != newTag)) {

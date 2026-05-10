@@ -1,17 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " E ",
-    "CNC",
-    " E "
+    " H ",
+    "ENE",
+    " H "
   ],
   "key": {
     "N": { "item": "minecraft:name_tag" },
-    "C": { "item": "minecraft:chest" },
+    "H": { "item": "minecraft:hopper" },
     "E": { "item": "minecraft:ender_pearl" }
   },
   "result": {
-    "id": "cobblepalsworld:player_tag",
+    "id": "cobblepalsworld:puller_tag",
     "count": 1
   }
 }

@@ -24,6 +24,32 @@ interface TagBehavior {
 
     fun isTargetValid(world: World, target: BlockPos, tag: TagInstance): Boolean
 
+    /**
+     * Per-tag arrival tolerance.
+     * Mirrors the Cobbleworkers idea that jobs, not the engine, define how close
+     * a worker needs to be before it can act.
+     */
+    fun arrivalTolerance(tag: TagInstance, state: WorkerState): Double = 3.0
+
+    /**
+     * Per-tag arrival pacing.
+     * Inspired by Cobbleworkers' job-owned arrival style: the engine owns the phase,
+     * but the behavior decides how long it wants to wait before working.
+     */
+    fun arrivalDelayTicks(tag: TagInstance, state: WorkerState): Long =
+        TagExecutionEngine.defaultArrivalDelayTicks()
+
+    /**
+     * Per-tag cooldown pacing.
+     * Keeps the shared state machine generic while letting tags define their own rhythm.
+     */
+    fun cooldownTicks(tag: TagInstance, state: WorkerState): Long =
+        TagExecutionEngine.defaultCooldownTicks(tag, state)
+
+    /** How long an idle worker should wait before retrying target discovery after a miss. */
+    fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long =
+        TagExecutionEngine.defaultIdleRetryTicks()
+
     /** Config range + Range augment bonus. Uses WorkerState cache. */
     fun effectiveRange(tag: TagInstance, state: WorkerState): Int =
         TagExecutionEngine.effectiveRange(tag, state)

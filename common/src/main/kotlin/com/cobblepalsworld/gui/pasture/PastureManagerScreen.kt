@@ -7,6 +7,8 @@ import com.cobblemon.mod.common.client.render.drawScaledText
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState
 import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.util.cobblemonResource
+import com.cobblepalsworld.gui.UiGlyph
+import com.cobblepalsworld.gui.UiIconButtons
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.Screen
@@ -109,16 +111,7 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
         val closeX = pL + PANEL_WIDTH - 12
         val closeY = pT + 3
         val closeHovered = mouseX >= closeX && mouseX < closeX + 10 && mouseY >= closeY && mouseY < closeY + 10
-        drawScaledText(
-            context = context,
-            font = CobblemonResources.DEFAULT_LARGE,
-            text = Text.literal("X").styled { it.withBold(true) } as MutableText,
-            x = closeX + 5,
-            y = closeY + 1,
-            centered = true,
-            shadow = true,
-            colour = if (closeHovered) 0xFF6666 else TEXT_DIM
-        )
+        UiIconButtons.draw(context, closeX, closeY, 10, 10, UiGlyph.Close, 0xFFFF6B6B.toInt(), closeHovered, closeHovered)
 
         if (snapshot.pals.isEmpty()) {
             drawScaledText(
@@ -308,17 +301,8 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                     && mouseY >= homeBtnY && mouseY < homeBtnY + HOME_BTN_HEIGHT
                     && mouseY >= listTop && mouseY < listBottom
             val homeBg = if (homeHovered) 0xC0306050 else 0x80203030
-            context.fill(homeBtnX, homeBtnY, homeBtnX + HOME_BTN_WIDTH, homeBtnY + HOME_BTN_HEIGHT, homeBg.toInt())
-            drawScaledText(
-                context = context,
-                text = Text.literal("\u2302") as MutableText,
-                x = homeBtnX + HOME_BTN_WIDTH / 2,
-                y = homeBtnY + 1,
-                scale = 0.8F,
-                centered = true,
-                shadow = true,
-                colour = if (homeHovered) ACCENT else TEXT_DIM
-            )
+            context.fill(homeBtnX - 1, homeBtnY - 1, homeBtnX + HOME_BTN_WIDTH + 1, homeBtnY + HOME_BTN_HEIGHT + 1, homeBg.toInt())
+            UiIconButtons.draw(context, homeBtnX, homeBtnY, HOME_BTN_WIDTH, HOME_BTN_HEIGHT, UiGlyph.Home, ACCENT, homeHovered, homeHovered)
         }
 
         context.disableScissor()
@@ -338,6 +322,10 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
             val thumbH = maxOf(12, barH * visibleEntries / snapshot.pals.size)
             val thumbY = barTop + (barH - thumbH) * scrollOffset / maxScroll
             context.fill(barX, thumbY, barX + SCROLL_BAR_WIDTH, thumbY + thumbH, ACCENT_DIM)
+        }
+
+        hoveredTooltip(mouseX, mouseY)?.let { tooltip ->
+            context.drawTooltip(textRenderer, tooltip, mouseX, mouseY)
         }
     }
 
@@ -403,7 +391,7 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                     && mouseY >= homeBtnY && mouseY < homeBtnY + HOME_BTN_HEIGHT
                     && mouseY >= listTop && mouseY < listBottom
                 ) {
-                    CobblePalsNetworking.sendTeleportHome(snapshot.pals[i].pokemonId)
+                    CobblePalsNetworking.sendTeleportHome(snapshot.pasturePos, snapshot.pals[i].pokemonId)
                     return true
                 }
             }
@@ -419,4 +407,29 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
     }
 
     override fun shouldPause() = false
+
+    private fun hoveredTooltip(mouseX: Int, mouseY: Int): List<Text>? {
+        val closeX = panelLeft + PANEL_WIDTH - 12
+        val closeY = panelTop + 3
+        if (UiIconButtons.contains(mouseX, mouseY, closeX, closeY, 10, 10)) {
+            return listOf(Text.literal("Close manager"))
+        }
+
+        val listTop = panelTop + HEADER_HEIGHT
+        val listBottom = panelTop + PANEL_HEIGHT
+        val endIdx = minOf(scrollOffset + visibleEntries + 1, snapshot.pals.size)
+        for (i in scrollOffset until endIdx) {
+            val ey = listTop + (i - scrollOffset) * ENTRY_HEIGHT
+            val homeBtnX = panelLeft + PANEL_WIDTH - SCROLL_BAR_WIDTH - HOME_BTN_WIDTH - 8
+            val homeBtnY = ey + ENTRY_HEIGHT - HOME_BTN_HEIGHT - 3
+            if (mouseY >= listTop && mouseY < listBottom && UiIconButtons.contains(mouseX, mouseY, homeBtnX, homeBtnY, HOME_BTN_WIDTH, HOME_BTN_HEIGHT)) {
+                return listOf(
+                    Text.literal("Send ${snapshot.pals[i].displayName} home"),
+                    Text.literal("Returns this pal to its pasture anchor.")
+                )
+            }
+        }
+
+        return null
+    }
 }

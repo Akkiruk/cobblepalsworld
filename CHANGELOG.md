@@ -1,5 +1,103 @@
 # Changelog
 
+## 0.1.25
+
+- Removed the remaining pasture worker-slot dependency from controller-native Command Post modules, so router-executed tags no longer need assigned Pokemon records or consume linked pasture worker capacity.
+- Let controller-native modules keep running even when no pasture is linked, while worker-managed tags still require a pasture link as expected.
+- Updated Command Post runtime status so its counters and hints now describe runnable job slots instead of pretending every installed module needs a worker assignment.
+
+## 0.1.24
+
+- Moved Guardian onto the controller-native scheduler so hostile defense around a Command Post now runs as a bounded router-side strike pass instead of per-Pokemon pathing and target tracking.
+- Moved Shepherd onto the same controller-native path so pen breeding now runs as a bounded controller pass using food from the Command Post buffer instead of autonomous worker inventory loops.
+- Finished the current Command Post tag surface migration so every live controller-managed tag now executes inside the router scheduler rather than the old worker-first loop.
+
+## 0.1.23
+
+- Reworked Command Post factory modules so scalable tags now execute directly on the controller with bounded per-slot scheduler state instead of routing those jobs back through per-Pokemon worker AI.
+- Moved Sender, Puller, Distributor, Dropper, Void, Breaker, Harvester, Vacuum, and Activator onto the new controller-native path while keeping existing module items, bindings, filters, and assignments world-compatible.
+- Stopped controller-managed factory Pokemon from pathfinding or running worker state machines for those native tags, so large Command Post setups now scale around the controller scheduler instead of autonomous worker polling.
+
+## 0.1.22
+
+- Added a shared idle target-search retry gate so workers stop re-running expensive discovery scans every wake-up when no work is available.
+- Reduced the hottest per-tag search costs by adding heavier idle backoff for Vacuum, Harvester, Shepherd, Guardian, and Activator, removing unnecessary entity-list sorting, and making Harvester resume large area scans from a rolling cursor.
+- Tightened the performance defaults further by reducing pathfinding chatter, increasing container-cache minimums, and preserving old Courier/Stasher config values after the Sender/Distributor id migration.
+
+## 0.1.21
+
+- Promoted Sender and Distributor to real canonical item ids while keeping legacy Courier and Stasher items loadable and auto-normalizing them anywhere the mod actively touches those stacks.
+- Tightened the tag filter UI so non-filter tags stop exposing ghost filter slots, filter rows, and stale tooltip data they no longer use.
+- Reworked Activator into an explicit bound-target tool that right-clicks one selected block or entity cluster instead of scanning the surrounding area.
+
+## 0.1.20
+
+- Deleted the Smelter, Flinger, Player, Planter, Illuminator, and Weatherworker tags from the live CobblePals World surface, along with their behavior code and item resources.
+- Reworked logistics around a modular-router-style split: Sender now pushes items out of the Command Post buffer, Puller now feeds that buffer from one bound source, and Distributor now spreads buffered items across multiple targets.
+- Reworked Breaker into a one-block job that only mines its exact bound block, and changed Harvester to require an explicit player-selected work box instead of scanning arbitrary nearby farmland.
+
+## 0.1.19
+
+- Added behavior-owned target memory for Breaker, Guardian, Shepherd, and Weatherworker so workers keep working productive nearby targets instead of restarting full searches every cycle.
+- Tightened Breaker's drop simulation by choosing a more appropriate tool for the block it is breaking, which makes its behavior closer to what players expect from real harvesting.
+- Removed the leftover alias-only source texture definitions and art for sender, puller, placer, and distributor so the generated asset source now matches the live tag surface.
+
+## 0.1.18
+
+- Deleted the Fisher, Lookout, and Scout tags entirely from the live mod surface, including their behavior registration, recipes, models, lang keys, and source art assets.
+- Reworked Activator into a simpler fake-player right-click tool that stocks matching items and performs predictable interaction passes without the old hidden mode system.
+- Surfaced more tag settings directly in tag tooltips and the assignment screen, and added cached source-container lookups so common logistics tags do not re-scan from scratch every cycle.
+
+## 0.1.17
+
+- Refactored the shared tag worker lifecycle so arrival delay, arrival tolerance, and cooldown policy now belong to each tag behavior instead of living as hardcoded engine rules.
+- Replaced the old breaker-only engine special case with a modular per-tag lifecycle contract, making CobblePals' worker execution model closer to the proven Cobbleworkers pattern without copying its code directly.
+
+## 0.1.16
+
+- Delayed the Command Post hover tooltips so they only appear after the mouse has rested on the same region for three seconds.
+- Fixed the pasture manager send-home action to target the exact pasture shown in the open manager instead of depending on transient link state.
+- Made breaker workers act immediately once they reach a target by skipping the normal arrival wait and using an effectively instant cooldown.
+
+## 0.1.15
+
+- Removed the long explanatory strings from the Command Post screen and moved that detail into hover tooltips on the relevant panels and counters.
+- Tightened unbound breaker target selection so breaker workers ignore buried blocks and choose exposed matches instead, which fixes common grass-filter cases that never produced visible movement.
+
+## 0.1.14
+
+- Added a real 27-slot Command Post buffer and exposed it directly in the Command Post screen instead of forcing modules to rely on external containers.
+- Reworked controller-run tag routing so producer tags deposit into the Command Post buffer by default and consumer tags pull from that same buffer when no explicit source is bound.
+- Updated courier and stasher flows so the built-in Command Post buffer acts as the default logistics hub while still respecting explicit bound destinations and source containers.
+
+## 0.1.13
+
+- Reworked the Command Post screen styling again with a stronger control-console palette and clearer visual hierarchy.
+- Replaced the old text-like filter controls with icon buttons and hover tooltips in the tag filter UI.
+- Upgraded the pasture manager action controls to themed icon buttons with hover help for close and send-home actions.
+
+## 0.1.12
+
+- Rebuilt the Command Post screen into a wider, sectioned layout with readable labels, a proper jobs grid, a dedicated boost row, and cleaner pasture status reporting.
+- Reworked the Command Post block art into distinct front, side, top, and bottom faces so it no longer renders like the same texture stamped on every side.
+
+## 0.1.11
+
+- Removed the square background fill from generated item textures so the outer area around tags and augments stays transparent in inventories and GUIs.
+- Kept the AI-assisted frame styling inside the module silhouette while masking anything outside the intended chamfered shape.
+
+## 0.1.10
+
+- Added an InvokeAI-backed sprite prompt manifest and review log so the texture pipeline records which prompts worked, which failed, and why.
+- Rebuilt the item and Command Post textures around reviewed AI-generated base frames plus crisp overlay glyphs, keeping the final art readable at Minecraft scale instead of shipping raw diffusion outputs.
+- Refreshed the full CobblePals World icon set from the new hybrid pipeline so tags, augments, and the Command Post face all share a more cohesive style.
+
+## 0.1.9
+
+- Replaced the placeholder tag and augment icons with a full original texture suite so every current CobblePals World item now has dedicated art.
+- Added a custom Command Post block texture so the block item no longer renders as a plain iron cube.
+- Fixed stale item model mappings so flinger, player, and void now use CobblePals World textures instead of borrowed vanilla or legacy art.
+
 ## 0.1.8
 
 - Rebalanced Command Post worker dispatch so new assignments rotate more fairly across the linked pasture roster instead of always front-loading the same first few Pokemon.

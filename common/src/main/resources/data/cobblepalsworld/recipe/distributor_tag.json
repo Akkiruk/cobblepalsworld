@@ -2,16 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     " C ",
-    "SNS",
+    "HNH",
     " C "
   ],
   "key": {
     "N": { "item": "minecraft:name_tag" },
-    "C": { "item": "minecraft:compass" },
-    "S": { "item": "minecraft:spyglass" }
+    "H": { "item": "minecraft:hopper" },
+    "C": { "item": "minecraft:comparator" }
   },
   "result": {
-    "id": "cobblepalsworld:scout_tag",
+    "id": "cobblepalsworld:distributor_tag",
     "count": 1
   }
 }

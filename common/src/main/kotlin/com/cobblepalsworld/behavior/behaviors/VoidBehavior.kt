@@ -34,7 +34,7 @@ object VoidBehavior : TagBehavior {
         return if (hasItems) {
             origin
         } else {
-            ContainerFinder.findClosestMatching(world, origin, effectiveRange(tag, state)) { _, pos ->
+            ContainerFinder.findControllerFirstCachedMatching(world, origin, tag, state, effectiveRange(tag, state)) { _, pos ->
                 containerHasMatchingItems(world, pos, tag)
             }
         }

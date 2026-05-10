@@ -43,22 +43,14 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(BreakerBehavior)
         TagBehaviorRegistry.register(GuardianBehavior)
         TagBehaviorRegistry.register(HarvesterBehavior)
-        TagBehaviorRegistry.register(FisherBehavior)
         TagBehaviorRegistry.register(VacuumBehavior)
-        TagBehaviorRegistry.register(SmelterBehavior)
         TagBehaviorRegistry.register(SenderBehavior)      // Courier
+        TagBehaviorRegistry.register(PullerBehavior)
         TagBehaviorRegistry.register(DistributorBehavior)  // Stasher
         TagBehaviorRegistry.register(DropperBehavior)
-        TagBehaviorRegistry.register(FlingerBehavior)
         TagBehaviorRegistry.register(VoidBehavior)
-        TagBehaviorRegistry.register(PlayerBehavior)
-        TagBehaviorRegistry.register(PlacerBehavior)       // Planter
-        TagBehaviorRegistry.register(IlluminatorBehavior)
         TagBehaviorRegistry.register(ActivatorBehavior)
         TagBehaviorRegistry.register(ShepherdBehavior)
-        TagBehaviorRegistry.register(DetectorBehavior)     // Lookout
-        TagBehaviorRegistry.register(ScoutBehavior)
-        TagBehaviorRegistry.register(WeatherworkerBehavior)
     }
 
     private fun registerInteractions() {

@@ -11,6 +11,7 @@ class WorkerState(val pokemonId: UUID) {
     var arrivalTick: Long? = null
     var lastPathfindTick: Long = 0L
     var lastSeenTick: Long = 0L
+    var nextTargetSearchTick: Long = 0L
 
     // --- Eco mode (skip full work scans after a worker has been idle for a while) ---
     /** Ticks since this worker last did useful work. Reset on any successful action. */
@@ -33,10 +34,16 @@ class WorkerState(val pokemonId: UUID) {
     var cachedContainerPos: BlockPos? = null
     /** World time when cachedContainerPos was found. */
     var containerCacheTime: Long = 0L
+    /** Last known source/search container position for behaviors that repeatedly restock. */
+    var cachedSourceContainerPos: BlockPos? = null
+    /** World time when cachedSourceContainerPos was found. */
+    var sourceContainerCacheTime: Long = 0L
 
     // --- Last-match slot (avoid scanning from slot 0 every time) ---
     /** Last slot index where a matching item was found in the source container. */
     var lastMatchSlot: Int = 0
+    /** Rolling scan cursor for behaviors that search large fixed spaces like harvest boxes. */
+    var searchCursor: Int = 0
 
     // --- Source tracking (prevents depositing back to the same container we pulled from) ---
     /** The BlockPos that the behavior extracted items FROM. Excluded during deposit search. */
@@ -52,6 +59,7 @@ class WorkerState(val pokemonId: UUID) {
         arrivalTick = null
         workSourcePos = null
         lastRedstonePower = false
+        nextTargetSearchTick = 0L
         idleTicks = 0
         ecoMode = false
         ecoSkipCounter = 0
@@ -68,5 +76,6 @@ class WorkerState(val pokemonId: UUID) {
         cachedRange = -1
         cachedMaxItems = -1
         cachedContainerPos = null
+        cachedSourceContainerPos = null
     }
 }

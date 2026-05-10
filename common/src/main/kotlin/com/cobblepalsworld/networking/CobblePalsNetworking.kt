@@ -16,6 +16,7 @@ import net.minecraft.network.codec.PacketCodec
 import net.minecraft.network.packet.CustomPayload
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.util.Identifier
+import net.minecraft.util.math.BlockPos
 import java.util.UUID
 
 object CobblePalsNetworking {
@@ -46,15 +47,16 @@ object CobblePalsNetworking {
         }
     }
 
-    class TeleportHomeC2S(val pokemonId: UUID) : CustomPayload {
+    class TeleportHomeC2S(val pasturePos: BlockPos, val pokemonId: UUID) : CustomPayload {
         override fun getId() = TYPE
         companion object {
             val TYPE = CustomPayload.Id<TeleportHomeC2S>(Identifier.of(CobblePalsWorld.MODID, "teleport_home"))
             val CODEC = object : PacketCodec<RegistryByteBuf, TeleportHomeC2S> {
                 override fun encode(buf: RegistryByteBuf, value: TeleportHomeC2S) {
+                    buf.writeBlockPos(value.pasturePos)
                     buf.writeUuid(value.pokemonId)
                 }
-                override fun decode(buf: RegistryByteBuf) = TeleportHomeC2S(buf.readUuid())
+                override fun decode(buf: RegistryByteBuf) = TeleportHomeC2S(buf.readBlockPos(), buf.readUuid())
             }
         }
     }
@@ -83,7 +85,7 @@ object CobblePalsNetworking {
         ) { payload, context ->
             context.queue {
                 val player = context.player as? ServerPlayerEntity ?: return@queue
-                handleTeleportHome(player, payload.pokemonId)
+                handleTeleportHome(player, payload.pasturePos, payload.pokemonId)
             }
         }
     }
@@ -100,8 +102,12 @@ object CobblePalsNetworking {
 
     private fun handleOpenRequest(player: ServerPlayerEntity) {
         val link = PastureLinkManager.getLinkByPlayerId(player.uuid) ?: return
+        handleOpenRequest(player, link.pos)
+    }
+
+    private fun handleOpenRequest(player: ServerPlayerEntity, pasturePos: BlockPos) {
         val world = player.serverWorld
-        val pos = link.pos
+        val pos = pasturePos.toImmutable()
         val pasture = world.getBlockEntity(pos) as? PokemonPastureBlockEntity ?: return
 
         val pals = pasture.tetheredPokemon.mapNotNull { tethering ->
@@ -167,29 +173,31 @@ object CobblePalsNetworking {
         NetworkManager.sendToServer(OpenManagerC2S())
     }
 
-    fun sendTeleportHome(pokemonId: UUID) {
-        NetworkManager.sendToServer(TeleportHomeC2S(pokemonId))
+    fun sendTeleportHome(pasturePos: BlockPos, pokemonId: UUID) {
+        NetworkManager.sendToServer(TeleportHomeC2S(pasturePos, pokemonId))
     }
 
-    private fun handleTeleportHome(player: ServerPlayerEntity, pokemonId: UUID) {
-        val link = PastureLinkManager.getLinkByPlayerId(player.uuid) ?: return
+    private fun handleTeleportHome(player: ServerPlayerEntity, pasturePos: BlockPos, pokemonId: UUID) {
         val world = player.serverWorld
-        val pasturePos = link.pos
-        val pasture = world.getBlockEntity(pasturePos) as? PokemonPastureBlockEntity ?: return
+        val targetPasturePos = pasturePos.toImmutable()
+        val pasture = world.getBlockEntity(targetPasturePos) as? PokemonPastureBlockEntity ?: return
+        if (pasture.ownerName.isNotEmpty() && pasture.ownerName != player.name.string) return
 
         // Verify this pokemon belongs to this pasture
         val tethering = pasture.tetheredPokemon.find { it.pokemonId == pokemonId } ?: return
         val pokemon = try { tethering.getPokemon() } catch (_: Exception) { return } ?: return
-        val entity = pokemon.entity ?: return
+        val entity = pokemon.entity
 
         // Clean up any active work state
-        TagExecutionEngine.cleanup(pokemonId, world, entity.blockPos)
+        TagExecutionEngine.cleanup(pokemonId, world, entity?.blockPos ?: targetPasturePos)
 
         // Teleport to pasture block
-        entity.teleport(pasturePos.x + 0.5, pasturePos.y + 1.0, pasturePos.z + 0.5, false)
-        entity.navigation.stop()
+        if (entity != null) {
+            entity.teleport(targetPasturePos.x + 0.5, targetPasturePos.y + 1.0, targetPasturePos.z + 0.5, false)
+            entity.navigation.stop()
+        }
 
         // Re-send updated manager data
-        handleOpenRequest(player)
+        handleOpenRequest(player, targetPasturePos)
     }
 }

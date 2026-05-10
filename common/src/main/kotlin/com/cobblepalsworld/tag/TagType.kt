@@ -18,6 +18,7 @@ enum class BindingMode {
     NONE,
     CONTAINER,
     POSITION,
+    AREA,
 }
 
 enum class TagType(
@@ -25,6 +26,7 @@ enum class TagType(
     val bindingMode: BindingMode = BindingMode.NONE,
     val usesFilter: Boolean = true,
     val supportsTargetList: Boolean = false,
+    val controllerNative: Boolean = false,
     val description: String,
     val color: Formatting = Formatting.WHITE,
     val arrivalParticle: ParticleEffect = ParticleTypes.HAPPY_VILLAGER,
@@ -35,7 +37,8 @@ enum class TagType(
     BREAKER(
         id = "breaker",
         bindingMode = BindingMode.POSITION,
-        description = "Breaks matching blocks in range",
+        controllerNative = true,
+        description = "Breaks one exact bound block, then returns the drops to the Command Post",
         color = Formatting.RED,
         arrivalParticle = ParticleTypes.CRIT,
         workParticle = ParticleTypes.EXPLOSION,
@@ -43,7 +46,8 @@ enum class TagType(
     ),
     GUARDIAN(
         id = "guardian",
-        description = "Attacks hostile mobs in range",
+        controllerNative = true,
+        description = "Attacks hostile mobs near the Command Post",
         usesFilter = false,
         color = Formatting.DARK_RED,
         arrivalParticle = ParticleTypes.ANGRY_VILLAGER,
@@ -54,58 +58,52 @@ enum class TagType(
     // --- Gathering ---
     HARVESTER(
         id = "harvester",
-        description = "Harvests mature crops and replants them",
+        bindingMode = BindingMode.AREA,
+        controllerNative = true,
+        description = "Harvests mature crops only inside the selected work box into the Command Post buffer",
         usesFilter = false,
         color = Formatting.DARK_GREEN,
         arrivalParticle = ParticleTypes.HAPPY_VILLAGER,
         workParticle = ParticleTypes.COMPOSTER,
         workSound = SoundEvents.BLOCK_CROP_BREAK
     ),
-    FISHER(
-        id = "fisher",
-        description = "Catches fish from nearby water",
-        usesFilter = false,
-        color = Formatting.BLUE,
-        arrivalParticle = ParticleTypes.BUBBLE,
-        workParticle = ParticleTypes.FISHING,
-        workSound = SoundEvents.ENTITY_FISHING_BOBBER_SPLASH
-    ),
     VACUUM(
         id = "vacuum",
-        description = "Picks up dropped items nearby",
+        controllerNative = true,
+        description = "Collects dropped items near the Command Post into its buffer",
         color = Formatting.AQUA,
         arrivalParticle = ParticleTypes.PORTAL,
         workParticle = ParticleTypes.PORTAL,
         workSound = SoundEvents.ENTITY_ITEM_PICKUP
     ),
 
-    // --- Processing ---
-    SMELTER(
-        id = "smelter",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Smelts raw items from containers using fire power",
-        color = Formatting.GOLD,
-        arrivalParticle = ParticleTypes.FLAME,
-        workParticle = ParticleTypes.LAVA,
-        workSound = SoundEvents.BLOCK_FURNACE_FIRE_CRACKLE
-    ),
-
     // --- Logistics ---
     COURIER(
-        id = "courier",
+        id = "sender",
         bindingMode = BindingMode.CONTAINER,
-        supportsTargetList = true,
-        description = "Carries items from nearby containers to a bound destination",
+        controllerNative = true,
+        description = "Sends filtered items from the Command Post buffer to one bound container",
         color = Formatting.LIGHT_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
         workParticle = ParticleTypes.ENCHANT,
         workSound = SoundEvents.BLOCK_CHEST_CLOSE
     ),
+    PULLER(
+        id = "puller",
+        bindingMode = BindingMode.CONTAINER,
+        controllerNative = true,
+        description = "Pulls filtered items from one bound container into the Command Post buffer",
+        color = Formatting.BLUE,
+        arrivalParticle = ParticleTypes.ENCHANT,
+        workParticle = ParticleTypes.ENCHANT,
+        workSound = SoundEvents.BLOCK_CHEST_OPEN
+    ),
     STASHER(
-        id = "stasher",
+        id = "distributor",
         bindingMode = BindingMode.CONTAINER,
         supportsTargetList = true,
-        description = "Distributes items from a source into nearby containers",
+        controllerNative = true,
+        description = "Distributes filtered items from the Command Post buffer across multiple containers",
         color = Formatting.DARK_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
         workParticle = ParticleTypes.ENCHANT,
@@ -114,63 +112,28 @@ enum class TagType(
     DROPPER(
         id = "dropper",
         bindingMode = BindingMode.POSITION,
-        description = "Drops matching items from containers at a bound location",
+        controllerNative = true,
+        description = "Drops matching items from the Command Post buffer at a bound location",
         color = Formatting.DARK_GRAY,
         arrivalParticle = ParticleTypes.SMOKE,
         workParticle = ParticleTypes.SMOKE,
         workSound = SoundEvents.ENTITY_ITEM_FRAME_REMOVE_ITEM
     ),
-    FLINGER(
-        id = "flinger",
-        bindingMode = BindingMode.POSITION,
-        description = "Launches matching items from containers toward a bound target or forward direction",
-        color = Formatting.GRAY,
-        arrivalParticle = ParticleTypes.CLOUD,
-        workParticle = ParticleTypes.CLOUD,
-        workSound = SoundEvents.ENTITY_ARROW_SHOOT
-    ),
     VOID(
         id = "void",
-        description = "Deletes matching items after pulling them into its carry buffer",
+        controllerNative = true,
+        description = "Deletes matching items directly from the Command Post buffer",
         color = Formatting.DARK_RED,
         arrivalParticle = ParticleTypes.LARGE_SMOKE,
         workParticle = ParticleTypes.LARGE_SMOKE,
         workSound = SoundEvents.BLOCK_LAVA_EXTINGUISH
     ),
-    PLAYER(
-        id = "player",
-        description = "Delivers matching items from containers into the owner's inventory",
-        color = Formatting.GOLD,
-        arrivalParticle = ParticleTypes.END_ROD,
-        workParticle = ParticleTypes.END_ROD,
-        workSound = SoundEvents.ENTITY_ITEM_PICKUP
-    ),
-
-    // --- Placement / world building ---
-    PLANTER(
-        id = "planter",
-        bindingMode = BindingMode.POSITION,
-        description = "Places matching block items from containers at a bound location",
-        color = Formatting.GREEN,
-        arrivalParticle = ParticleTypes.HAPPY_VILLAGER,
-        workParticle = ParticleTypes.COMPOSTER,
-        workSound = SoundEvents.BLOCK_GRASS_PLACE
-    ),
-    ILLUMINATOR(
-        id = "illuminator",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Lights up dark areas with torches from containers",
-        color = Formatting.YELLOW,
-        arrivalParticle = ParticleTypes.FLAME,
-        workParticle = ParticleTypes.FLAME,
-        workSound = SoundEvents.BLOCK_WOOD_PLACE
-    ),
-
     // --- Interaction ---
     ACTIVATOR(
         id = "activator",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Right-clicks blocks with usable items like bonemeal and hoes",
+        bindingMode = BindingMode.POSITION,
+        controllerNative = true,
+        description = "Right-clicks one exact bound target with filtered items from the Command Post buffer",
         color = Formatting.YELLOW,
         arrivalParticle = ParticleTypes.WAX_ON,
         workParticle = ParticleTypes.WAX_ON,
@@ -179,56 +142,24 @@ enum class TagType(
     SHEPHERD(
         id = "shepherd",
         bindingMode = BindingMode.POSITION,
-        description = "Feeds and breeds animals near a bound pen area",
+        controllerNative = true,
+        description = "Feeds and breeds animals near a bound pen using food from the Command Post buffer",
         usesFilter = false,
         color = Formatting.WHITE,
         arrivalParticle = ParticleTypes.HEART,
         workParticle = ParticleTypes.HEART,
         workSound = SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP
     ),
-
-    // --- Sensing / utility ---
-    LOOKOUT(
-        id = "lookout",
-        bindingMode = BindingMode.CONTAINER,
-        usesFilter = true,
-        description = "Monitors a container and emits a nearby redstone signal when conditions match",
-        color = Formatting.DARK_AQUA,
-        arrivalParticle = ParticleTypes.ELECTRIC_SPARK,
-        workParticle = ParticleTypes.ELECTRIC_SPARK,
-        workSound = SoundEvents.BLOCK_LEVER_CLICK
-    ),
-    SCOUT(
-        id = "scout",
-        description = "Explores nearby and highlights ores and points of interest",
-        usesFilter = false,
-        color = Formatting.GRAY,
-        arrivalParticle = ParticleTypes.END_ROD,
-        workParticle = ParticleTypes.END_ROD,
-        workSound = SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME
-    ),
-    WEATHERWORKER(
-        id = "weatherworker",
-        description = "Boosts crop growth in the surrounding area",
-        usesFilter = false,
-        color = Formatting.DARK_BLUE,
-        arrivalParticle = ParticleTypes.RAIN,
-        workParticle = ParticleTypes.RAIN,
-        workSound = SoundEvents.WEATHER_RAIN
-    );
+    ;
 
     val supportsBinding: Boolean get() = bindingMode != BindingMode.NONE
 
     companion object {
         private val byId: Map<String, TagType> = buildMap {
             TagType.entries.forEach { put(it.id, it) }
-            // Backward compat: old save IDs → new tag types
-            put("sender", COURIER)
-            put("placer", PLANTER)
-            put("detector", LOOKOUT)
-            put("distributor", STASHER)
-            // Retired tags map to closest equivalent
-            put("puller", COURIER)
+            // Backward compat: old save IDs and legacy item ids
+            put("courier", COURIER)
+            put("stasher", STASHER)
         }
         fun fromId(id: String): TagType? = byId[id]
     }

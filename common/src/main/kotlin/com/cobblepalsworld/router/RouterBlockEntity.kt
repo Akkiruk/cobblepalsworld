@@ -9,11 +9,13 @@ import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagItem
+import com.cobblepalsworld.tag.TagRegistry
 import net.minecraft.block.Block
 import net.minecraft.block.BlockState
 import net.minecraft.block.entity.BlockEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
+import net.minecraft.inventory.Inventory
 import net.minecraft.inventory.SidedInventory
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.item.ItemStack
@@ -42,8 +44,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         const val UPGRADE_SLOT_START = MODULE_SLOT_END
         const val UPGRADE_SLOT_COUNT = 5
         const val UPGRADE_SLOT_END = UPGRADE_SLOT_START + UPGRADE_SLOT_COUNT
-        const val TOTAL_SLOTS = UPGRADE_SLOT_END
-        private val AUTOMATION_SLOTS = intArrayOf()
+        const val STORAGE_SLOT_START = UPGRADE_SLOT_END
+        const val STORAGE_SLOT_COUNT = 27
+        const val STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT
+        const val TOTAL_SLOTS = STORAGE_SLOT_END
+        private val AUTOMATION_SLOTS = IntArray(STORAGE_SLOT_COUNT) { STORAGE_SLOT_START + it }
         private const val LINK_RADIUS = 12
         private const val LINK_HEIGHT = 4
 
@@ -54,6 +59,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     }
 
     private val inventory = SimpleInventory(TOTAL_SLOTS)
+    private val storageInventoryView: Inventory = RouterStorageInventory(this)
     private val propertyDelegate = object : PropertyDelegate {
         override fun get(index: Int): Int {
             return when (index) {
@@ -76,7 +82,13 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     private var linkedPastureDimension: String? = null
     private var linkedPasturePos: BlockPos? = null
     private var dispatchCursor: Int = 0
+    private var moduleExecutionCursor: Int = 0
     private val assignedWorkers = arrayOfNulls<UUID>(MODULE_SLOT_COUNT)
+    private val moduleReadyTicks = LongArray(MODULE_SLOT_COUNT)
+    private val moduleSearchCursors = IntArray(MODULE_SLOT_COUNT)
+    private val moduleRoundRobinIndices = IntArray(MODULE_SLOT_COUNT)
+    private val moduleLastWorkTicks = LongArray(MODULE_SLOT_COUNT) { Long.MIN_VALUE }
+    private val moduleLastRedstonePower = BooleanArray(MODULE_SLOT_COUNT)
     private var linkedWorkerCount: Int = 0
     private var assignedWorkerCount: Int = 0
     private var activeWorkerCount: Int = 0
@@ -141,16 +153,22 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     }
 
     fun tagInModuleSlot(index: Int, registries: RegistryWrapper.WrapperLookup, augments: AugmentSet): TagInstance? {
-        val stack = getStack(MODULE_SLOT_START + index)
+        val stack = TagRegistry.normalizeInventorySlot(this, MODULE_SLOT_START + index)
         val item = stack.item as? TagItem ?: return null
         return TagInstance(
             type = item.tagType,
             filter = TagItem.getFilter(stack, registries),
             boundPos = TagItem.getBoundPos(stack),
+            boundArea = TagItem.getBoundArea(stack),
+            controllerPos = pos.toImmutable(),
             augments = augments,
             settings = TagItem.getSettings(stack)
         )
     }
+
+    fun storageInventory(): Inventory = storageInventoryView
+
+    fun isStorageSlot(slot: Int): Boolean = slot in STORAGE_SLOT_START until STORAGE_SLOT_END
 
     fun installedAugments(): AugmentSet {
         val levels = mutableMapOf<AugmentType, Int>()
@@ -165,6 +183,79 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     }
 
     fun assignedWorker(moduleIndex: Int): UUID? = assignedWorkers.getOrNull(moduleIndex)
+
+    fun moduleExecutionStart(): Int = Math.floorMod(moduleExecutionCursor, MODULE_SLOT_COUNT)
+
+    fun advanceModuleExecutionCursor(step: Int = 1) {
+        moduleExecutionCursor = Math.floorMod(moduleExecutionCursor + step, MODULE_SLOT_COUNT)
+    }
+
+    fun isModuleReady(moduleIndex: Int, worldTime: Long): Boolean {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return false
+        return moduleReadyTicks[moduleIndex] <= worldTime
+    }
+
+    fun setModuleReadyTick(moduleIndex: Int, readyTick: Long) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleReadyTicks[moduleIndex] = readyTick
+    }
+
+    fun moduleSearchCursor(moduleIndex: Int): Int {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return 0
+        return moduleSearchCursors[moduleIndex]
+    }
+
+    fun setModuleSearchCursor(moduleIndex: Int, cursor: Int) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleSearchCursors[moduleIndex] = cursor
+    }
+
+    fun moduleRoundRobinIndex(moduleIndex: Int): Int {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return 0
+        return moduleRoundRobinIndices[moduleIndex]
+    }
+
+    fun setModuleRoundRobinIndex(moduleIndex: Int, index: Int) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleRoundRobinIndices[moduleIndex] = index
+    }
+
+    fun lastModuleRedstonePower(moduleIndex: Int): Boolean {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return false
+        return moduleLastRedstonePower[moduleIndex]
+    }
+
+    fun setLastModuleRedstonePower(moduleIndex: Int, powered: Boolean) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleLastRedstonePower[moduleIndex] = powered
+    }
+
+    fun markModuleWorked(moduleIndex: Int, worldTime: Long) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleLastWorkTicks[moduleIndex] = worldTime
+    }
+
+    fun wasModuleRecentlyActive(moduleIndex: Int, worldTime: Long, activeWindow: Long): Boolean {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return false
+        val lastWorkTick = moduleLastWorkTicks[moduleIndex]
+        return lastWorkTick != Long.MIN_VALUE && worldTime - lastWorkTick <= activeWindow
+    }
+
+    fun clearModuleRuntime(moduleIndex: Int) {
+        if (moduleIndex !in 0 until MODULE_SLOT_COUNT) return
+        moduleReadyTicks[moduleIndex] = 0L
+        moduleSearchCursors[moduleIndex] = 0
+        moduleRoundRobinIndices[moduleIndex] = 0
+        moduleLastWorkTicks[moduleIndex] = Long.MIN_VALUE
+        moduleLastRedstonePower[moduleIndex] = false
+    }
+
+    fun clearAllModuleRuntime() {
+        moduleExecutionCursor = 0
+        for (index in 0 until MODULE_SLOT_COUNT) {
+            clearModuleRuntime(index)
+        }
+    }
 
     fun dispatchCursorStart(rosterSize: Int): Int {
         if (rosterSize <= 0) return 0
@@ -203,8 +294,8 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     fun updateStatus(linked: Boolean, roster: Int, assigned: Int, active: Int) {
         val nextLinked = if (linked) roster else 0
-        val nextAssigned = if (linked) assigned else 0
-        val nextActive = if (linked) active else 0
+        val nextAssigned = assigned.coerceAtLeast(0)
+        val nextActive = active.coerceAtLeast(0)
         if (linkedWorkerCount == nextLinked && assignedWorkerCount == nextAssigned && activeWorkerCount == nextActive) {
             return
         }
@@ -231,6 +322,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
             }
         }
         clearAssignedWorkers()
+        clearAllModuleRuntime()
         updateStatus(false, 0, 0, 0)
         updatePowered(false)
         if (changed) {
@@ -314,6 +406,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
             null
         }
         assignedWorkers.fill(null)
+        clearAllModuleRuntime()
         val assignedNbt = nbt.getList("AssignedWorkers", 10)
         for (index in 0 until assignedNbt.size) {
             val entry = assignedNbt.getCompound(index)
@@ -331,12 +424,13 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
             val slot = entry.getByte("Slot").toInt()
             if (slot !in 0 until TOTAL_SLOTS || !entry.contains("Item")) continue
             val decoded = ItemStack.fromNbt(registries, entry.get("Item")!!)
-            decoded.ifPresent { inventory.setStack(slot, it) }
+            decoded.ifPresent { inventory.setStack(slot, TagRegistry.normalizeStack(it)) }
         }
     }
 
     override fun clear() {
         inventory.clear()
+        clearAllModuleRuntime()
     }
 
     override fun size(): Int = TOTAL_SLOTS
@@ -347,21 +441,29 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     override fun removeStack(slot: Int, amount: Int): ItemStack {
         val removed = inventory.removeStack(slot, amount)
-        if (!removed.isEmpty) markDirty()
+        if (!removed.isEmpty) {
+            moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
+            markDirty()
+        }
         return removed
     }
 
     override fun removeStack(slot: Int): ItemStack {
         val removed = inventory.removeStack(slot)
-        if (!removed.isEmpty) markDirty()
+        if (!removed.isEmpty) {
+            moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
+            markDirty()
+        }
         return removed
     }
 
     override fun setStack(slot: Int, stack: ItemStack) {
-        inventory.setStack(slot, stack)
-        if (!stack.isEmpty && stack.count > stack.maxCount) {
-            stack.count = stack.maxCount
+        val normalized = TagRegistry.normalizeStack(stack)
+        inventory.setStack(slot, normalized)
+        if (!normalized.isEmpty && normalized.count > normalized.maxCount) {
+            normalized.count = normalized.maxCount
         }
+        moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
         markDirty()
     }
 
@@ -378,7 +480,12 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     override fun getAvailableSlots(side: Direction): IntArray = AUTOMATION_SLOTS
 
-    override fun canInsert(slot: Int, stack: ItemStack, dir: Direction?): Boolean = false
+    override fun canInsert(slot: Int, stack: ItemStack, dir: Direction?): Boolean = isStorageSlot(slot)
 
-    override fun canExtract(slot: Int, stack: ItemStack, dir: Direction): Boolean = false
+    override fun canExtract(slot: Int, stack: ItemStack, dir: Direction): Boolean = isStorageSlot(slot)
+
+    private fun moduleIndexForSlot(slot: Int): Int? {
+        if (slot !in MODULE_SLOT_START until MODULE_SLOT_END) return null
+        return slot - MODULE_SLOT_START
+    }
 }

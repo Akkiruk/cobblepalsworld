@@ -36,7 +36,7 @@ object DropperBehavior : TagBehavior {
             tag.boundPos ?: origin
         } else {
             val exclude = setOfNotNull(tag.boundPos)
-            ContainerFinder.findClosestMatching(world, origin, effectiveRange(tag, state), exclude) { _, pos ->
+            ContainerFinder.findControllerFirstCachedMatching(world, origin, tag, state, effectiveRange(tag, state), exclude) { _, pos ->
                 containerHasMatchingItems(world, pos, tag)
             }
         }

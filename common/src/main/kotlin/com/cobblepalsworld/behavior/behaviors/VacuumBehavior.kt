@@ -19,6 +19,7 @@ import net.minecraft.world.World
 object VacuumBehavior : TagBehavior {
     override val tagType = TagType.VACUUM
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
+    override fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long = 30L
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
@@ -31,16 +32,31 @@ object VacuumBehavior : TagBehavior {
         )
 
         // Check for items
-        val closestItem = world.getEntitiesByClass(ItemEntity::class.java, searchBox) { itemEntity ->
-            itemEntity.isAlive && FilterMatcher.matches(itemEntity.stack, tag.filter)
-        }.minByOrNull { it.squaredDistanceTo(entity) }
+        var closestItem: ItemEntity? = null
+        var closestItemDistance = Double.MAX_VALUE
+        for (itemEntity in world.getEntitiesByClass(ItemEntity::class.java, searchBox) { candidate ->
+            candidate.isAlive && FilterMatcher.matches(candidate.stack, tag.filter)
+        }) {
+            val distance = itemEntity.squaredDistanceTo(entity)
+            if (distance < closestItemDistance) {
+                closestItem = itemEntity
+                closestItemDistance = distance
+            }
+        }
 
         if (closestItem != null) return closestItem.blockPos
 
         // XP Vacuum augment: also target XP orbs
         if (tag.augments.vacuumsXp()) {
-            val closestXp = world.getEntitiesByClass(ExperienceOrbEntity::class.java, searchBox) { it.isAlive }
-                .minByOrNull { it.squaredDistanceTo(entity) }
+            var closestXp: ExperienceOrbEntity? = null
+            var closestXpDistance = Double.MAX_VALUE
+            for (xpEntity in world.getEntitiesByClass(ExperienceOrbEntity::class.java, searchBox) { it.isAlive }) {
+                val distance = xpEntity.squaredDistanceTo(entity)
+                if (distance < closestXpDistance) {
+                    closestXp = xpEntity
+                    closestXpDistance = distance
+                }
+            }
             if (closestXp != null) return closestXp.blockPos
         }
 
@@ -60,7 +76,7 @@ object VacuumBehavior : TagBehavior {
         // Collect only what the inventory can actually accept this trip.
         val items = world.getEntitiesByClass(ItemEntity::class.java, searchBox) { itemEntity ->
             itemEntity.isAlive && FilterMatcher.matches(itemEntity.stack, tag.filter)
-        }.sortedBy { it.squaredDistanceTo(entity) }
+        }
         val inventory = InventoryManager.getOrCreate(entity.pokemon)
         val plannedInventory = inventory.copyForPlanning()
         val maxItems = effectiveMaxItems(tag, state)

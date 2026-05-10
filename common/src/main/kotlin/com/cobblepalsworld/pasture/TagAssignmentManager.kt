@@ -24,21 +24,24 @@ object TagAssignmentManager {
     private val assignments = ConcurrentHashMap<UUID, AssignmentRecord>()
 
     fun assign(pokemonId: UUID, tag: TagInstance) {
+        val normalizedTag = tag.copy(controllerPos = null)
         val existing = assignments[pokemonId]
         assignments[pokemonId] = if (existing == null) {
-            AssignmentRecord(tag)
+            AssignmentRecord(normalizedTag)
         } else {
-            existing.copy(tag = tag, controllerBinding = null)
+            existing.copy(tag = normalizedTag, controllerBinding = null)
         }
     }
 
     fun assignFromController(pokemonId: UUID, tag: TagInstance, dimensionId: String, pos: BlockPos) {
+        val controllerPos = pos.toImmutable()
+        val normalizedTag = tag.copy(controllerPos = controllerPos)
         val existing = assignments[pokemonId]
-        val controllerBinding = ControllerBinding(dimensionId, pos.toImmutable())
+        val controllerBinding = ControllerBinding(dimensionId, controllerPos)
         assignments[pokemonId] = if (existing == null) {
-            AssignmentRecord(tag, controllerBinding = controllerBinding)
+            AssignmentRecord(normalizedTag, controllerBinding = controllerBinding)
         } else {
-            existing.copy(tag = tag, controllerBinding = controllerBinding)
+            existing.copy(tag = normalizedTag, controllerBinding = controllerBinding)
         }
     }
 

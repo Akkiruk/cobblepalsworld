@@ -1,17 +1,16 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " FB",
-    "FNF",
-    " BF"
+    " E ",
+    "ENE",
+    " E "
   ],
   "key": {
     "N": { "item": "minecraft:name_tag" },
-    "F": { "item": "minecraft:feather" },
-    "B": { "item": "minecraft:bow" }
+    "E": { "item": "minecraft:ender_pearl" }
   },
   "result": {
-    "id": "cobblepalsworld:flinger_tag",
+    "id": "cobblepalsworld:sender_tag",
     "count": 1
   }
 }
