@@ -8,6 +8,7 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.gui.pasture.PalSnapshot
 import com.cobblepalsworld.gui.pasture.PastureSnapshot
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import dev.architectury.networking.NetworkManager
@@ -107,6 +108,7 @@ object CobblePalsNetworking {
 
     private fun handleOpenRequest(player: ServerPlayerEntity, pasturePos: BlockPos) {
         val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
         val pos = pasturePos.toImmutable()
         val pasture = world.getBlockEntity(pos) as? PokemonPastureBlockEntity ?: return
 
@@ -179,6 +181,7 @@ object CobblePalsNetworking {
 
     private fun handleTeleportHome(player: ServerPlayerEntity, pasturePos: BlockPos, pokemonId: UUID) {
         val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
         val targetPasturePos = pasturePos.toImmutable()
         val pasture = world.getBlockEntity(targetPasturePos) as? PokemonPastureBlockEntity ?: return
         if (pasture.ownerName.isNotEmpty() && pasture.ownerName != player.name.string) return

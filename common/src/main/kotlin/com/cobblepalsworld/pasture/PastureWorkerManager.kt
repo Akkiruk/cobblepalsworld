@@ -10,37 +10,36 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import net.minecraft.registry.RegistryKey
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+private data class PastureKey(val dimension: RegistryKey<World>, val pos: BlockPos)
+
 object PastureWorkerManager {
     private val tickInterval get() = ConfigManager.config.general.tickInterval
 
     // Track previously-tethered UUIDs per pasture for recall cleanup
-    private val previousTethered = ConcurrentHashMap<BlockPos, MutableSet<UUID>>()
+    private val previousTethered = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
     // Track previously-tagged UUIDs per pasture for tag removal cleanup
-    private val previouslyTagged = ConcurrentHashMap<BlockPos, MutableSet<UUID>>()
+    private val previouslyTagged = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
     private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
     private const val STALE_ENTRY_TTL = 20L * 30L
-    private val initializedWorlds = ConcurrentHashMap.newKeySet<net.minecraft.registry.RegistryKey<World>>()
 
     fun tickPasture(world: World, pos: BlockPos, pasture: PokemonPastureBlockEntity) {
         if (world.isClient) return
         val serverWorld = world as? ServerWorld ?: return
+        val pastureKey = PastureKey(serverWorld.registryKey, pos.toImmutable())
 
-        // Load persisted data on first tick per world
-        if (initializedWorlds.add(serverWorld.registryKey)) {
-            CobblePalsSaveData.get(serverWorld)
-        }
+        CobblePalsSaveData.ensureLoaded(serverWorld)
 
         // Periodic auto-save
         if (world.time % SAVE_INTERVAL == 0L) {
             CobblePalsSaveData.markDirty(serverWorld)
-            StateManager.pruneStale(world.time, STALE_ENTRY_TTL)
-            ClaimManager.pruneStale(world.time, STALE_ENTRY_TTL)
+            TagExecutionEngine.pruneStaleRuntime(world.time, STALE_ENTRY_TTL)
             InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
         }
 
@@ -54,7 +53,7 @@ object PastureWorkerManager {
         for (t in tethered) {
             try { currentIds.add(t.pokemonId) } catch (_: Exception) {}
         }
-        val prevIds = previousTethered.getOrPut(pos) { mutableSetOf() }
+        val prevIds = previousTethered.getOrPut(pastureKey) { mutableSetOf() }
         val orphanedAssignments = TagAssignmentManager.findOrphansAt(serverWorld.registryKey.value.toString(), pos, currentIds)
         val missingIds = buildSet {
             prevIds.forEach { prevId ->
@@ -77,7 +76,7 @@ object PastureWorkerManager {
                 currentlyTagged.add(id)
             }
         }
-        val prevTagged = previouslyTagged.getOrPut(pos) { mutableSetOf() }
+        val prevTagged = previouslyTagged.getOrPut(pastureKey) { mutableSetOf() }
         for (prevId in prevTagged) {
             if (prevId in currentIds && prevId !in currentlyTagged) {
                 // Pokemon is still tethered but lost its tag — clean up work state
@@ -163,22 +162,18 @@ object PastureWorkerManager {
                 TagAssignmentManager.remove(tethering.pokemonId)
             } catch (_: Exception) {}
         }
-        previousTethered.remove(pasture.pos)
-        previouslyTagged.remove(pasture.pos)
+        val pastureKey = PastureKey(world.registryKey, pasture.pos.toImmutable())
+        previousTethered.remove(pastureKey)
+        previouslyTagged.remove(pastureKey)
 
         // Mark save data dirty so cleanup is persisted
         (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
     }
 
     fun onServerStopping(server: net.minecraft.server.MinecraftServer) {
-        // Force-save all data before shutdown to prevent item loss
-        for (world in server.worlds) {
-            CobblePalsSaveData.markDirty(world)
-        }
-        TagAssignmentManager.clear()
-        InventoryManager.clear()
-        StateManager.clear()
-        ClaimManager.clear()
+        CobblePalsSaveData.markDirty(server)
+        TagExecutionEngine.resetRuntimeState()
+        CobblePalsSaveData.clearLoaded(server)
         resetTransientState(clearInitialization = true)
     }
 
@@ -187,9 +182,6 @@ object PastureWorkerManager {
     }
 
     fun resetTransientState(clearInitialization: Boolean = false) {
-        if (clearInitialization) {
-            initializedWorlds.clear()
-        }
         previousTethered.clear()
         previouslyTagged.clear()
     }

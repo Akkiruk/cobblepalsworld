@@ -6,6 +6,7 @@ import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.ingame.HandledScreen
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.text.Text
+import org.lwjgl.glfw.GLFW
 
 class RouterScreen(
     handler: RouterScreenHandler,
@@ -187,7 +188,8 @@ class RouterScreen(
                 lines = listOf(
                     Text.literal("Task Matrix"),
                     Text.literal("Install tag cards here to create active job slots."),
-                    Text.literal("Current cards: $jobCardCount")
+                    Text.literal("Current cards: $jobCardCount"),
+                    Text.literal("Hover a tag card and press R to edit it.")
                 )
             )
 
@@ -398,5 +400,35 @@ class RouterScreen(
         if (hoveredTooltip != null && now - hoveredTooltipSinceMs >= TOOLTIP_DELAY_MS) {
             context.drawTooltip(textRenderer, hoveredTooltip.lines, mouseX, mouseY)
         }
+    }
+
+    override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        if (keyCode == GLFW.GLFW_KEY_R) {
+            val moduleIndex = hoveredModuleIndex() ?: return super.keyPressed(keyCode, scanCode, modifiers)
+            val slot = handler.slots.getOrNull(moduleIndex) ?: return super.keyPressed(keyCode, scanCode, modifiers)
+            if (slot.stack.item is TagItem) {
+                client?.interactionManager?.clickButton(handler.syncId, 100 + moduleIndex)
+                return true
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers)
+    }
+
+    private fun hoveredModuleIndex(): Int? {
+        val client = client ?: return null
+        val localMouseX = client.mouse.x.toInt() - x
+        val localMouseY = client.mouse.y.toInt() - y
+
+        for (row in 0 until RouterScreenHandler.MODULE_ROWS) {
+            for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
+                val left = RouterScreenHandler.MODULE_START_X + col * 18
+                val top = RouterScreenHandler.MODULE_START_Y + row * 18
+                if (contains(localMouseX, localMouseY, left, top, 16, 16)) {
+                    return row * RouterScreenHandler.MODULE_COLUMNS + col
+                }
+            }
+        }
+
+        return null
     }
 }

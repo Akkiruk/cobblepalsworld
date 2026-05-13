@@ -17,10 +17,13 @@ import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NbtCompound
 import net.minecraft.nbt.NbtList
 import net.minecraft.registry.RegistryWrapper
+import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.PersistentState
+import net.minecraft.world.World
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class CobblePalsSaveData : PersistentState() {
 
@@ -102,6 +105,7 @@ class CobblePalsSaveData : PersistentState() {
 
     companion object {
         private const val DATA_ID = "cobblepalsworld"
+        private val initializedServers = ConcurrentHashMap.newKeySet<MinecraftServer>()
 
         fun fromNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): CobblePalsSaveData {
             val data = CobblePalsSaveData()
@@ -213,12 +217,40 @@ class CobblePalsSaveData : PersistentState() {
             )
         }
 
+        private fun primaryWorld(server: MinecraftServer): ServerWorld {
+            return server.getWorld(World.OVERWORLD)
+                ?: server.worlds.firstOrNull()
+                ?: error("CobblePals World requires at least one loaded world")
+        }
+
+        fun ensureLoaded(server: MinecraftServer) {
+            if (initializedServers.add(server)) {
+                get(server)
+            }
+        }
+
+        fun ensureLoaded(world: ServerWorld) {
+            ensureLoaded(world.server)
+        }
+
+        fun clearLoaded(server: MinecraftServer) {
+            initializedServers.remove(server)
+        }
+
+        fun get(server: MinecraftServer): CobblePalsSaveData {
+            return primaryWorld(server).persistentStateManager.getOrCreate(getType(), DATA_ID)
+        }
+
         fun get(world: ServerWorld): CobblePalsSaveData {
-            return world.persistentStateManager.getOrCreate(getType(), DATA_ID)
+            return get(world.server)
+        }
+
+        fun markDirty(server: MinecraftServer) {
+            get(server).markDirty()
         }
 
         fun markDirty(world: ServerWorld) {
-            get(world).markDirty()
+            markDirty(world.server)
         }
     }
 }

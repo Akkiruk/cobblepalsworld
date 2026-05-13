@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.28
+
+- Moved CobblePals persistence onto one server-wide save authority so assignments and carried inventories no longer fight per-dimension state files or risk being wiped during shutdown.
+- Made pasture worker bookkeeping dimension-aware, routed stale runtime pruning through shared cleanup, and fixed redstone-gated workers so they release claims safely while still finishing needed deposits.
+- Locked the Pokemon assignment screen while a Command Post owns that pal, preventing managed tags or augments from being edited into a screen state that never applies.
+
+## 0.1.27
+
+- Fixed Puller job flow so pals carrying any extracted items always return to the Command Post buffer before trying to pull more, which avoids soft-lock behavior when filter settings change or mixed filter rules leave non-matching stacks in their inventory.
+- Added clearer filter diagnostics to tag tooltips and the tag editor so item, tag, and mod filter groups plus their ANY/ALL semantics are visible while testing.
+- Added a Command Post hotkey: hover a module card and press `R` to open that tag's editor directly from the router screen.
+
+## 0.1.26
+
+- Routed live Command Post tags back through the Pokemon worker loop so assigned pals visibly travel, work, and deposit instead of the router silently teleporting items or breaking blocks at range.
+- Kept the Command Post buffer, bindings, and controller assignment flow intact while dropping the controller-native execution flag that made the work feel detached from the Pokemon.
+
 ## 0.1.25
 
 - Removed the remaining pasture worker-slot dependency from controller-native Command Post modules, so router-executed tags no longer need assigned Pokemon records or consume linked pasture worker capacity.

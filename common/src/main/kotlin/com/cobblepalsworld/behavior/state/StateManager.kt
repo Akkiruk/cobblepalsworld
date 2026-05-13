@@ -12,10 +12,16 @@ object StateManager {
 
     fun get(pokemonId: UUID): WorkerState? = states[pokemonId]
 
-    fun pruneStale(currentTime: Long, staleAfterTicks: Long) {
-        states.entries.removeIf { (_, state) ->
-            state.lastSeenTick > 0L && currentTime - state.lastSeenTick > staleAfterTicks
+    fun pruneStale(currentTime: Long, staleAfterTicks: Long): Set<UUID> {
+        val removed = mutableSetOf<UUID>()
+        states.entries.removeIf { (pokemonId, state) ->
+            val isStale = state.lastSeenTick > 0L && currentTime - state.lastSeenTick > staleAfterTicks
+            if (isStale) {
+                removed += pokemonId
+            }
+            isStale
         }
+        return removed
     }
 
     fun remove(pokemonId: UUID) {

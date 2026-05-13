@@ -18,6 +18,7 @@ object RouterExecutionEngine {
     private const val BASE_COOLDOWN = 20
 
     fun tick(world: ServerWorld, pos: BlockPos, _state: net.minecraft.block.BlockState, router: RouterBlockEntity) {
+        CobblePalsSaveData.ensureLoaded(world)
         val dimensionId = world.registryKey.value.toString()
         val augments = router.installedAugments()
         val tasksBySlot = buildTasksBySlot(world, router, augments)

@@ -37,7 +37,6 @@ enum class TagType(
     BREAKER(
         id = "breaker",
         bindingMode = BindingMode.POSITION,
-        controllerNative = true,
         description = "Breaks one exact bound block, then returns the drops to the Command Post",
         color = Formatting.RED,
         arrivalParticle = ParticleTypes.CRIT,
@@ -46,7 +45,6 @@ enum class TagType(
     ),
     GUARDIAN(
         id = "guardian",
-        controllerNative = true,
         description = "Attacks hostile mobs near the Command Post",
         usesFilter = false,
         color = Formatting.DARK_RED,
@@ -59,7 +57,6 @@ enum class TagType(
     HARVESTER(
         id = "harvester",
         bindingMode = BindingMode.AREA,
-        controllerNative = true,
         description = "Harvests mature crops only inside the selected work box into the Command Post buffer",
         usesFilter = false,
         color = Formatting.DARK_GREEN,
@@ -69,7 +66,6 @@ enum class TagType(
     ),
     VACUUM(
         id = "vacuum",
-        controllerNative = true,
         description = "Collects dropped items near the Command Post into its buffer",
         color = Formatting.AQUA,
         arrivalParticle = ParticleTypes.PORTAL,
@@ -81,7 +77,6 @@ enum class TagType(
     COURIER(
         id = "sender",
         bindingMode = BindingMode.CONTAINER,
-        controllerNative = true,
         description = "Sends filtered items from the Command Post buffer to one bound container",
         color = Formatting.LIGHT_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
@@ -91,7 +86,6 @@ enum class TagType(
     PULLER(
         id = "puller",
         bindingMode = BindingMode.CONTAINER,
-        controllerNative = true,
         description = "Pulls filtered items from one bound container into the Command Post buffer",
         color = Formatting.BLUE,
         arrivalParticle = ParticleTypes.ENCHANT,
@@ -102,7 +96,6 @@ enum class TagType(
         id = "distributor",
         bindingMode = BindingMode.CONTAINER,
         supportsTargetList = true,
-        controllerNative = true,
         description = "Distributes filtered items from the Command Post buffer across multiple containers",
         color = Formatting.DARK_PURPLE,
         arrivalParticle = ParticleTypes.ENCHANT,
@@ -112,7 +105,6 @@ enum class TagType(
     DROPPER(
         id = "dropper",
         bindingMode = BindingMode.POSITION,
-        controllerNative = true,
         description = "Drops matching items from the Command Post buffer at a bound location",
         color = Formatting.DARK_GRAY,
         arrivalParticle = ParticleTypes.SMOKE,
@@ -121,7 +113,6 @@ enum class TagType(
     ),
     VOID(
         id = "void",
-        controllerNative = true,
         description = "Deletes matching items directly from the Command Post buffer",
         color = Formatting.DARK_RED,
         arrivalParticle = ParticleTypes.LARGE_SMOKE,
@@ -132,7 +123,6 @@ enum class TagType(
     ACTIVATOR(
         id = "activator",
         bindingMode = BindingMode.POSITION,
-        controllerNative = true,
         description = "Right-clicks one exact bound target with filtered items from the Command Post buffer",
         color = Formatting.YELLOW,
         arrivalParticle = ParticleTypes.WAX_ON,
@@ -142,7 +132,6 @@ enum class TagType(
     SHEPHERD(
         id = "shepherd",
         bindingMode = BindingMode.POSITION,
-        controllerNative = true,
         description = "Feeds and breeds animals near a bound pen using food from the Command Post buffer",
         usesFilter = false,
         color = Formatting.WHITE,

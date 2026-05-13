@@ -58,7 +58,6 @@ class WorkerState(val pokemonId: UUID) {
         depositPos = null
         arrivalTick = null
         workSourcePos = null
-        lastRedstonePower = false
         nextTargetSearchTick = 0L
         idleTicks = 0
         ecoMode = false

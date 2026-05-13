@@ -1,6 +1,7 @@
 package com.cobblepalsworld.gui.router
 
 import com.cobblepalsworld.augment.AugmentItem
+import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
@@ -12,7 +13,9 @@ import net.minecraft.item.ItemStack
 import net.minecraft.screen.ArrayPropertyDelegate
 import net.minecraft.screen.PropertyDelegate
 import net.minecraft.screen.ScreenHandler
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory
 import net.minecraft.screen.slot.Slot
+import net.minecraft.text.Text
 
 class RouterScreenHandler : ScreenHandler {
     private val routerInventory: Inventory
@@ -134,5 +137,23 @@ class RouterScreenHandler : ScreenHandler {
 
         return moved
     }
+
+    override fun onButtonClick(player: PlayerEntity, id: Int): Boolean {
+        val moduleIndex = id - 100
+        if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
+
+        val inventorySlot = RouterBlockEntity.MODULE_SLOT_START + moduleIndex
+        val stack = routerInventory.getStack(inventorySlot)
+        if (stack.item !is TagItem) return false
+
+        if (!player.world.isClient) {
+            player.openHandledScreen(SimpleNamedScreenHandlerFactory(
+                { syncId, inv, _ -> TagFilterScreenHandler(syncId, inv, routerInventory, inventorySlot) },
+                Text.translatable("screen.cobblepalsworld.tag_filter")
+            ))
+        }
+        return true
+    }
+
     override fun canUse(player: PlayerEntity): Boolean = routerInventory.canPlayerUse(player)
 }

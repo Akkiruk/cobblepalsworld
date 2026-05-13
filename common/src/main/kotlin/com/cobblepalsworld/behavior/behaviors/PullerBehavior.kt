@@ -28,12 +28,12 @@ object PullerBehavior : TagBehavior {
         val sourcePos = tag.boundPos ?: return null
         val commandPostPos = ContainerFinder.controllerBufferPos(world, tag) ?: return null
         val pokemonInv = InventoryManager.get(entity.pokemon.uuid)
-        val hasItems = pokemonInv != null && (0 until pokemonInv.size()).any { slot ->
+        val carryingItems = pokemonInv != null && (0 until pokemonInv.size()).any { slot ->
             val stack = pokemonInv.getStack(slot)
-            !stack.isEmpty && FilterMatcher.matches(stack, tag.filter)
+            !stack.isEmpty
         }
 
-        return if (hasItems) {
+        return if (carryingItems) {
             val inventory = ContainerFinder.getInventoryAt(world, commandPostPos) ?: return null
             if (ContainerFinder.hasSpace(inventory)) commandPostPos else null
         } else {

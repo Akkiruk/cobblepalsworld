@@ -90,6 +90,15 @@ class TagFilterScreen(
             }
         }
 
+        if (showFilterControls) {
+            val breakdown = buildList {
+                if (handler.filterItemCount > 0) add("${handler.filterItemCount} item${if (handler.filterItemCount != 1) "s" else ""}")
+                if (handler.matchTagCount > 0) add("${handler.matchTagCount} tag${if (handler.matchTagCount != 1) "s" else ""}")
+                if (handler.matchModIdCount > 0) add("${handler.matchModIdCount} mod${if (handler.matchModIdCount != 1) "s" else ""}")
+            }.joinToString(", ").ifEmpty { "no active filters" }
+            context.drawText(textRenderer, Text.literal("Debug: $breakdown"), 72, 66, 0x6D93A6, false)
+        }
+
         val footer = if (showFilterControls) "Click items to set filter" else "This tag ignores item filters"
         context.drawText(textRenderer, Text.literal(footer), 5, 76, 0x505058, false)
     }
@@ -173,7 +182,9 @@ class TagFilterScreen(
                 active = true,
                 tooltip = listOf(
                     Text.literal("Match rule"),
-                    Text.literal("Current: ${humanValue(handler.matchMode.name)}")
+                    Text.literal("Current: ${humanValue(handler.matchMode.name)}"),
+                    Text.literal("Any: match any enabled filter group."),
+                    Text.literal("All: match every enabled filter group.")
                 )
             )
             buttonY += 9

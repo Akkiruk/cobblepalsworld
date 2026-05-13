@@ -19,6 +19,7 @@ import net.minecraft.item.ItemStack
 import net.minecraft.screen.ArrayPropertyDelegate
 import net.minecraft.screen.PropertyDelegate
 import net.minecraft.screen.ScreenHandler
+import net.minecraft.screen.slot.SlotActionType
 import net.minecraft.screen.slot.Slot
 import java.util.UUID
 
@@ -61,6 +62,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.augmentInventory = SimpleInventory(AUGMENT_SLOT_COUNT)
         this.pokemonDisplayInventory = SimpleInventory(9)
         this.pokemonId = pokemonId
+        (playerInventory.player.world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::ensureLoaded)
         this.invData = object : PropertyDelegate {
             override fun get(index: Int): Int {
                 val pokemonInv = InventoryManager.get(pokemonId)
@@ -110,11 +112,11 @@ class PokemonTagScreenHandler : ScreenHandler {
         addProperties(invData)
 
         // Slot 0: Tag slot (gold panel, center-left)
-        addSlot(TagSlot(tagInventory, 0, 32, 18))
+        addSlot(TagSlot(tagInventory, 0, 32, 18) { isManagedByCommandPost })
 
         // Slots 1-3: Augment slots (left column)
         for (i in 0 until AUGMENT_SLOT_COUNT) {
-            addSlot(AugmentSlot(augmentInventory, i, 8, 18 + i * 18))
+            addSlot(AugmentSlot(augmentInventory, i, 8, 18 + i * 18) { isManagedByCommandPost })
         }
 
         // Slots 4-12: 3x3 pokémon inventory display (read-only)
@@ -136,7 +138,15 @@ class PokemonTagScreenHandler : ScreenHandler {
         }
     }
 
+    override fun onSlotClick(slotIndex: Int, button: Int, actionType: SlotActionType, player: PlayerEntity) {
+        if (isManagedByCommandPost && (slotIndex == TAG_SLOT || slotIndex in AUGMENT_SLOT_START until AUGMENT_SLOT_END)) {
+            return
+        }
+        super.onSlotClick(slotIndex, button, actionType, player)
+    }
+
     override fun quickMove(player: PlayerEntity, slotIndex: Int): ItemStack {
+        if (isManagedByCommandPost) return ItemStack.EMPTY
         if (slotIndex == TAG_SLOT) {
             val slot = slots[TAG_SLOT]
             if (!slot.hasStack()) return ItemStack.EMPTY

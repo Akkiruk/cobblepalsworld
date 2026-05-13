@@ -66,11 +66,26 @@ object TagExecutionEngine {
     fun tick(world: World, entity: PokemonEntity, pokemon: Pokemon, tag: TagInstance, origin: BlockPos) {
         if (!isTagEnabled(tag.type)) return
 
+        val behavior = TagBehaviorRegistry.get(tag.type) ?: return
         val state = StateManager.getOrCreate(pokemon.uuid)
         state.lastSeenTick = world.time
-        state.targetPos?.let { ClaimManager.touch(it, pokemon.uuid, world) }
 
-        if (!passesRedstoneGate(world, origin, tag, state)) return
+        if (!passesRedstoneGate(world, origin, tag, state)) {
+            val inventory = InventoryManager.get(pokemon.uuid)
+            if (inventory != null && !inventory.isEmpty && !behavior.handlesOwnInventory) {
+                if (state.phase != WorkerPhase.DEPOSITING) {
+                    releaseClaimAndReset(world, state)
+                    state.phase = WorkerPhase.DEPOSITING
+                }
+            } else {
+                if (state.phase != WorkerPhase.IDLE) {
+                    releaseClaimAndReset(world, state)
+                }
+                return
+            }
+        } else {
+            state.targetPos?.let { ClaimManager.touch(it, pokemon.uuid, world) }
+        }
 
         // --- Eco mode: idle workers tick at a reduced rate to save CPU ---
         if (state.phase == WorkerPhase.IDLE) {
@@ -84,8 +99,6 @@ object TagExecutionEngine {
                 state.ecoSkipCounter = 0
             }
         }
-
-        val behavior = TagBehaviorRegistry.get(tag.type) ?: return
 
         // Keep looking at active target during arrival
         if (state.phase == WorkerPhase.ARRIVING) {
@@ -107,13 +120,7 @@ object TagExecutionEngine {
     }
 
     fun cleanup(pokemonId: java.util.UUID, world: World? = null, pos: BlockPos? = null) {
-        ClaimManager.releaseAll(pokemonId)
-        StateManager.remove(pokemonId)
-        BreakerBehavior.clearPastureOrigin(pokemonId)
-        GuardianBehavior.cleanup(pokemonId)
-        SenderBehavior.cleanup(pokemonId)
-        DistributorBehavior.cleanup(pokemonId)
-        ShepherdBehavior.cleanup(pokemonId)
+        cleanupRuntimeOnly(pokemonId)
 
         // Drop carried items instead of deleting them
         val inventory = InventoryManager.remove(pokemonId)
@@ -130,6 +137,22 @@ object TagExecutionEngine {
             }
             PastureWorkerManager.markDirtyNow(world)
         }
+    }
+
+    fun cleanupRuntimeOnly(pokemonId: java.util.UUID) {
+        ClaimManager.releaseAll(pokemonId)
+        StateManager.remove(pokemonId)
+        BreakerBehavior.clearPastureOrigin(pokemonId)
+        GuardianBehavior.cleanup(pokemonId)
+        SenderBehavior.cleanup(pokemonId)
+        DistributorBehavior.cleanup(pokemonId)
+        ShepherdBehavior.cleanup(pokemonId)
+    }
+
+    fun pruneStaleRuntime(currentTime: Long, staleAfterTicks: Long) {
+        val stalePokemonIds = StateManager.pruneStale(currentTime, staleAfterTicks)
+        stalePokemonIds.forEach(::cleanupRuntimeOnly)
+        ClaimManager.pruneStale(currentTime, staleAfterTicks)
     }
 
     fun resetRuntimeState() {
@@ -392,6 +415,11 @@ object TagExecutionEngine {
                 inventory.setStack(slot, ItemStack.EMPTY)
             }
         }
+    }
+
+    private fun releaseClaimAndReset(world: World, state: WorkerState) {
+        state.targetPos?.let { ClaimManager.release(it, world) }
+        state.reset()
     }
 
     private fun resetToIdle(state: WorkerState) {

@@ -23,9 +23,10 @@ class TagFilterScreenHandler : ScreenHandler {
     private val filterInventory: SimpleInventory
     private val filterData: PropertyDelegate
     private val itemSlot: Int
-    private val trackedTagStack: ItemStack?
-    private val matchTags: List<String>
-    private val matchModIds: List<String>
+    private val trackedInventory: net.minecraft.inventory.Inventory?
+    private val trackedSlotIndex: Int
+    private var matchTags: List<String> = emptyList()
+    private var matchModIds: List<String> = emptyList()
 
     companion object {
         private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
@@ -36,7 +37,8 @@ class TagFilterScreenHandler : ScreenHandler {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
         this.filterData = ArrayPropertyDelegate(8)
         this.itemSlot = -1
-        this.trackedTagStack = null
+        this.trackedInventory = null
+        this.trackedSlotIndex = -1
         this.matchTags = emptyList()
         this.matchModIds = emptyList()
         setupSlots(playerInventory)
@@ -47,9 +49,27 @@ class TagFilterScreenHandler : ScreenHandler {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
         this.filterData = ArrayPropertyDelegate(8)
         this.itemSlot = if (hand == Hand.MAIN_HAND) playerInventory.selectedSlot else 40
+        this.trackedInventory = playerInventory
+        this.trackedSlotIndex = itemSlot
 
-        val stack = playerInventory.player.getStackInHand(hand)
-        this.trackedTagStack = stack
+        val stack = trackedInventory.getStack(trackedSlotIndex)
+        loadTrackedTag(stack, playerInventory)
+        setupSlots(playerInventory)
+    }
+
+    constructor(syncId: Int, playerInventory: PlayerInventory, trackedInventory: net.minecraft.inventory.Inventory, trackedSlotIndex: Int) : super(MenuTypes.TAG_FILTER.get(), syncId) {
+        this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
+        this.filterData = ArrayPropertyDelegate(8)
+        this.itemSlot = -1
+        this.trackedInventory = trackedInventory
+        this.trackedSlotIndex = trackedSlotIndex
+
+        val stack = trackedInventory.getStack(trackedSlotIndex)
+        loadTrackedTag(stack, playerInventory)
+        setupSlots(playerInventory)
+    }
+
+    private fun loadTrackedTag(stack: ItemStack, playerInventory: PlayerInventory) {
         if (stack.item is TagItem) {
             val registries = playerInventory.player.world.registryManager
             val filter = TagItem.getFilter(stack, registries)
@@ -76,7 +96,6 @@ class TagFilterScreenHandler : ScreenHandler {
             filterData.set(6, 64)
             filterData.set(7, -1)
         }
-        setupSlots(playerInventory)
     }
 
     private fun setupSlots(playerInventory: PlayerInventory) {
@@ -109,6 +128,9 @@ class TagFilterScreenHandler : ScreenHandler {
     val regulatorAmount: Int get() = filterData.get(6).coerceIn(1, 64)
     val tagType: TagType? get() = TagType.entries.getOrNull(filterData.get(7))
     val usesFilter: Boolean get() = tagType?.usesFilter != false
+    val filterItemCount: Int get() = (0 until TagFilter.MAX_FILTER_SLOTS).count { !filterInventory.getStack(it).isEmpty }
+    val matchTagCount: Int get() = matchTags.size
+    val matchModIdCount: Int get() = matchModIds.size
 
     private val protectedScreenSlotIndex: Int
         get() = when (itemSlot) {
@@ -177,8 +199,8 @@ class TagFilterScreenHandler : ScreenHandler {
 
     override fun onClosed(player: PlayerEntity) {
         super.onClosed(player)
-        if (!player.world.isClient && itemSlot >= 0) {
-            val stack = trackedTagStack ?: player.inventory.getStack(itemSlot)
+        if (!player.world.isClient && trackedInventory != null && trackedSlotIndex >= 0) {
+            val stack = trackedInventory.getStack(trackedSlotIndex)
             if (!stack.isEmpty && stack.item is TagItem) {
                 val filter = if (usesFilter) {
                     val items = (0 until TagFilter.MAX_FILTER_SLOTS)

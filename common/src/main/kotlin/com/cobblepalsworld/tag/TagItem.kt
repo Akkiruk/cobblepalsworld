@@ -354,10 +354,25 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
             val mode = if (filter.whitelist) "Whitelist" else "Blacklist"
             tooltip.add(Text.literal("Mode: $mode").formatted(Formatting.GRAY))
             tooltip.add(Text.literal("Match: ${filter.matchMode.name.lowercase().replaceFirstChar(Char::titlecase)}").formatted(Formatting.DARK_GRAY))
+            val filterParts = mutableListOf<String>()
             if (filter.items.isNotEmpty()) {
-                tooltip.add(Text.literal("Filter: ${filter.items.size} item(s)").formatted(Formatting.DARK_GRAY))
+                filterParts += "${filter.items.size} item${if (filter.items.size != 1) "s" else ""}"
             }
-            if (filter.whitelist && filter.items.isEmpty()) {
+            if (filter.matchTags.isNotEmpty()) {
+                filterParts += "${filter.matchTags.size} tag${if (filter.matchTags.size != 1) "s" else ""}"
+            }
+            if (filter.matchModIds.isNotEmpty()) {
+                filterParts += "${filter.matchModIds.size} mod${if (filter.matchModIds.size != 1) "s" else ""}"
+            }
+            if (filterParts.isNotEmpty()) {
+                tooltip.add(Text.literal("Filter: ${filterParts.joinToString(", ")}").formatted(Formatting.DARK_GRAY))
+                val behaviorText = when (filter.matchMode) {
+                    com.cobblepalsworld.tag.filter.FilterMatchMode.ANY -> "Any enabled filter group may match"
+                    com.cobblepalsworld.tag.filter.FilterMatchMode.ALL -> "Every enabled filter group must match"
+                }
+                tooltip.add(Text.literal(behaviorText).formatted(Formatting.DARK_AQUA))
+            }
+            if (filter.whitelist && filter.isEmpty()) {
                 tooltip.add(Text.translatable("tooltip.cobblepalsworld.whitelist_empty").formatted(Formatting.RED))
             }
         }
@@ -404,6 +419,8 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
         if (tagType.supportsTargetList && settings.extraTargets.isNotEmpty()) {
             tooltip.add(Text.literal("Extra Targets: ${settings.extraTargets.size}").formatted(Formatting.AQUA))
         }
+
+        tooltip.add(Text.literal("Command Post: hover + R to edit").formatted(Formatting.DARK_GRAY))
     }
 
     private fun humanValue(value: String): String =
