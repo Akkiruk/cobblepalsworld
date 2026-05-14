@@ -30,8 +30,12 @@ import kotlin.math.sin
 object WorkerOverlayRenderer {
     private const val ENTRY_TTL_TICKS = 60L
     private const val MAX_RENDER_DISTANCE_SQ = 72.0 * 72.0
+    private const val MAX_OVERLAY_ENTRIES = 128
+    private const val MAX_STACK_CACHE_ENTRIES = 96
 
     private val overlays = linkedMapOf<Int, OverlayEntry>()
+    private val tagStackCache = linkedMapOf<String, ItemStack>()
+    private val cargoStackCache = linkedMapOf<String, ItemStack>()
     private var worldKey: String? = null
 
     fun replaceWorksiteVisuals(worksitePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
@@ -43,8 +47,11 @@ object WorkerOverlayRenderer {
         val now = world.time
         overlays.entries.removeIf { it.value.worksitePos == worksite }
         visuals.forEach { snapshot ->
+            overlays.remove(snapshot.entityId)
             overlays[snapshot.entityId] = OverlayEntry(worksite, snapshot, now)
         }
+        prune(now)
+        trimCache(overlays, MAX_OVERLAY_ENTRIES)
     }
 
     fun render(matrices: MatrixStack) {
@@ -253,16 +260,31 @@ object WorkerOverlayRenderer {
     }
 
     private fun resolveTagStack(tagTypeId: String): ItemStack? {
+        tagStackCache.remove(tagTypeId)?.let { cached ->
+            tagStackCache[tagTypeId] = cached
+            return cached.copy()
+        }
         val type = TagType.fromId(tagTypeId) ?: return null
         val item = TagRegistry.getItem(type) ?: return null
-        return ItemStack(item)
+        return ItemStack(item).also {
+            tagStackCache[tagTypeId] = it.copy()
+            trimCache(tagStackCache, MAX_STACK_CACHE_ENTRIES)
+        }
     }
 
     private fun resolveCargoStack(itemId: String, carriedItemCount: Int): ItemStack? {
+        val cacheKey = "$itemId:$carriedItemCount"
+        cargoStackCache.remove(cacheKey)?.let { cached ->
+            cargoStackCache[cacheKey] = cached
+            return cached.copy()
+        }
         val identifier = runCatching { Identifier.of(itemId) }.getOrNull() ?: return null
         val item = Registries.ITEM.get(identifier)
         if (item == Items.AIR) return null
-        return ItemStack(item, carriedItemCount.coerceAtLeast(1).coerceAtMost(item.maxCount))
+        return ItemStack(item, carriedItemCount.coerceAtLeast(1).coerceAtMost(item.maxCount)).also {
+            cargoStackCache[cacheKey] = it.copy()
+            trimCache(cargoStackCache, MAX_STACK_CACHE_ENTRIES)
+        }
     }
 
     private fun phaseColor(phase: WorkerPhase, hasCargo: Boolean): Int {
@@ -332,10 +354,19 @@ object WorkerOverlayRenderer {
         if (worldKey == currentWorldKey) return
         worldKey = currentWorldKey
         overlays.clear()
+        tagStackCache.clear()
+        cargoStackCache.clear()
     }
 
     private fun prune(now: Long) {
         overlays.entries.removeIf { (_, entry) -> now - entry.updatedAt > ENTRY_TTL_TICKS }
+    }
+
+    private fun <K, V> trimCache(cache: MutableMap<K, V>, maxEntries: Int) {
+        while (cache.size > maxEntries) {
+            val firstKey = cache.keys.firstOrNull() ?: return
+            cache.remove(firstKey)
+        }
     }
 
     private fun crewOffset(index: Int, count: Int): Pair<Double, Double> {

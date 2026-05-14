@@ -81,6 +81,10 @@ object WorkerNavigationManager {
         failedDestinations.clear()
     }
 
+    fun pruneFailureCache(currentTime: Long) {
+        failedDestinations.entries.removeIf { (_, failedUntil) -> currentTime >= failedUntil }
+    }
+
     private fun ensureSession(
         entity: PokemonEntity,
         destination: BlockPos,

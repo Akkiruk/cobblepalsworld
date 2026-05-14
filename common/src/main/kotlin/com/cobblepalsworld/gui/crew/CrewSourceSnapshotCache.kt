@@ -10,4 +10,8 @@ object CrewSourceSnapshotCache {
     }
 
     fun get(routerPos: BlockPos): List<CrewSourceSnapshot> = snapshotsByRouter[routerPos.toImmutable()].orEmpty()
+
+    fun clear(routerPos: BlockPos) {
+        snapshotsByRouter.remove(routerPos.toImmutable())
+    }
 }

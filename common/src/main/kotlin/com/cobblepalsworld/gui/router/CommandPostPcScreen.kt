@@ -61,7 +61,7 @@ class CommandPostPcScreen(
     private var sourceType = CrewSourceType.PC
     private var sourceBoxIndex = 0
     private var pastureScrollIndex = 0
-    private var commandMode = CommandPostMode.SOURCE
+    private var commandMode = CommandPostMode.JOBS
     private var rosterSort = CommandPostRosterSort.STATUS
     private var drawerMode = CommandPostDrawerMode.CLOSED
     private var sourceQuery = ""
@@ -96,9 +96,9 @@ class CommandPostPcScreen(
     private var previousBoxButton: CommandPostTextureButtonWidget? = null
     private var nextBoxButton: CommandPostTextureButtonWidget? = null
 
-    private val renderStates = mutableMapOf<String, FloatingState>()
-    private val renderableCache = mutableMapOf<UUID, RenderableCacheEntry>()
-    private val heldItemCache = mutableMapOf<String, ItemStack?>()
+    private val renderStates = linkedMapOf<String, FloatingState>()
+    private val renderableCache = linkedMapOf<UUID, RenderableCacheEntry>()
+    private val heldItemCache = linkedMapOf<String, ItemStack>()
 
     init {
         backgroundWidth = CommandPostPcShell.BASE_WIDTH
@@ -124,11 +124,15 @@ class CommandPostPcScreen(
                     texture = CommandPostModeDrawer.BUTTON_TEXTURE,
                     highlighted = { commandMode == mode }
                 ) {
+                        val previousMode = commandMode
                     commandMode = mode
                     selectedPokemonId = null
                     selectedModuleIndex = null
                     searchField?.setFocused(false)
                     sourceSearchActive = false
+                        if (mode == CommandPostMode.SOURCE && previousMode != CommandPostMode.SOURCE) {
+                            requestSourceRefresh()
+                        }
                 }
             )
         }
@@ -273,14 +277,18 @@ class CommandPostPcScreen(
                 setText(sourceQuery)
                 setChangedListener { value ->
                     sourceQuery = value
-                    requestSourceRefresh()
+                    if (commandMode == CommandPostMode.SOURCE) {
+                        requestSourceRefresh()
+                    }
                 }
                 visible = drawerMode == CommandPostDrawerMode.FILTERS
             }
         )
         applySlotLayout()
         requestCrewRefresh()
-        requestSourceRefresh()
+        if (commandMode == CommandPostMode.SOURCE) {
+            requestSourceRefresh()
+        }
         nextCrewRefreshAtMs = System.currentTimeMillis() + 1_000L
         nextSourceRefreshAtMs = System.currentTimeMillis() + 3_000L
     }
@@ -291,7 +299,7 @@ class CommandPostPcScreen(
             requestCrewRefresh()
             nextCrewRefreshAtMs = now + 1_000L
         }
-        if (now >= nextSourceRefreshAtMs) {
+        if (commandMode == CommandPostMode.SOURCE && now >= nextSourceRefreshAtMs) {
             requestSourceRefresh()
             nextSourceRefreshAtMs = now + 4_000L
         }
@@ -348,6 +356,16 @@ class CommandPostPcScreen(
     }
 
     override fun drawForeground(context: DrawContext, mouseX: Int, mouseY: Int) {
+    }
+
+    override fun close() {
+        clearScreenCaches()
+        super.close()
+    }
+
+    override fun removed() {
+        clearRenderCaches()
+        super.removed()
     }
 
     override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
@@ -824,7 +842,9 @@ class CommandPostPcScreen(
         clipHeight: Int
     ) {
         val renderable = renderablePokemon(view) ?: return
-        val state = renderStates.getOrPut(stateKey) { FloatingState() }
+        val state = renderStates.remove(stateKey) ?: FloatingState()
+        renderStates[stateKey] = state
+        trimCache(renderStates, MAX_RENDER_STATE_CACHE_ENTRIES)
         context.enableScissor(centerX - clipHalfWidth, topY, centerX + clipHalfWidth, topY + clipHeight)
         context.matrices.push()
         context.matrices.translate(centerX.toDouble(), topY.toDouble(), 0.0)
@@ -849,23 +869,33 @@ class CommandPostPcScreen(
             append('|')
             append(view.heldItemId)
         }
-        renderableCache[view.pokemonId]?.takeIf { it.signature == signature }?.let { return it.renderable }
+        renderableCache.remove(view.pokemonId)?.takeIf { it.signature == signature }?.let { cached ->
+            renderableCache[view.pokemonId] = cached
+            return cached.renderable
+        }
         val identifier = runCatching { Identifier.of(view.speciesIdentifier) }.getOrNull()
         val species = identifier?.let(PokemonSpecies::getByIdentifier)
             ?: PokemonSpecies.getByName(view.species.substringAfter(':'))
             ?: return null
         return RenderablePokemon(species, view.aspects, heldStack(view.heldItemId) ?: ItemStack.EMPTY).also {
             renderableCache[view.pokemonId] = RenderableCacheEntry(signature, it)
+            trimCache(renderableCache, MAX_RENDERABLE_CACHE_ENTRIES)
         }
     }
 
     private fun heldStack(itemId: String): ItemStack? {
         if (itemId.isBlank()) return null
-        heldItemCache[itemId]?.let { return it?.copy() }
+        heldItemCache.remove(itemId)?.let { cached ->
+            heldItemCache[itemId] = cached
+            return cached.copy()
+        }
         val identifier = runCatching { Identifier.of(itemId) }.getOrNull() ?: return null
         val item = Registries.ITEM.get(identifier)
         if (item == Items.AIR) return null
-        return ItemStack(item).also { heldItemCache[itemId] = it.copy() }
+        return ItemStack(item).also {
+            heldItemCache[itemId] = it.copy()
+            trimCache(heldItemCache, MAX_HELD_ITEM_CACHE_ENTRIES)
+        }
     }
 
     private fun currentSourceBox(sources: List<CrewSourceSnapshot>): CrewSourceBoxSnapshot? {
@@ -939,7 +969,27 @@ class CommandPostPcScreen(
     }
 
     private fun requestSourceRefresh() {
+        if (commandMode != CommandPostMode.SOURCE) return
         CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos, sourceType, sourceBoxIndex, sourceQuery)
+    }
+
+    private fun clearScreenCaches() {
+        clearRenderCaches()
+        CrewSourceSnapshotCache.clear(handler.routerPos)
+        CommandPostCrewSnapshotCache.clear(handler.routerPos)
+    }
+
+    private fun clearRenderCaches() {
+        renderStates.clear()
+        renderableCache.clear()
+        heldItemCache.clear()
+    }
+
+    private fun <K, V> trimCache(cache: MutableMap<K, V>, maxEntries: Int) {
+        while (cache.size > maxEntries) {
+            val firstKey = cache.keys.firstOrNull() ?: return
+            cache.remove(firstKey)
+        }
     }
 
     private fun filteredMembers(members: List<CommandPostCrewMemberSnapshot>): List<CommandPostCrewMemberSnapshot> {
@@ -1245,6 +1295,9 @@ class CommandPostPcScreen(
         private const val LOGISTICS_HOTBAR_TOP = 162
         private const val HIDDEN_SLOT_X = -10_000
         private const val HIDDEN_SLOT_Y = -10_000
+        private const val MAX_RENDER_STATE_CACHE_ENTRIES = 48
+        private const val MAX_RENDERABLE_CACHE_ENTRIES = 72
+        private const val MAX_HELD_ITEM_CACHE_ENTRIES = 64
 
         private val SOURCE_BUTTON_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_icon_filter.png")
     }

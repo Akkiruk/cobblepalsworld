@@ -42,6 +42,7 @@ object TagExecutionEngine {
     private const val WORKSPACE_PADDING_BLOCKS = 2
     private const val ENTITY_LEASH_PADDING_BLOCKS = 10
     private const val MIN_ENTITY_LEASH_BLOCKS = 28
+    private const val MIN_LOGISTICS_RANGE = 32
 
     // --- Compiled cache helpers (avoid recomputing every tick) ---
 
@@ -60,7 +61,7 @@ object TagExecutionEngine {
     /** Get or compute the effective search range. Cached on WorkerState. */
     fun effectiveRange(tag: TagInstance, state: WorkerState): Int {
         if (state.cachedRange < 0) {
-            state.cachedRange = ConfigManager.config.getTagConfig(tag.type).range + tag.augments.extraRange()
+            state.cachedRange = maxOf(ConfigManager.config.getTagConfig(tag.type).range, minimumBaseRange(tag.type)) + tag.augments.extraRange()
         }
         return state.cachedRange
     }
@@ -75,6 +76,13 @@ object TagExecutionEngine {
 
     fun isTagEnabled(type: TagType): Boolean {
         return ConfigManager.config.getTagConfig(type).enabled
+    }
+
+    private fun minimumBaseRange(type: TagType): Int {
+        return when (type) {
+            TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> MIN_LOGISTICS_RANGE
+            else -> 1
+        }
     }
 
     fun tick(

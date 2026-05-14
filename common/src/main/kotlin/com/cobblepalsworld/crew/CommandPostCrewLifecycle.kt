@@ -16,7 +16,8 @@ import net.minecraft.util.math.Vec3d
 import java.util.UUID
 
 object CommandPostCrewLifecycle {
-    private const val HOME_DISTANCE_SQUARED = 96.0
+    private const val HOME_DISTANCE_BLOCKS = 96.0
+    private const val HOME_DISTANCE_SQUARED = HOME_DISTANCE_BLOCKS * HOME_DISTANCE_BLOCKS
 
     fun resolvePokemon(world: ServerWorld, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null): Pokemon? {
         val ownerUuid = if (member.ownerUuid.leastSignificantBits == 0L && member.ownerUuid.mostSignificantBits == 0L) {
@@ -34,6 +35,10 @@ object CommandPostCrewLifecycle {
         val current = pokemon.entity
         if (current != null && current.world === world && current.blockPos.getSquaredDistance(anchor) <= HOME_DISTANCE_SQUARED) {
             return current
+        }
+
+        if (current != null && current.world === world) {
+            return teleportToAnchor(world, anchor, current)
         }
 
         if (current != null) {
@@ -78,5 +83,13 @@ object CommandPostCrewLifecycle {
             return current
         }
         return ensureEntity(world, anchor, pokemon)
+    }
+
+    private fun teleportToAnchor(world: ServerWorld, anchor: BlockPos, entity: PokemonEntity): PokemonEntity {
+        val spawnPos = SafePositionResolver.standNear(world, anchor.up(), anchor) ?: anchor.up()
+        entity.teleport(spawnPos.x + 0.5, spawnPos.y.toDouble(), spawnPos.z + 0.5, false)
+        entity.navigation.stop()
+        entity.setVelocity(0.0, 0.0, 0.0)
+        return entity
     }
 }

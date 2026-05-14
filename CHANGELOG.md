@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.36
+
+- Fixed Command Post crew workers being recalled to the trainer after walking only a short distance from the post; distant same-world workers are now reseated at the Command Post without the owner recall beam.
+- Reduced Command Post open-time FPS cost by opening to the jobs view, syncing Party/PC source data only while the source view is active, and clearing/bounding Pokemon render caches when the screen closes.
+- Cached worker overlay item/tag stacks, bounded overlay entries, and pruned stale path/visual runtime caches so long-running 16-worker setups do not keep accumulating transient render/path state.
+- Raised the default Command Post worker target to 16 and gave logistics roles a 32-block practical base range so sender/puller/distributor-style jobs can travel farther without being immediately dragged home.
+
 ## 0.2.35
 
 - Moved the Command Post search field, mode controls, toolbar actions, source toggle, box navigation, and pasture roster onto real child widgets so the screen behaves closer to Cobblemon's widget-owned PC flow.

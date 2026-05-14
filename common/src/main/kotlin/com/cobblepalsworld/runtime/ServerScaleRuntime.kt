@@ -5,6 +5,7 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationBudget
+import com.cobblepalsworld.navigation.WorkerNavigationManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
@@ -39,7 +40,9 @@ object ServerScaleRuntime {
         CobblePalsSaveData.markDirty(server)
         TagExecutionEngine.pruneStaleRuntime(world.time, STALE_ENTRY_TTL)
         ClaimManager.pruneStale(world.time, STALE_ENTRY_TTL)
+        WorkerNavigationManager.pruneFailureCache(world.time)
         InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
+        pruneTransientCaches(world.time)
     }
 
     fun navigationBudget(world: ServerWorld, localStarts: Int): NavigationBudget {
@@ -92,6 +95,11 @@ object ServerScaleRuntime {
         pathBudgets.clear()
         visualStates.clear()
         nearbyPlayerCache.clear()
+    }
+
+    private fun pruneTransientCaches(currentTime: Long) {
+        visualStates.entries.removeIf { (_, state) -> currentTime - state.tick > STALE_ENTRY_TTL }
+        nearbyPlayerCache.entries.removeIf { (_, state) -> currentTime - state.tick > STALE_ENTRY_TTL }
     }
 
     private fun consumeGlobalPathStart(world: ServerWorld): Boolean {
