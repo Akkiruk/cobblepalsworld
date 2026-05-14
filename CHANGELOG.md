@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.32
+
+- Fixed Command Post PC render artifacts by hiding vanilla handled slots in Source mode and only enabling real item slots in the modes that need inventory interaction.
+- Reworked Jobs into a centered tag-card install surface with augment sockets and the player bag inside the Cobblemon PC display instead of left-side slot controls.
+- Reworked Logistics into a clean Command Post buffer and player inventory view so tags and carried items can be managed directly from the post.
+- Primed Pokemon hover before the portrait renders so hovered and selected Pokemon no longer overlap in the left preview.
+
 ## 0.2.31
 
 - Finished the remaining concrete Command Post Cobblemon UI fidelity items: dedicated party slot helper, pasture row widget, recall button widget, richer stats-style selected Pokemon info, and real bottom filter/options drawers.

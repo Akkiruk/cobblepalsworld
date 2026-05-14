@@ -135,11 +135,13 @@ class CommandPostPcScreen(
     override fun drawBackground(context: DrawContext, delta: Float, mouseX: Int, mouseY: Int) {
         val localMouseX = mouseX - x
         val localMouseY = mouseY - y
+        applySlotLayout()
         val sources = CrewSourceSnapshotCache.get(handler.routerPos)
         val crew = CommandPostCrewSnapshotCache.get(handler.routerPos)
         val currentBox = currentSourceBox(sources)
         val allMembers = crew?.members.orEmpty()
         val members = filteredMembers(allMembers)
+        primeHoveredPokemon(currentBox, members, localMouseX, localMouseY)
         val preview = previewPokemon(currentBox, allMembers)
 
         drawPortrait(context, preview, delta)
@@ -419,18 +421,29 @@ class CommandPostPcScreen(
     }
 
     private fun drawRouterSlots(context: DrawContext) {
-        if (commandMode == CommandPostMode.SOURCE) return
-        for (row in 0 until RouterScreenHandler.MODULE_ROWS) {
-            for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
-                val left = MODULE_SLOT_LEFT + col * 18
-                val top = MODULE_SLOT_TOP + row * 18
-                blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = 0.55F)
+    }
+
+    private enum class SlotFrameStyle { COBBLEMON, COMPACT }
+
+    private fun drawSlotFrames(context: DrawContext, slotRange: IntRange, style: SlotFrameStyle) {
+        slotRange.forEach { slotIndex ->
+            val slot = handler.slots.getOrNull(slotIndex) ?: return@forEach
+            if (slot.x == HIDDEN_SLOT_X && slot.y == HIDDEN_SLOT_Y) return@forEach
+            when (style) {
+                SlotFrameStyle.COBBLEMON -> blitk(
+                    matrixStack = context.matrices,
+                    texture = CommandPostPcShell.SLOT_OVERLAY,
+                    x = x + slot.x - 4,
+                    y = y + slot.y - 4,
+                    width = CommandPostStorageWidget.SLOT_SIZE,
+                    height = CommandPostStorageWidget.SLOT_SIZE,
+                    alpha = 0.55F
+                )
+                SlotFrameStyle.COMPACT -> {
+                    context.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0x6618242A)
+                    context.fill(x + slot.x, y + slot.y, x + slot.x + 16, y + slot.y + 16, 0x5522343A)
+                }
             }
-        }
-        for (index in 0 until RouterBlockEntity.UPGRADE_SLOT_COUNT) {
-            val left = UPGRADE_SLOT_LEFT + (index % 3) * 18
-            val top = UPGRADE_SLOT_TOP + (index / 3) * 18
-            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = 0.38F)
         }
     }
 
@@ -491,14 +504,17 @@ class CommandPostPcScreen(
         drawOperationalFrame(context, "JOBS")
         val views = moduleViews()
         val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
+        drawSmallText(context, "Tag cards", JOBS_MODULE_LEFT, JOBS_MODULE_TOP - 10, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "Augments", JOBS_UPGRADE_LEFT, JOBS_UPGRADE_TOP - 10, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "Bag", CENTER_INV_LEFT, JOBS_PLAYER_TOP - 9, 0xFFEAF4F5.toInt(), true)
+        drawSlotFrames(context, 0 until RouterBlockEntity.MODULE_SLOT_COUNT, SlotFrameStyle.COBBLEMON)
+        drawSlotFrames(context, RouterScreenHandler.UPGRADE_SCREEN_SLOT_START until RouterScreenHandler.STORAGE_SCREEN_SLOT_START, SlotFrameStyle.COMPACT)
+        drawSlotFrames(context, RouterScreenHandler.COMMAND_SLOT_COUNT until handler.slots.size, SlotFrameStyle.COMPACT)
         if (views.isEmpty()) {
-            drawSmallText(context, "Install tag cards", CommandPostStorageWidget.X + 14, CommandPostStorageWidget.Y + 24, 0xFFB8C3C7.toInt(), false)
-            slotHits = emptyList()
-            return
+            drawSmallText(context, "Drop tags here", JOBS_MODULE_LEFT + 2, JOBS_MODULE_TOP + 60, 0xFFB8C3C7.toInt(), false)
         }
-        val hits = mutableListOf<PanelHit>()
-        views.take(6).forEachIndexed { row, view ->
-            val top = CommandPostStorageWidget.Y + 20 + row * 19
+        views.forEach { view ->
+            val slot = handler.slots.getOrNull(view.moduleIndex) ?: return@forEach
             val active = handler.moduleActive(view.moduleIndex)
             val assigned = handler.moduleAssigned(view.moduleIndex)
             val roleMembers = members.filter { it.tagTypeId == view.tagType.id }
@@ -509,18 +525,18 @@ class CommandPostPcScreen(
                 assigned -> 0xFFFFD166.toInt()
                 else -> 0xFFEAF4F5.toInt()
             }
-            context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 15, if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 17)) 0x5522343A else 0x3318242A)
-            drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 14, top, rowColor, true)
-            drawSmallText(context, TagTypePresentation.familyOf(view.tagType).label, CommandPostStorageWidget.X + 92, top, 0xFFB8C3C7.toInt(), false)
-            drawSmallText(context, if (active) "Active" else if (assigned) "Staffed" else "Open", CommandPostStorageWidget.X + 124, top, rowColor, false)
-            drawSmallText(context, causeChip(active, assigned, blocked), CommandPostStorageWidget.X + 124, top + 8, rowColor, false)
-            hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 156, 17) {
-                selectedModuleIndex = view.moduleIndex
-                commandMode = CommandPostMode.POLICY
-                true
+            val badgeLeft = slot.x + 12
+            val badgeTop = slot.y + 12
+            context.fill(x + badgeLeft, y + badgeTop, x + badgeLeft + 5, y + badgeTop + 5, rowColor)
+            if (contains(localMouseX, localMouseY, slot.x - 4, slot.y - 4, 25, 25)) {
+                hoveredTooltip = HoverTooltip("job-${view.moduleIndex}", listOf(
+                    Text.literal(TagTypePresentation.roleLabel(view.tagType)),
+                    Text.literal(TagTypePresentation.familyOf(view.tagType).label),
+                    Text.literal(causeChip(active, assigned, blocked))
+                ))
             }
         }
-        panelHits = hits
+        panelHits = emptyList()
         slotHits = emptyList()
     }
 
@@ -608,19 +624,13 @@ class CommandPostPcScreen(
             usedSlots > 0 -> "Flowing"
             else -> "Empty"
         }
-        drawSmallText(context, "Buffer", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 24, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$usedSlots/${RouterBlockEntity.STORAGE_SLOT_COUNT} slots", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 24, 0xFFDDE7EA.toInt(), false)
-        drawSmallText(context, "$itemCount items", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 40, 0xFFB8C3C7.toInt(), false)
-        drawSmallText(context, "Pressure $pressure", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 40, if (pressure == "Full") 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
-        drawSmallText(context, "Role cards", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 58, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$moduleCount installed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 58, 0xFFDDE7EA.toInt(), false)
-        drawSmallText(context, "Routes", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 74, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$logisticsCount logistics", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 74, 0xFFDDE7EA.toInt(), false)
-        drawSmallText(context, "Starved", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 90, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$starved unstaffed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 90, if (starved > 0) 0xFFFFD166.toInt() else 0xFFBFE7C4.toInt(), false)
-        drawSmallText(context, "Backlog", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 106, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, if (backedUp > 0) "$backedUp intake high" else "Flow clear", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 106, if (backedUp > 0) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
-        drawSmallText(context, if (usedSlots == 0) "Senders wait for buffer" else if (pressure == "Full") "Pullers may stall" else "Items can move", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 126, 0xFFB8C3C7.toInt(), false)
+        drawSmallText(context, "Buffer", CENTER_INV_LEFT, LOGISTICS_BUFFER_TOP - 9, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$usedSlots/${RouterBlockEntity.STORAGE_SLOT_COUNT}  $itemCount items  $pressure", CENTER_INV_LEFT + 46, LOGISTICS_BUFFER_TOP - 9, if (pressure == "Full") 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
+        drawSlotFrames(context, RouterScreenHandler.STORAGE_SCREEN_SLOT_START until RouterScreenHandler.COMMAND_SLOT_COUNT, SlotFrameStyle.COMPACT)
+        drawSmallText(context, "Bag", CENTER_INV_LEFT, LOGISTICS_PLAYER_TOP - 9, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "Routes $logisticsCount  Starved $starved  Backlog $backedUp", CENTER_INV_LEFT + 26, LOGISTICS_PLAYER_TOP - 9, if (starved > 0 || backedUp > 0) 0xFFFFD166.toInt() else 0xFFBFE7C4.toInt(), false)
+        drawSlotFrames(context, RouterScreenHandler.COMMAND_SLOT_COUNT until handler.slots.size, SlotFrameStyle.COMPACT)
+        drawSmallText(context, if (usedSlots == 0) "Senders wait for buffer" else if (pressure == "Full") "Pullers may stall" else "Items can move", CENTER_INV_LEFT, LOGISTICS_HOTBAR_TOP + 19, 0xFFB8C3C7.toInt(), false)
         panelHits = emptyList()
         slotHits = emptyList()
     }
@@ -749,6 +759,42 @@ class CommandPostPcScreen(
         if (boxCount <= 0) return null
         sourceBoxIndex = sourceBoxIndex.coerceIn(0, boxCount - 1)
         return source.boxes.firstOrNull { it.boxIndex == sourceBoxIndex } ?: source.boxes.firstOrNull()
+    }
+
+    private fun primeHoveredPokemon(box: CrewSourceBoxSnapshot?, members: List<CommandPostCrewMemberSnapshot>, localMouseX: Int, localMouseY: Int) {
+        if (commandMode == CommandPostMode.SOURCE) {
+            box?.slots.orEmpty().forEachIndexed { index, rawSlot ->
+                val pokemon = rawSlot.pokemon?.takeIf(::sourceMatchesFilters) ?: return@forEachIndexed
+                val left: Int
+                val top: Int
+                val size: Int
+                if (sourceType == CrewSourceType.PARTY) {
+                    val bounds = CommandPostPartySlot.bounds(index) ?: return@forEachIndexed
+                    left = bounds.left
+                    top = bounds.top
+                    size = bounds.size
+                } else {
+                    val gridIndex = rawSlot.slotIndex
+                    if (gridIndex !in 0 until CommandPostStorageWidget.BOX_SLOT_COUNT) return@forEachIndexed
+                    left = CommandPostStorageWidget.slotLeft(gridIndex)
+                    top = CommandPostStorageWidget.slotTop(gridIndex)
+                    size = CommandPostStorageWidget.SLOT_SIZE
+                }
+                if (contains(localMouseX, localMouseY, left, top, size, size)) {
+                    hoveredSource = pokemon
+                    return
+                }
+            }
+        }
+
+        if (!CommandPostPastureWidget.listContains(localMouseX, localMouseY)) return
+        members.drop(pastureScrollIndex).take(CommandPostPastureWidget.VISIBLE_ROWS).forEachIndexed { row, member ->
+            val bounds = CommandPostPastureWidget.rowBounds(row)
+            if (contains(localMouseX, localMouseY, bounds.left, bounds.top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT)) {
+                hoveredCrew = member
+                return
+            }
+        }
     }
 
     private fun previewPokemon(box: CrewSourceBoxSnapshot?, members: List<CommandPostCrewMemberSnapshot>): CommandPostPokemonRenderView? {
@@ -933,17 +979,57 @@ class CommandPostPcScreen(
     }
 
     private fun applySlotLayout() {
+        for (slotIndex in handler.slots.indices) {
+            setSlotPosition(slotIndex, HIDDEN_SLOT_X, HIDDEN_SLOT_Y)
+        }
+        when (commandMode) {
+            CommandPostMode.SOURCE -> return
+            CommandPostMode.JOBS -> {
+                positionModuleSlots(JOBS_MODULE_LEFT, JOBS_MODULE_TOP)
+                positionUpgradeSlots(JOBS_UPGRADE_LEFT, JOBS_UPGRADE_TOP)
+                positionPlayerInventory(CENTER_INV_LEFT, JOBS_PLAYER_TOP, JOBS_HOTBAR_TOP)
+            }
+            CommandPostMode.POLICY -> return
+            CommandPostMode.LOGISTICS -> {
+                positionStorageSlots(CENTER_INV_LEFT, LOGISTICS_BUFFER_TOP)
+                positionPlayerInventory(CENTER_INV_LEFT, LOGISTICS_PLAYER_TOP, LOGISTICS_HOTBAR_TOP)
+            }
+        }
+    }
+
+    private fun positionModuleSlots(left: Int, top: Int) {
         for (row in 0 until RouterScreenHandler.MODULE_ROWS) {
             for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
                 val slotIndex = row * RouterScreenHandler.MODULE_COLUMNS + col
-                setSlotPosition(slotIndex, MODULE_SLOT_LEFT + col * 18, MODULE_SLOT_TOP + row * 18)
+                setSlotPosition(slotIndex, left + col * 18, top + row * 18)
             }
         }
+    }
+
+    private fun positionUpgradeSlots(left: Int, top: Int) {
         for (index in 0 until RouterBlockEntity.UPGRADE_SLOT_COUNT) {
-            setSlotPosition(RouterScreenHandler.UPGRADE_SCREEN_SLOT_START + index, UPGRADE_SLOT_LEFT + (index % 3) * 18, UPGRADE_SLOT_TOP + (index / 3) * 18)
+            setSlotPosition(RouterScreenHandler.UPGRADE_SCREEN_SLOT_START + index, left + index * 18, top)
         }
-        for (slotIndex in RouterScreenHandler.STORAGE_SCREEN_SLOT_START until handler.slots.size) {
-            setSlotPosition(slotIndex, HIDDEN_SLOT_X, HIDDEN_SLOT_Y)
+    }
+
+    private fun positionStorageSlots(left: Int, top: Int) {
+        for (row in 0 until RouterScreenHandler.STORAGE_ROWS) {
+            for (col in 0 until RouterScreenHandler.STORAGE_COLUMNS) {
+                val slotIndex = RouterScreenHandler.STORAGE_SCREEN_SLOT_START + row * RouterScreenHandler.STORAGE_COLUMNS + col
+                setSlotPosition(slotIndex, left + col * 18, top + row * 18)
+            }
+        }
+    }
+
+    private fun positionPlayerInventory(left: Int, top: Int, hotbarTop: Int) {
+        val start = RouterScreenHandler.COMMAND_SLOT_COUNT
+        for (row in 0..2) {
+            for (col in 0..8) {
+                setSlotPosition(start + row * 9 + col, left + col * 18, top + row * 18)
+            }
+        }
+        for (col in 0..8) {
+            setSlotPosition(start + 27 + col, left + col * 18, hotbarTop)
         }
     }
 
@@ -954,11 +1040,10 @@ class CommandPostPcScreen(
     }
 
     private fun hoveredModuleSlot(localMouseX: Int, localMouseY: Int): Int? {
-        for (row in 0 until RouterScreenHandler.MODULE_ROWS) {
-            for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
-                val index = row * RouterScreenHandler.MODULE_COLUMNS + col
-                if (contains(localMouseX, localMouseY, MODULE_SLOT_LEFT + col * 18, MODULE_SLOT_TOP + row * 18, 18, 18)) return index
-            }
+        for (index in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
+            val slot = handler.slots.getOrNull(index) ?: continue
+            if (slot.x == HIDDEN_SLOT_X && slot.y == HIDDEN_SLOT_Y) continue
+            if (contains(localMouseX, localMouseY, slot.x, slot.y, 18, 18)) return index
         }
         return null
     }
@@ -1032,10 +1117,16 @@ class CommandPostPcScreen(
         private const val SOURCE_BUTTON_TOP = 186
         private const val SOURCE_BUTTON_SIZE = 8
 
-        private const val MODULE_SLOT_LEFT = 14
-        private const val MODULE_SLOT_TOP = 139
-        private const val UPGRADE_SLOT_LEFT = 8
-        private const val UPGRADE_SLOT_TOP = 99
+        private const val CENTER_INV_LEFT = 91
+        private const val JOBS_MODULE_LEFT = 101
+        private const val JOBS_MODULE_TOP = 42
+        private const val JOBS_UPGRADE_LEFT = 165
+        private const val JOBS_UPGRADE_TOP = 56
+        private const val JOBS_PLAYER_TOP = 101
+        private const val JOBS_HOTBAR_TOP = 159
+        private const val LOGISTICS_BUFFER_TOP = 39
+        private const val LOGISTICS_PLAYER_TOP = 104
+        private const val LOGISTICS_HOTBAR_TOP = 162
         private const val HIDDEN_SLOT_X = -10_000
         private const val HIDDEN_SLOT_Y = -10_000
 
