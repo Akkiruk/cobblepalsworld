@@ -1,6 +1,8 @@
 package com.cobblepalsworld.gui.pasture
 
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.behavior.state.WorkerStatusKind
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import net.minecraft.network.PacketByteBuf
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -24,35 +26,53 @@ data class PalSnapshot(
     val carriedSlotCount: Int,
     val primaryCarriedItemId: String?,
     val isEcoMode: Boolean,
-    val isManagedByCommandPost: Boolean
+    val isManagedByCommandPost: Boolean,
+    val statusReasonOrdinal: Int,
+    val statusDetail: String
 ) {
     fun workerPhase(): WorkerPhase? = WorkerPhase.entries.getOrNull(phaseOrdinal)
 
-    fun isActive(): Boolean = workerPhase()?.let { it != WorkerPhase.IDLE } == true
+    fun statusReason(): WorkerStatusReason? = WorkerStatusReason.entries.getOrNull(statusReasonOrdinal)
+
+    fun statusKind(): WorkerStatusKind? = statusReason()?.kind
+
+    fun isActive(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.ACTIVE
 
     fun hasCargo(): Boolean = carriedItemCount > 0
+
+    fun isReady(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.READY
+
+    fun isWaiting(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.WAITING
+
+    fun isBlocked(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.BLOCKED
+
+    fun isStandby(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.STANDBY
 
     fun statusLabel(): String = when {
         isFainted -> "Fainted"
         tagTypeId == null -> "Unassigned"
-        workerPhase() == WorkerPhase.NAVIGATING -> "Moving"
-        workerPhase() == WorkerPhase.ARRIVING -> "Arriving"
-        workerPhase() == WorkerPhase.WORKING -> "Working"
-        workerPhase() == WorkerPhase.DEPOSITING -> "Returning"
-        hasCargo() -> "Loaded"
-        cooldownTicksRemaining > 0 -> "Cooldown"
-        searchDelayTicksRemaining > 0 -> "Awaiting"
-        isEcoMode -> "Eco Idle"
+        statusReason() != null -> statusReason()!!.label
         else -> "Ready"
     }
 
+    fun statusDetailOrFallback(): String = when {
+        isFainted -> "This pal must be healed before it can work again."
+        tagTypeId == null -> "Assign a tag to give this pal a job."
+        statusDetail.isNotBlank() -> statusDetail
+        statusReason() == WorkerStatusReason.READY -> "Ready to look for a new assignment."
+        hasCargo() -> "Holding cargo and ready to return it."
+        else -> "No additional worker detail is available yet."
+    }
+
     fun sortRank(): Int = when {
-        isFainted -> 5
-        tagTypeId == null -> 4
+        isFainted -> 6
+        tagTypeId == null -> 5
         isActive() -> 0
-        hasCargo() -> 1
-        cooldownTicksRemaining > 0 || searchDelayTicksRemaining > 0 -> 2
-        isEcoMode -> 3
+        isReady() -> 1
+        isWaiting() || hasCargo() -> 2
+        isBlocked() -> 3
+        isStandby() -> 4
+        isEcoMode -> 4
         else -> 2
     }
 
@@ -81,6 +101,8 @@ data class PalSnapshot(
         primaryCarriedItemId?.let { buf.writeString(it) }
         buf.writeBoolean(isEcoMode)
         buf.writeBoolean(isManagedByCommandPost)
+        buf.writeVarInt(statusReasonOrdinal)
+        buf.writeString(statusDetail)
     }
 
     companion object {
@@ -103,7 +125,9 @@ data class PalSnapshot(
             carriedSlotCount = buf.readVarInt(),
             primaryCarriedItemId = if (buf.readBoolean()) buf.readString() else null,
             isEcoMode = buf.readBoolean(),
-            isManagedByCommandPost = buf.readBoolean()
+            isManagedByCommandPost = buf.readBoolean(),
+            statusReasonOrdinal = buf.readVarInt(),
+            statusDetail = buf.readString()
         )
     }
 }

@@ -6,6 +6,7 @@ import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.gui.pasture.PalSnapshot
 import com.cobblepalsworld.gui.pasture.PastureSnapshot
@@ -326,7 +327,9 @@ object CobblePalsNetworking {
             carriedSlotCount = carriedSlotCount,
             primaryCarriedItemId = primaryCarriedItemId,
             isEcoMode = state?.ecoMode == true,
-            isManagedByCommandPost = assignmentView?.controllerBinding != null
+            isManagedByCommandPost = assignmentView?.controllerBinding != null,
+            statusReasonOrdinal = state?.statusReason?.ordinal ?: WorkerStatusReason.READY.ordinal,
+            statusDetail = state?.statusDetail ?: ""
         )
     }
 

@@ -25,12 +25,18 @@ The architecture direction in this document is no longer just aspirational. Seve
 - Phase 5 is partially delivered: nearby-player throttling now provides a real slowdown policy for distant pastures without introducing fake off-screen labor.
 - Phase 3 is now partially delivered in-world as well: active workers can publish a live visual state to nearby clients so duty halos, role icons, and cargo cues reinforce the same worker truth shown by the manager.
 
+### Shipped Progress Through 0.1.33
+
+- Phase 4 advanced again: the pasture manager now exposes authoritative ready, waiting, blocked, and standby states with explicit worker explanations, so the Command Post surface can answer why a pal is not acting instead of only showing that it is idle.
+- Phase 4 also gained stronger operational framing: the manager header now summarizes the current order mix and slot pressure so the player can read the pasture as an active workforce rather than a flat roster.
+- Phase 5 advanced meaningfully: in-flight workers now keep their slot priority and idle workers rotate fairly through limited worker capacity, which fixes the worst list-order starvation case and makes controlled concurrency more intentional.
+- Phase 5 also improved search calmness: target contention now backs off instead of hot-retrying every pasture tick, which lowers pointless churn while preserving the same worker-truth model.
+
 ### Still Missing Relative To Final Vision
 
-- Blocked and idle explanation is still not a solved player-facing feature.
 - Completion beats and family-specific effect language are still uneven across tags.
 - Assignment identity, preference, and reservation tooling are still future work.
-- Larger-orchard scalability still needs more explicit pathfinding and concurrency policy beyond the new distant slowdown baseline.
+- Larger-orchard scalability still needs more explicit pathfinding and concurrency policy beyond the new distant slowdown baseline and the new fair worker rotation.
 
 ## Mission Statement
 
@@ -346,6 +352,8 @@ Each role should have a visible "job complete" beat. This gives labor emotional 
 
 Idle, traveling, working, returning, depositing, and blocked should each have a readable presentation strategy.
 
+Status: partially implemented. The manager now distinguishes ready, waiting, blocked, and standby states with explicit reasons, and the world overlay already covers the active slice. What remains is stronger in-world blocked/completion feedback and family-specific spectacle.
+
 ## Scalability Policy
 
 The final version needs an explicit performance philosophy.
@@ -517,7 +525,9 @@ The player feels like they are directing a team.
 Current status:
 
 - Worker overview and operational visibility are now materially better through the live pasture manager board.
-- Blocked and idle explanations plus true work-order framing are still missing.
+- Blocked and idle explanations are now live from authoritative runtime state.
+- Order framing is now partially live through manager summaries of active assignments and slot pressure.
+- Preference systems, reservation systems, and deeper work-order authoring are still missing.
 
 ### Phase 5. Scalable Orchestration Pass
 
@@ -538,7 +548,8 @@ Larger pastures feel calmer and slower at distance, not fake.
 Current status:
 
 - Nearby-player slowdown is now live and aligned with the one-authority rule.
-- Search churn, pathfinding budgets, and controlled concurrency still need a broader system pass.
+- Target-contention backoff and fair idle-worker rotation are now live, which materially improves controlled concurrency.
+- Search churn, pathfinding budgets, and broader large-pasture orchestration still need a wider system pass.
 
 ### Phase 6. Assignment Identity Pass
 

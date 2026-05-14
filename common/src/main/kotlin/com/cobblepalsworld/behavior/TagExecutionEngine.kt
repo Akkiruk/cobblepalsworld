@@ -6,6 +6,7 @@ import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerState
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
 import com.cobblepalsworld.behavior.behaviors.DistributorBehavior
@@ -16,6 +17,7 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.navigation.NavigationAttempt
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
@@ -67,11 +69,18 @@ object TagExecutionEngine {
     }
 
     fun tick(world: World, entity: PokemonEntity, pokemon: Pokemon, tag: TagInstance, origin: BlockPos) {
-        if (!isTagEnabled(tag.type)) return
-
-        val behavior = TagBehaviorRegistry.get(tag.type) ?: return
         val state = StateManager.getOrCreate(pokemon.uuid)
         state.lastSeenTick = world.time
+
+        if (!isTagEnabled(tag.type)) {
+            if (state.phase != WorkerPhase.IDLE) {
+                releaseClaimAndReset(world, state)
+            }
+            state.setStatus(WorkerStatusReason.TAG_DISABLED, "This tag is disabled in the config")
+            return
+        }
+
+        val behavior = TagBehaviorRegistry.get(tag.type) ?: return
 
         if (!passesRedstoneGate(world, origin, tag, state)) {
             val inventory = InventoryManager.get(pokemon.uuid)
@@ -80,10 +89,12 @@ object TagExecutionEngine {
                     releaseClaimAndReset(world, state)
                     state.phase = WorkerPhase.DEPOSITING
                 }
+                state.setStatus(WorkerStatusReason.DEPOSITING, "Returning cargo while the redstone gate is closed")
             } else {
                 if (state.phase != WorkerPhase.IDLE) {
                     releaseClaimAndReset(world, state)
                 }
+                state.setStatus(WorkerStatusReason.REDSTONE_OFF, "Waiting for the redstone condition to allow work")
                 return
             }
         } else {
@@ -98,7 +109,12 @@ object TagExecutionEngine {
             }
             if (state.ecoMode) {
                 state.ecoSkipCounter++
-                if (state.ecoSkipCounter < config.ecoTickMultiplier) return
+                if (state.ecoSkipCounter < config.ecoTickMultiplier) {
+                    if (state.statusReason == WorkerStatusReason.READY) {
+                        state.setStatus(WorkerStatusReason.ECO_IDLE, "Quiet scan mode is spacing out work checks")
+                    }
+                    return
+                }
                 state.ecoSkipCounter = 0
             }
         }
@@ -231,6 +247,7 @@ object TagExecutionEngine {
         tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
     ) {
         if (world.time < state.cooldownUntil) {
+            state.setStatus(WorkerStatusReason.COOLDOWN, "Recovering before the next assignment")
             // While on cooldown, drift back toward pasture if far away
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 NavigationHelper.navigateTo(entity, origin, state)
@@ -239,6 +256,14 @@ object TagExecutionEngine {
         }
 
         if (world.time < state.nextTargetSearchTick) {
+            state.setStatus(
+                if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.SEARCH_DELAY,
+                if (state.ecoMode) {
+                    "No work found recently; scanning less often in eco mode"
+                } else {
+                    "Waiting before the next target scan"
+                }
+            )
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 NavigationHelper.navigateTo(entity, origin, state)
             }
@@ -250,12 +275,21 @@ object TagExecutionEngine {
         val existingInv = InventoryManager.get(pokemon.uuid)
         if (existingInv != null && !existingInv.isEmpty && !behavior.handlesOwnInventory) {
             state.phase = WorkerPhase.DEPOSITING
+            state.setStatus(WorkerStatusReason.DEPOSITING, "Returning carried cargo to storage")
             return
         }
 
         val target = behavior.findTarget(world, origin, entity, tag, state)
         if (target == null) {
             state.nextTargetSearchTick = world.time + behavior.idleRetryTicks(tag, state)
+            state.setStatus(
+                if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.NO_TARGET,
+                if (state.ecoMode) {
+                    "No valid targets found; staying in quiet scan mode"
+                } else {
+                    "No valid targets found in the current work range"
+                }
+            )
             // No work found — stay idle (eco mode will kick in via tick counter)
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 NavigationHelper.navigateTo(entity, origin, state)
@@ -263,13 +297,23 @@ object TagExecutionEngine {
             return
         }
         // Found work — check claim first, then exit eco mode
-        if (ClaimManager.isClaimedByOther(target, pokemon.uuid, world)) return
+        if (ClaimManager.isClaimedByOther(target, pokemon.uuid, world)) {
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
+            state.setStatus(WorkerStatusReason.TARGET_BUSY, "Another pal already claimed that target")
+            return
+        }
         state.markDidWork()
         state.nextTargetSearchTick = 0L
 
         ClaimManager.claim(target, pokemon.uuid, world)
         state.targetPos = target
-        NavigationHelper.navigateTo(entity, target, state)
+        applyNavigationStatus(
+            state = state,
+            attempt = NavigationHelper.navigateTo(entity, target, state),
+            activeReason = WorkerStatusReason.NAVIGATING,
+            activeDetail = "Moving to the selected job target",
+            failedDetail = "Could not find a path to the selected target"
+        )
         state.phase = WorkerPhase.NAVIGATING
     }
 
@@ -282,6 +326,8 @@ object TagExecutionEngine {
         if (!behavior.isTargetValid(world, target, tag)) {
             ClaimManager.release(target, world)
             resetToIdle(state)
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
+            state.setStatus(WorkerStatusReason.NO_TARGET, "The claimed target is no longer valid")
             return
         }
 
@@ -289,9 +335,16 @@ object TagExecutionEngine {
             NavigationHelper.stopNavigation(entity)
             state.arrivalTick = world.time
             state.phase = WorkerPhase.ARRIVING
+            state.setStatus(WorkerStatusReason.ARRIVING, "Settling into position before starting work")
             WorkVisualHandler.onArrival(world, entity, target, tag.type)
         } else {
-            NavigationHelper.navigateTo(entity, target, state)
+            applyNavigationStatus(
+                state = state,
+                attempt = NavigationHelper.navigateTo(entity, target, state),
+                activeReason = WorkerStatusReason.NAVIGATING,
+                activeDetail = "Closing in on the current target",
+                failedDetail = "Pathfinding to the target failed; retrying"
+            )
         }
     }
 
@@ -302,14 +355,20 @@ object TagExecutionEngine {
         if (!behavior.isTargetValid(world, target, tag)) {
             ClaimManager.release(target, world)
             resetToIdle(state)
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
+            state.setStatus(WorkerStatusReason.NO_TARGET, "The target disappeared before work could begin")
             return
         }
 
         val arrived = state.arrivalTick ?: run { state.arrivalTick = world.time; return }
-        if (world.time - arrived < behavior.arrivalDelayTicks(tag, state)) return
+        if (world.time - arrived < behavior.arrivalDelayTicks(tag, state)) {
+            state.setStatus(WorkerStatusReason.ARRIVING, "Preparing to work at the target")
+            return
+        }
 
         state.arrivalTick = null
         state.phase = WorkerPhase.WORKING
+        state.setStatus(WorkerStatusReason.WORKING, "Executing the assigned job")
     }
 
     private fun tickWorking(
@@ -317,6 +376,7 @@ object TagExecutionEngine {
         tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
     ) {
         val target = state.targetPos ?: run { resetToIdle(state); return }
+        state.setStatus(WorkerStatusReason.WORKING, "Executing the assigned job")
         val result = behavior.doWork(world, entity, target, tag, state)
 
         when (result) {
@@ -330,22 +390,31 @@ object TagExecutionEngine {
                     storeItems(world, entity, pokemon, result.items)
                     PastureWorkerManager.markDirtyNow(world)
                     state.phase = WorkerPhase.DEPOSITING
+                    state.setStatus(WorkerStatusReason.DEPOSITING, "Returning gathered cargo to storage")
                 } else {
                     resetToIdle(state)
                     state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
+                    state.setStatus(WorkerStatusReason.COOLDOWN, "Work completed; cooling down before the next job")
                 }
             }
             is WorkResult.MoveTo -> {
                 ClaimManager.release(target, world)
                 state.targetPos = result.target
                 ClaimManager.claim(result.target, pokemon.uuid, world)
-                NavigationHelper.navigateTo(entity, result.target, state)
+                applyNavigationStatus(
+                    state = state,
+                    attempt = NavigationHelper.navigateTo(entity, result.target, state),
+                    activeReason = WorkerStatusReason.NAVIGATING,
+                    activeDetail = "Repositioning to a follow-up target",
+                    failedDetail = "Could not path to the follow-up target"
+                )
                 state.phase = WorkerPhase.NAVIGATING
             }
             is WorkResult.Repeat -> {
                 state.arrivalTick = null
                 state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
                 state.phase = WorkerPhase.IDLE
+                state.setStatus(WorkerStatusReason.COOLDOWN, "Loop complete; waiting before the next pass")
             }
             is WorkResult.Continue -> { /* stay in WORKING */ }
         }
@@ -359,6 +428,7 @@ object TagExecutionEngine {
         if (inventory == null || inventory.isEmpty) {
             resetToIdle(state)
             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
+            state.setStatus(WorkerStatusReason.COOLDOWN, "Cargo run finished; waiting before new work")
             return
         }
 
@@ -408,14 +478,17 @@ object TagExecutionEngine {
                             WorkVisualHandler.onDeposit(world, entity, origin)
                             resetToIdle(state)
                             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
+                            state.setStatus(WorkerStatusReason.COOLDOWN, "Delivered cargo to a mobile inventory")
                             return
                         }
                         dropAllItems(world, entity, inventory)
                         resetToIdle(state)
+                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "No deposit target was available, so cargo was dropped")
                         return
                     } else {
                         dropAllItems(world, entity, inventory)
                         resetToIdle(state)
+                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "No deposit space was found for the carried cargo")
                         return
                     }
                 }
@@ -434,8 +507,15 @@ object TagExecutionEngine {
             state.depositPos = null
             resetToIdle(state)
             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
+            state.setStatus(WorkerStatusReason.COOLDOWN, "Cargo delivered; waiting before the next assignment")
         } else {
-            NavigationHelper.navigateTo(entity, depositPos, state)
+            applyNavigationStatus(
+                state = state,
+                attempt = NavigationHelper.navigateTo(entity, depositPos, state),
+                activeReason = WorkerStatusReason.DEPOSITING,
+                activeDetail = "Returning carried cargo to deposit it",
+                failedDetail = "Could not path back to a deposit target"
+            )
         }
     }
 
@@ -466,6 +546,19 @@ object TagExecutionEngine {
     private fun releaseClaimAndReset(world: World, state: WorkerState) {
         state.targetPos?.let { ClaimManager.release(it, world) }
         state.reset()
+    }
+
+    private fun applyNavigationStatus(
+        state: WorkerState,
+        attempt: NavigationAttempt,
+        activeReason: WorkerStatusReason,
+        activeDetail: String,
+        failedDetail: String
+    ) {
+        when (attempt) {
+            NavigationAttempt.STARTED, NavigationAttempt.THROTTLED -> state.setStatus(activeReason, activeDetail)
+            NavigationAttempt.FAILED -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
+        }
     }
 
     private fun resetToIdle(state: WorkerState) {

@@ -5,6 +5,8 @@ import java.util.UUID
 
 class WorkerState(val pokemonId: UUID) {
     var phase: WorkerPhase = WorkerPhase.IDLE
+    var statusReason: WorkerStatusReason = WorkerStatusReason.READY
+    var statusDetail: String = ""
     var targetPos: BlockPos? = null
     var depositPos: BlockPos? = null
     var cooldownUntil: Long = 0L
@@ -54,6 +56,8 @@ class WorkerState(val pokemonId: UUID) {
 
     fun reset() {
         phase = WorkerPhase.IDLE
+        statusReason = WorkerStatusReason.READY
+        statusDetail = ""
         targetPos = null
         depositPos = null
         arrivalTick = null
@@ -68,6 +72,11 @@ class WorkerState(val pokemonId: UUID) {
         idleTicks = 0
         ecoMode = false
         ecoSkipCounter = 0
+    }
+
+    fun setStatus(reason: WorkerStatusReason, detail: String = "") {
+        statusReason = reason
+        statusDetail = detail
     }
 
     fun invalidateCache() {

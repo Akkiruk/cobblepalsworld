@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.33
+
+- Reworked the pasture manager into an operations board that now explains why each pal is ready, waiting, blocked, or on standby, and summarizes the current order mix so the screen behaves more like workforce control than a raw status dump.
+- Added authoritative worker status reasons from the shared runtime so redstone stalls, no-target waits, eco scans, cooldowns, pathing trouble, and worker-cap standby all show up from the real server-side state instead of being guessed client-side.
+- Reworked pasture worker scheduling so in-flight pals keep progressing and idle workers rotate fairly through limited worker slots, which reduces starvation from fixed list order and advances the audit's controlled-concurrency pass.
+
 ## 0.1.32
 
 - Added active in-world worker overlays that now come from the same authoritative pasture tick state as the manager, giving busy pals a duty halo plus live tag and cargo icons instead of leaving activity readable only in menus.

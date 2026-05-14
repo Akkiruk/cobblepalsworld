@@ -6,12 +6,15 @@ import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.behavior.state.WorkerState
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import com.cobblepalsworld.tag.TagInstance
 import net.minecraft.registry.Registries
 import net.minecraft.registry.RegistryKey
 import net.minecraft.server.network.ServerPlayerEntity
@@ -23,6 +26,18 @@ import java.util.concurrent.ConcurrentHashMap
 
 private data class PastureKey(val dimension: RegistryKey<World>, val pos: BlockPos)
 
+private data class WorkerCandidate(
+    val pokemonId: UUID,
+    val pokemon: com.cobblemon.mod.common.pokemon.Pokemon,
+    val entity: PokemonEntity,
+    val tag: TagInstance,
+    val state: WorkerState?,
+    val carriesCargo: Boolean
+) {
+    val isInFlight: Boolean
+        get() = state?.phase?.let { it != WorkerPhase.IDLE } == true || carriesCargo
+}
+
 object PastureWorkerManager {
     private val baseTickInterval get() = ConfigManager.config.general.tickInterval
 
@@ -30,6 +45,7 @@ object PastureWorkerManager {
     private val previousTethered = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
     // Track previously-tagged UUIDs per pasture for tag removal cleanup
     private val previouslyTagged = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
+    private val idleRotationCursor = ConcurrentHashMap<PastureKey, Int>()
     private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
     private const val STALE_ENTRY_TTL = 20L * 30L
 
@@ -94,9 +110,7 @@ object PastureWorkerManager {
         prevTagged.clear()
         prevTagged.addAll(currentlyTagged)
 
-        // Tick each tethered Pokémon that has a tag assigned (capped by maxWorkersPerPasture)
-        var workerCount = 0
-        val maxWorkers = ConfigManager.config.general.maxWorkersPerPasture
+        val workerCandidates = mutableListOf<WorkerCandidate>()
         for (tethering in tethered) {
             val pokemon = try { tethering.getPokemon() } catch (_: Exception) { continue }
                 ?: continue
@@ -108,19 +122,45 @@ object PastureWorkerManager {
 
             val tag = TagAssignmentManager.get(pokemon.uuid)
             if (tag != null) {
-                if (workerCount >= maxWorkers) continue
-                try {
-                    TagExecutionEngine.tick(world, entity, pokemon, tag, pos)
-                    workerCount++
-                    buildWorkerVisual(entity, pokemon.uuid)?.let(activeVisuals::add)
-                } catch (e: Exception) {
-                    com.cobblepalsworld.CobblePalsWorld.LOGGER.error("Error ticking Pokémon worker", e)
-                }
+                workerCandidates += WorkerCandidate(
+                    pokemonId = pokemon.uuid,
+                    pokemon = pokemon,
+                    entity = entity,
+                    tag = tag,
+                    state = StateManager.get(pokemon.uuid),
+                    carriesCargo = InventoryManager.get(pokemon.uuid)?.isEmpty == false
+                )
             } else {
                 // Idle pokemon (no tag): wander within 4 blocks of pasture
                 tickIdleWander(world, entity, pos)
             }
         }
+
+        val maxWorkers = ConfigManager.config.general.maxWorkersPerPasture
+        val activeCandidates = workerCandidates.filter { it.isInFlight }
+        val idleCandidates = rotateIdleCandidates(pastureKey, workerCandidates.filterNot { it.isInFlight })
+        val selectedIdleCandidates = idleCandidates.take((maxWorkers - activeCandidates.size).coerceAtLeast(0))
+
+        (activeCandidates + selectedIdleCandidates).forEach { candidate ->
+            try {
+                TagExecutionEngine.tick(world, candidate.entity, candidate.pokemon, candidate.tag, pos)
+                buildWorkerVisual(candidate.entity, candidate.pokemonId)?.let(activeVisuals::add)
+            } catch (e: Exception) {
+                com.cobblepalsworld.CobblePalsWorld.LOGGER.error("Error ticking Pokémon worker", e)
+            }
+        }
+
+        idleCandidates.drop(selectedIdleCandidates.size).forEach { candidate ->
+            val state = StateManager.getOrCreate(candidate.pokemonId)
+            state.lastSeenTick = world.time
+            state.setStatus(WorkerStatusReason.WORKER_CAP, "Waiting for an open pasture worker slot")
+        }
+
+        advanceIdleRotationCursor(
+            pastureKey = pastureKey,
+            idleCandidateCount = idleCandidates.size,
+            advanceBy = if (idleCandidates.isEmpty()) 0 else maxOf(1, selectedIdleCandidates.size)
+        )
 
         if (nearbyPlayers.isNotEmpty()) {
             CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
@@ -185,6 +225,29 @@ object PastureWorkerManager {
         )
     }
 
+    private fun rotateIdleCandidates(pastureKey: PastureKey, candidates: List<WorkerCandidate>): List<WorkerCandidate> {
+        if (candidates.size <= 1) return candidates
+
+        val start = Math.floorMod(idleRotationCursor[pastureKey] ?: 0, candidates.size)
+        return List(candidates.size) { index ->
+            candidates[(start + index) % candidates.size]
+        }
+    }
+
+    private fun advanceIdleRotationCursor(pastureKey: PastureKey, idleCandidateCount: Int, advanceBy: Int) {
+        if (idleCandidateCount <= 1) {
+            if (idleCandidateCount == 0) {
+                idleRotationCursor.remove(pastureKey)
+            } else {
+                idleRotationCursor[pastureKey] = 0
+            }
+            return
+        }
+
+        val current = idleRotationCursor[pastureKey] ?: 0
+        idleRotationCursor[pastureKey] = Math.floorMod(current + advanceBy, idleCandidateCount)
+    }
+
     private fun tickIdleWander(world: World, entity: PokemonEntity, pasturePos: BlockPos) {
         if (world.time % WANDER_INTERVAL != 0L) return
 
@@ -226,6 +289,7 @@ object PastureWorkerManager {
         val pastureKey = PastureKey(world.registryKey, pasture.pos.toImmutable())
         previousTethered.remove(pastureKey)
         previouslyTagged.remove(pastureKey)
+        idleRotationCursor.remove(pastureKey)
 
         // Mark save data dirty so cleanup is persisted
         (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
@@ -245,5 +309,6 @@ object PastureWorkerManager {
     fun resetTransientState(clearInitialization: Boolean = false) {
         previousTethered.clear()
         previouslyTagged.clear()
+        idleRotationCursor.clear()
     }
 }

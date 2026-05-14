@@ -27,9 +27,9 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
 
     companion object {
         private const val PANEL_WIDTH = 284
-        private const val PANEL_HEIGHT = 208
+        private const val PANEL_HEIGHT = 216
         private const val ENTRY_HEIGHT = 40
-        private const val HEADER_HEIGHT = 34
+        private const val HEADER_HEIGHT = 42
         private const val SCROLL_BAR_WIDTH = 5
         private const val PORTRAIT_SIZE = 28
         private const val HOME_BTN_WIDTH = 12
@@ -125,8 +125,10 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         val pos = snapshot.pasturePos
         val assignedCount = snapshot.pals.count { it.tagTypeId != null }
         val activeCount = snapshot.pals.count { it.isActive() }
-        val cargoCount = snapshot.pals.count { it.hasCargo() }
-        val ecoCount = snapshot.pals.count { it.isEcoMode }
+        val readyCount = snapshot.pals.count { it.isReady() }
+        val waitingCount = snapshot.pals.count { it.isWaiting() }
+        val blockedCount = snapshot.pals.count { it.isBlocked() }
+        val standbyCount = snapshot.pals.count { it.isStandby() }
         val subText = "${snapshot.ownerName}'s Pasture  \u2022  ${pos.x}, ${pos.y}, ${pos.z}"
         drawScaledText(
             context = context,
@@ -139,26 +141,43 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
             colour = TEXT_DIM
         )
 
+        drawScaledText(
+            context = context,
+            text = Text.literal(operationSummary()) as MutableText,
+            x = pL + PANEL_WIDTH / 2,
+            y = pT + 25,
+            scale = 0.68F,
+            centered = true,
+            shadow = true,
+            colour = TEXT_DIM
+        )
+
         val statusText = buildString {
-            append("Assigned ")
+            append("Tagged ")
             append(assignedCount)
-            append("/")
-            append(snapshot.maxWorkers)
             append("  \u2022  Active ")
             append(activeCount)
-            append("  \u2022  Cargo ")
-            append(cargoCount)
-            if (ecoCount > 0) {
-                append("  \u2022  Eco ")
-                append(ecoCount)
+            append("/")
+            append(snapshot.maxWorkers)
+            append("  \u2022  Ready ")
+            append(readyCount)
+            append("  \u2022  Wait ")
+            append(waitingCount)
+            if (blockedCount > 0) {
+                append("  \u2022  Blocked ")
+                append(blockedCount)
+            }
+            if (standbyCount > 0) {
+                append("  \u2022  Standby ")
+                append(standbyCount)
             }
         }
         drawScaledText(
             context = context,
             text = Text.literal(statusText) as MutableText,
             x = pL + PANEL_WIDTH / 2,
-            y = pT + 25,
-            scale = 0.72F,
+            y = pT + 33,
+            scale = 0.65F,
             centered = true,
             shadow = true,
             colour = TEXT_DIM
@@ -343,16 +362,16 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
                 colour = if (pal.hasCargo()) ITEMS_COLOR else TEXT_DIM
             )
 
-            val timingLine = timingLine(pal)
-            if (timingLine.isNotEmpty()) {
+            val explanation = explanationLine(pal)
+            if (explanation.isNotEmpty()) {
                 drawScaledText(
                     context = context,
-                    text = Text.literal(timingLine) as MutableText,
+                    text = Text.literal(explanation) as MutableText,
                     x = detailX,
                     y = ey + 29,
                     scale = 0.65F,
                     shadow = true,
-                    colour = TEXT_DIM
+                    colour = explanationColor(pal)
                 )
             }
 
@@ -477,6 +496,14 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
             return listOf(Text.literal("Close manager"))
         }
 
+        if (mouseX >= panelLeft && mouseX < panelLeft + PANEL_WIDTH && mouseY >= panelTop && mouseY < panelTop + HEADER_HEIGHT) {
+            return buildList {
+                add(Text.literal("Pasture operation overview"))
+                add(Text.literal(operationSummary()))
+                add(Text.literal(statusOverview()))
+            }
+        }
+
         val listTop = panelTop + HEADER_HEIGHT
         val listBottom = panelTop + PANEL_HEIGHT
         val endIdx = minOf(scrollOffset + visibleEntries + 1, snapshot.pals.size)
@@ -496,6 +523,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
                 val pal = snapshot.pals[i]
                 return buildList {
                     add(Text.literal("${pal.displayName} \u2022 ${pal.statusLabel()}"))
+                    add(Text.literal(pal.statusDetailOrFallback()))
                     add(Text.literal("Species: ${speciesLabel(pal)} \u2022 Lv.${pal.level}"))
                     add(Text.literal("Tag: ${pal.tagTypeId?.uppercase() ?: "none"}"))
                     pal.boundPos?.let { add(Text.literal("Binding: ${formatPos(it)}")) }
@@ -526,8 +554,10 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         pal.workerPhase() == WorkerPhase.NAVIGATING -> BINDING_COLOR
         pal.workerPhase() == WorkerPhase.ARRIVING -> ITEMS_COLOR
         pal.workerPhase() == WorkerPhase.DEPOSITING -> 0xF59E0B.toInt()
-        pal.isEcoMode -> 0x8AA3AD
-        pal.cooldownTicksRemaining > 0 || pal.searchDelayTicksRemaining > 0 -> 0xD8C060.toInt()
+        pal.isBlocked() -> 0xE57373.toInt()
+        pal.isStandby() -> 0xB794F4.toInt()
+        pal.isWaiting() || pal.isEcoMode -> 0xD8C060.toInt()
+        pal.isReady() -> ACCENT_DIM
         else -> TEXT_DIM
     }
 
@@ -572,12 +602,28 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         val parts = mutableListOf<String>()
         if (pal.cooldownTicksRemaining > 0) {
             parts += "Ready ${formatTicks(pal.cooldownTicksRemaining)}"
-        } else if (pal.searchDelayTicksRemaining > 0) {
+        }
+        if (pal.searchDelayTicksRemaining > 0) {
             parts += "Scan ${formatTicks(pal.searchDelayTicksRemaining)}"
         }
-        if (pal.isEcoMode) parts += "Eco"
-        if (pal.isManagedByCommandPost && parts.isEmpty()) parts += "Command Post"
-        return truncate(parts.joinToString(" \u2022 "), 22)
+        return truncate(parts.joinToString(" \u2022 "), 18)
+    }
+
+    private fun explanationLine(pal: PalSnapshot): String {
+        val parts = mutableListOf<String>()
+        val detail = pal.statusDetailOrFallback()
+        if (detail.isNotBlank()) parts += detail
+        val timing = timingLine(pal)
+        if (timing.isNotBlank()) parts += timing
+        return truncate(parts.joinToString(" \u2022 "), 32)
+    }
+
+    private fun explanationColor(pal: PalSnapshot): Int = when {
+        pal.isBlocked() -> 0xFCA5A5.toInt()
+        pal.isStandby() -> 0xD6BCFA.toInt()
+        pal.isWaiting() -> 0xF6E05E.toInt()
+        pal.isReady() -> 0x9AE6B4.toInt()
+        else -> TEXT_DIM
     }
 
     private fun tagStack(pal: PalSnapshot): ItemStack? {
@@ -600,6 +646,53 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         return rawName
             .split('_')
             .joinToString(" ") { part -> part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
+    }
+
+    private fun operationSummary(): String {
+        val assignments = snapshot.pals
+            .mapNotNull { it.tagTypeId }
+            .groupingBy { it.uppercase() }
+            .eachCount()
+            .entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+
+        if (assignments.isEmpty()) {
+            return "Orders No tagged work queued"
+        }
+
+        val summary = assignments.take(3).joinToString(" \u2022 ") { (tag, count) -> "$tag $count" }
+        val remaining = assignments.drop(3).sumOf { it.value }
+        return if (remaining > 0) {
+            truncate("Orders $summary \u2022 +$remaining more", 54)
+        } else {
+            truncate("Orders $summary", 54)
+        }
+    }
+
+    private fun statusOverview(): String {
+        val readyCount = snapshot.pals.count { it.isReady() }
+        val waitingCount = snapshot.pals.count { it.isWaiting() }
+        val blockedCount = snapshot.pals.count { it.isBlocked() }
+        val standbyCount = snapshot.pals.count { it.isStandby() }
+        val activeCount = snapshot.pals.count { it.isActive() }
+        return buildString {
+            append("Active ")
+            append(activeCount)
+            append("/")
+            append(snapshot.maxWorkers)
+            append(" \u2022 Ready ")
+            append(readyCount)
+            append(" \u2022 Waiting ")
+            append(waitingCount)
+            if (blockedCount > 0) {
+                append(" \u2022 Blocked ")
+                append(blockedCount)
+            }
+            if (standbyCount > 0) {
+                append(" \u2022 Standby ")
+                append(standbyCount)
+            }
+        }
     }
 
     private fun formatPos(pos: BlockPos): String = "${pos.x}, ${pos.y}, ${pos.z}"
