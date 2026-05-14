@@ -24,40 +24,55 @@ data class WorkerSession(
     var assignmentProfile: WorkerAssignmentProfile = WorkerAssignmentProfile()
 )
 
+private data class BindingIndexKey(val dimensionId: String, val pos: BlockPos)
+
 object WorkerSessionManager {
     private val sessions = ConcurrentHashMap<UUID, WorkerSession>()
+    private val pastureIndex = ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>()
+    private val controllerIndex = ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>()
 
     fun getSession(pokemonId: UUID): WorkerSession? = sessions[pokemonId]
 
     fun assign(pokemonId: UUID, tag: TagInstance) {
         val session = getOrCreateSession(pokemonId)
+        removeFromControllerIndex(pokemonId, session.controllerBinding)
         session.tag = tag.copy(controllerPos = null)
         session.controllerBinding = null
+        addToPastureIndex(pokemonId, session.pastureBinding)
     }
 
     fun assignFromController(pokemonId: UUID, tag: TagInstance, dimensionId: String, pos: BlockPos) {
         val controllerPos = pos.toImmutable()
         val session = getOrCreateSession(pokemonId)
+        removeFromControllerIndex(pokemonId, session.controllerBinding)
         session.tag = tag.copy(controllerPos = controllerPos)
         session.controllerBinding = ControllerBinding(dimensionId, controllerPos)
+        addToControllerIndex(pokemonId, session.controllerBinding)
+        addToPastureIndex(pokemonId, session.pastureBinding)
     }
 
     fun associateWithPasture(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
         sessions.computeIfPresent(pokemonId) { _, session ->
             if (session.tag != null) {
-                session.pastureBinding = PastureBinding(dimensionId, pos.toImmutable())
+                val nextBinding = PastureBinding(dimensionId, pos.toImmutable())
+                if (session.pastureBinding != nextBinding) {
+                    removeFromPastureIndex(pokemonId, session.pastureBinding)
+                    session.pastureBinding = nextBinding
+                    addToPastureIndex(pokemonId, session.pastureBinding)
+                }
             }
             session
         }
     }
 
     fun findOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
-        return sessions.entries.asSequence()
-            .filter { (pokemonId, session) ->
-                val binding = session.pastureBinding
-                session.tag != null && binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
+        val indexed = pastureIndex[BindingIndexKey(dimensionId, pos.toImmutable())] ?: return emptySet()
+        return indexed.asSequence()
+            .filter { pokemonId ->
+                val session = sessions[pokemonId]
+                val binding = session?.pastureBinding
+                session?.tag != null && binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
             }
-            .map { it.key }
             .toSet()
     }
 
@@ -94,12 +109,13 @@ object WorkerSessionManager {
     }
 
     fun findControlledBy(dimensionId: String, pos: BlockPos): Set<UUID> {
-        return sessions.entries.asSequence()
-            .filter { (_, session) ->
-                val binding = session.controllerBinding
-                session.tag != null && binding != null && binding.dimensionId == dimensionId && binding.pos == pos
+        val indexed = controllerIndex[BindingIndexKey(dimensionId, pos.toImmutable())] ?: return emptySet()
+        return indexed.asSequence()
+            .filter { pokemonId ->
+                val session = sessions[pokemonId]
+                val binding = session?.controllerBinding
+                session?.tag != null && binding != null && binding.dimensionId == dimensionId && binding.pos == pos
             }
-            .map { it.key }
             .toSet()
     }
 
@@ -139,12 +155,16 @@ object WorkerSessionManager {
 
     fun clearAssignments() {
         sessions.forEach { (uuid, session) ->
+            removeFromPastureIndex(uuid, session.pastureBinding)
+            removeFromControllerIndex(uuid, session.controllerBinding)
             session.tag = null
             session.pastureBinding = null
             session.controllerBinding = null
             session.assignmentProfile = WorkerAssignmentProfile()
             discardIfEmpty(uuid, session)
         }
+        pastureIndex.clear()
+        controllerIndex.clear()
     }
 
     fun getOrCreateState(pokemonId: UUID): WorkerState {
@@ -241,7 +261,11 @@ object WorkerSessionManager {
         }
     }
 
-    fun clearAll() = sessions.clear()
+    fun clearAll() {
+        sessions.clear()
+        pastureIndex.clear()
+        controllerIndex.clear()
+    }
 
     private fun getOrCreateSession(pokemonId: UUID): WorkerSession {
         return sessions.computeIfAbsent(pokemonId) { WorkerSession(it) }
@@ -249,12 +273,42 @@ object WorkerSessionManager {
 
     private fun clearAssignment(pokemonId: UUID, session: WorkerSession): TagInstance? {
         val tag = session.tag ?: return null
+        removeFromPastureIndex(pokemonId, session.pastureBinding)
+        removeFromControllerIndex(pokemonId, session.controllerBinding)
         session.tag = null
         session.pastureBinding = null
         session.controllerBinding = null
         session.assignmentProfile = WorkerAssignmentProfile()
         discardIfEmpty(pokemonId, session)
         return tag
+    }
+
+    private fun addToPastureIndex(pokemonId: UUID, binding: PastureBinding?) {
+        binding ?: return
+        pastureIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+    }
+
+    private fun removeFromPastureIndex(pokemonId: UUID, binding: PastureBinding?) {
+        binding ?: return
+        removeFromIndex(pastureIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
+    }
+
+    private fun addToControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
+        binding ?: return
+        controllerIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+    }
+
+    private fun removeFromControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
+        binding ?: return
+        removeFromIndex(controllerIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
+    }
+
+    private fun removeFromIndex(index: ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>, key: BindingIndexKey, pokemonId: UUID) {
+        val entries = index[key] ?: return
+        entries.remove(pokemonId)
+        if (entries.isEmpty()) {
+            index.remove(key, entries)
+        }
     }
 
     private fun discardIfEmpty(pokemonId: UUID, session: WorkerSession) {

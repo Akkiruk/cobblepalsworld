@@ -16,6 +16,7 @@ import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationBudget
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import com.cobblepalsworld.pasture.WorkerAssignmentProfile
@@ -53,13 +54,13 @@ object PastureWorkerManager {
     // Track previously-tagged UUIDs per pasture for tag removal cleanup
     private val previouslyTagged = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
     private val idleRotationCursor = ConcurrentHashMap<IdleRotationKey, Int>()
-    private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
-    private const val STALE_ENTRY_TTL = 20L * 30L
 
     fun findPastureForPokemon(world: ServerWorld, pokemonId: UUID): PokemonPastureBlockEntity? {
-        val pasturePos = previousTethered.entries.firstOrNull { (key, tetheredIds) ->
-            key.dimension == world.registryKey && pokemonId in tetheredIds
-        }?.key?.pos ?: return null
+        val pasturePos = ServerScaleRuntime.findPasturePos(world, pokemonId)
+            ?: previousTethered.entries.firstOrNull { (key, tetheredIds) ->
+                key.dimension == world.registryKey && pokemonId in tetheredIds
+            }?.key?.pos
+            ?: return null
         return world.getBlockEntity(pasturePos) as? PokemonPastureBlockEntity
     }
 
@@ -68,17 +69,10 @@ object PastureWorkerManager {
         val serverWorld = world as? ServerWorld ?: return
         val pastureKey = PastureKey(serverWorld.registryKey, pos.toImmutable())
 
-        CobblePalsSaveData.ensureLoaded(serverWorld)
-
-        // Periodic auto-save
-        if (world.time % SAVE_INTERVAL == 0L) {
-            CobblePalsSaveData.markDirty(serverWorld)
-            TagExecutionEngine.pruneStaleRuntime(world.time, STALE_ENTRY_TTL)
-            InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
-        }
+        ServerScaleRuntime.beforePastureTick(serverWorld)
 
         val nearbyPlayers = nearbyPlayers(serverWorld, pos)
-        val navigationBudget = NavigationBudget(ConfigManager.config.general.maxPathStartsPerPastureTick)
+        val navigationBudget = ServerScaleRuntime.navigationBudget(serverWorld, ConfigManager.config.general.maxPathStartsPerPastureTick)
 
         // Stagger pasture ticks — offset by position hash, with slower cadence for distant pastures.
         val pastureTickInterval = effectiveTickInterval(nearbyPlayers.isNotEmpty())
@@ -106,6 +100,7 @@ object PastureWorkerManager {
         }
         prevIds.clear()
         prevIds.addAll(currentIds)
+        ServerScaleRuntime.rememberPastureMembership(serverWorld, pos, currentIds)
 
         // Detect tag removal: clean up state for pokemon that lost their tag
         val currentlyTagged = mutableSetOf<UUID>()
@@ -202,7 +197,7 @@ object PastureWorkerManager {
             selectedIdleCandidates = selectedIdleCandidates
         )
 
-        if (nearbyPlayers.isNotEmpty()) {
+        if (nearbyPlayers.isNotEmpty() && ServerScaleRuntime.shouldSendWorkerVisuals(serverWorld, pos, activeVisuals)) {
             CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
         }
     }
@@ -221,13 +216,7 @@ object PastureWorkerManager {
     }
 
     private fun nearbyPlayers(world: ServerWorld, pos: BlockPos): List<ServerPlayerEntity> {
-        val rangeSq = ConfigManager.config.general.nearbyPlayerRange.toDouble() * ConfigManager.config.general.nearbyPlayerRange.toDouble()
-        val centerX = pos.x + 0.5
-        val centerY = pos.y + 0.5
-        val centerZ = pos.z + 0.5
-        return world.players.filter { player ->
-            !player.isSpectator && player.squaredDistanceTo(centerX, centerY, centerZ) <= rangeSq
-        }
+        return ServerScaleRuntime.nearbyPlayers(world, pos)
     }
 
     private fun buildWorkerVisual(
@@ -371,6 +360,7 @@ object PastureWorkerManager {
         previousTethered.remove(pastureKey)
         previouslyTagged.remove(pastureKey)
         idleRotationCursor.entries.removeIf { it.key.pastureKey == pastureKey }
+        ServerScaleRuntime.forgetPasture(world, pasture.pos)
 
         // Mark save data dirty so cleanup is persisted
         (world as? ServerWorld)?.let { CobblePalsSaveData.markDirty(it) }
@@ -380,6 +370,7 @@ object PastureWorkerManager {
         CobblePalsSaveData.markDirty(server)
         TagExecutionEngine.resetRuntimeState()
         CobblePalsSaveData.clearLoaded(server)
+        ServerScaleRuntime.clear(server)
         resetTransientState(clearInitialization = true)
     }
 
@@ -391,5 +382,6 @@ object PastureWorkerManager {
         previousTethered.clear()
         previouslyTagged.clear()
         idleRotationCursor.clear()
+        ServerScaleRuntime.clearTransient()
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+- Added indexed worker-session lookups for pasture and Command Post ownership, replacing global scans when cleaning recalled pals or resolving router-managed crews.
+- Centralized server-scale maintenance, global path-start budgeting, nearby-player caching, worker-visual throttling, and short-lived manager snapshots so large loaded bases spread their work more predictably.
+- Bounded the heaviest fallback scans for harvest areas, distributor target discovery, and target-claim cleanup so oversized farms and container networks advance in slices instead of sweeping everything at once.
+
 ## 0.2.5
 
 - Reworked the Command Post Roles view so every installed role card is its own policy line, making duplicate or multi-card setups editable and readable without collapsing them by role type.

@@ -8,6 +8,7 @@ import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.router.RouterBlockEntity
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagSpec
 import com.cobblepalsworld.tag.TagType
@@ -239,7 +240,7 @@ class RouterScreenHandler : ScreenHandler {
         val serverWorld = player.world as? ServerWorld ?: return null
         val router = routerInventory as? RouterBlockEntity ?: return null
         val pasture = router.linkedPasture(serverWorld) ?: return null
-        val snapshot = PastureSnapshotFactory.create(serverWorld, pasture)
+        val snapshot = ServerScaleRuntime.cachedSnapshot(serverWorld, pasture.pos) { PastureSnapshotFactory.create(serverWorld, pasture) }
         return snapshot.pals.getOrNull(snapshotIndex)?.pokemonId
     }
 
@@ -296,6 +297,7 @@ class RouterScreenHandler : ScreenHandler {
 
     private fun markAssignmentChange(player: PlayerEntity) {
         val serverWorld = player.world as? ServerWorld ?: return
+        linkedPasturePos?.let { ServerScaleRuntime.invalidateSnapshot(serverWorld, it) }
         CobblePalsSaveData.markDirty(serverWorld)
         sendContentUpdates()
     }
@@ -323,7 +325,7 @@ class RouterScreenHandler : ScreenHandler {
         val serverWorld = player.world as? ServerWorld ?: return false
         val router = routerInventory as? RouterBlockEntity ?: return false
         val pasture = router.linkedPasture(serverWorld) ?: return false
-        val snapshot = PastureSnapshotFactory.create(serverWorld, pasture)
+        val snapshot = ServerScaleRuntime.cachedSnapshot(serverWorld, pasture.pos) { PastureSnapshotFactory.create(serverWorld, pasture) }
         val pal = snapshot.pals.getOrNull(rowIndex) ?: return false
 
         player.openHandledScreen(SimpleNamedScreenHandlerFactory(

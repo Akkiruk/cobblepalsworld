@@ -25,6 +25,7 @@ object HarvesterBehavior : TagBehavior {
     override val tagType = TagType.HARVESTER
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
     override fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long = 30L
+    private const val MAX_BLOCKS_PER_TARGET_SEARCH = 512
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
@@ -36,7 +37,8 @@ object HarvesterBehavior : TagBehavior {
         if (volume <= 0) return null
 
         val startCursor = Math.floorMod(state.searchCursor, volume)
-        for (offset in 0 until volume) {
+        val scanLimit = minOf(volume, MAX_BLOCKS_PER_TARGET_SEARCH)
+        for (offset in 0 until scanLimit) {
             val index = (startCursor + offset) % volume
             val pos = area.positionAt(index)
             if (isMatureCrop(world, pos) && !ClaimManager.isClaimedByOther(pos, pokemonId, world)) {
@@ -44,6 +46,8 @@ object HarvesterBehavior : TagBehavior {
                 return pos.toImmutable()
             }
         }
+
+        state.searchCursor = (startCursor + scanLimit) % volume
 
         return null
     }

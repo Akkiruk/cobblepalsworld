@@ -29,6 +29,7 @@ object DistributorBehavior : TagBehavior {
 
     // Track round-robin index per Pokémon
     private val roundRobinIndex = mutableMapOf<UUID, Int>()
+    private const val FALLBACK_TARGET_SCAN_LIMIT = 64
 
     private fun sourceContainerPos(tag: TagInstance): BlockPos? = tag.controllerPos
 
@@ -120,7 +121,7 @@ object DistributorBehavior : TagBehavior {
         val targets = if (explicitTargets.isNotEmpty()) {
             explicitTargets
         } else {
-            ContainerFinder.findAllMatching(world, origin, range, setOfNotNull(sourcePos))
+            ContainerFinder.findAllMatching(world, origin, range, setOfNotNull(sourcePos), FALLBACK_TARGET_SCAN_LIMIT)
         }
 
         return when (tag.settings.targetStrategy) {

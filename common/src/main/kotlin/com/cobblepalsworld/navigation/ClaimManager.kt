@@ -11,36 +11,66 @@ private data class ClaimRecord(val pokemonId: UUID, var lastTouchedTick: Long)
 
 object ClaimManager {
     private val claims = ConcurrentHashMap<DimPos, ClaimRecord>()
+    private val claimsByPokemon = ConcurrentHashMap<UUID, MutableSet<DimPos>>()
 
     fun claim(pos: BlockPos, pokemonId: UUID, world: World) {
-        claims[DimPos(world.registryKey, pos)] = ClaimRecord(pokemonId, world.time)
+        val key = DimPos(world.registryKey, pos.toImmutable())
+        val previous = claims.put(key, ClaimRecord(pokemonId, world.time))
+        if (previous != null && previous.pokemonId != pokemonId) {
+            removeIndexedClaim(previous.pokemonId, key)
+        }
+        claimsByPokemon.getOrPut(pokemonId) { ConcurrentHashMap.newKeySet() }.add(key)
     }
 
     fun touch(pos: BlockPos, pokemonId: UUID, world: World) {
-        val claim = claims[DimPos(world.registryKey, pos)] ?: return
+        val claim = claims[DimPos(world.registryKey, pos.toImmutable())] ?: return
         if (claim.pokemonId == pokemonId) {
             claim.lastTouchedTick = world.time
         }
     }
 
     fun release(pos: BlockPos, world: World) {
-        claims.remove(DimPos(world.registryKey, pos))
+        val removed = claims.remove(DimPos(world.registryKey, pos.toImmutable())) ?: return
+        removeIndexedClaim(removed.pokemonId, DimPos(world.registryKey, pos.toImmutable()))
     }
 
     fun releaseAll(pokemonId: UUID) {
-        claims.entries.removeIf { it.value.pokemonId == pokemonId }
+        val keys = claimsByPokemon.remove(pokemonId) ?: return
+        keys.forEach { key ->
+            val claim = claims[key]
+            if (claim?.pokemonId == pokemonId) {
+                claims.remove(key, claim)
+            }
+        }
     }
 
     fun isClaimedByOther(pos: BlockPos, pokemonId: UUID, world: World): Boolean {
-        val owner = claims[DimPos(world.registryKey, pos)] ?: return false
+        val owner = claims[DimPos(world.registryKey, pos.toImmutable())] ?: return false
         return owner.pokemonId != pokemonId
     }
 
     fun pruneStale(currentTime: Long, staleAfterTicks: Long) {
-        claims.entries.removeIf { (_, claim) -> currentTime - claim.lastTouchedTick > staleAfterTicks }
+        claims.entries.removeIf { (key, claim) ->
+            val stale = currentTime - claim.lastTouchedTick > staleAfterTicks
+            if (stale) {
+                removeIndexedClaim(claim.pokemonId, key)
+            }
+            stale
+        }
     }
 
     fun count(): Int = claims.size
 
-    fun clear() = claims.clear()
+    fun clear() {
+        claims.clear()
+        claimsByPokemon.clear()
+    }
+
+    private fun removeIndexedClaim(pokemonId: UUID, key: DimPos) {
+        val keys = claimsByPokemon[pokemonId] ?: return
+        keys.remove(key)
+        if (keys.isEmpty()) {
+            claimsByPokemon.remove(pokemonId, keys)
+        }
+    }
 }

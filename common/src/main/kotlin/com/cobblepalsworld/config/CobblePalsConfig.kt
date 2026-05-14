@@ -26,7 +26,13 @@ data class CobblePalsConfig(
         /** How long (ticks) to cache a found container position before re-searching. */
         val containerCacheTicks: Int = 100,
         /** How many new pathing starts one pasture may trigger in a single tick pass. */
-        val maxPathStartsPerPastureTick: Int = 3
+        val maxPathStartsPerPastureTick: Int = 3,
+        /** Server-wide cap for fresh pathing starts, preventing many loaded pastures from stampeding at once. */
+        val maxGlobalPathStartsPerTick: Int = 64,
+        /** Minimum ticks between unchanged worker visual packets for a pasture. */
+        val visualUpdateIntervalTicks: Int = 10,
+        /** Ticks to reuse full pasture UI snapshots before rebuilding them. */
+        val managerSnapshotCacheTicks: Int = 10
     ) {
         fun validated() = GeneralConfig(
             tickInterval = tickInterval.coerceAtLeast(1),
@@ -42,7 +48,10 @@ data class CobblePalsConfig(
             ecoTimeoutTicks = ecoTimeoutTicks.coerceAtLeast(1),
             ecoTickMultiplier = ecoTickMultiplier.coerceAtLeast(1),
             containerCacheTicks = containerCacheTicks.coerceAtLeast(200),
-            maxPathStartsPerPastureTick = maxPathStartsPerPastureTick.coerceAtLeast(1)
+            maxPathStartsPerPastureTick = maxPathStartsPerPastureTick.coerceAtLeast(1),
+            maxGlobalPathStartsPerTick = if (maxGlobalPathStartsPerTick <= 0) 64 else maxGlobalPathStartsPerTick,
+            visualUpdateIntervalTicks = if (visualUpdateIntervalTicks <= 0) 10 else visualUpdateIntervalTicks,
+            managerSnapshotCacheTicks = if (managerSnapshotCacheTicks <= 0) 10 else managerSnapshotCacheTicks
         )
     }
 

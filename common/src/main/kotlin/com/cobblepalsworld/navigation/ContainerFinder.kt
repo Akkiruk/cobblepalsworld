@@ -50,10 +50,12 @@ object ContainerFinder {
         origin: BlockPos,
         range: Int = 16,
         exclude: Set<BlockPos> = emptySet(),
+        limit: Int = Int.MAX_VALUE,
         predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
     ): List<BlockPos> {
         val matches = mutableListOf<BlockPos>()
         for (pos in searchPositions(origin, range)) {
+            if (matches.size >= limit) break
             val immutablePos = pos.toImmutable()
             if (immutablePos in exclude) continue
 

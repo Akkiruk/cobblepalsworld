@@ -20,8 +20,6 @@ object RouterExecutionEngine {
     fun tick(world: ServerWorld, pos: BlockPos, _state: net.minecraft.block.BlockState, router: RouterBlockEntity) {
         CobblePalsSaveData.ensureLoaded(world)
         val dimensionId = world.registryKey.value.toString()
-        val augments = router.installedAugments()
-        val tasksBySlot = buildTasksBySlot(world, router, augments)
         var changed = false
 
         val linkedPasture = router.linkedPasture(world)
@@ -40,23 +38,22 @@ object RouterExecutionEngine {
             return
         }
 
-        val pasturePos = linkedPasture.pos.toImmutable()
-        val roster = collectRoster(linkedPasture)
-
         if (router.cooldownTicks > 0) {
             router.cooldownTicks -= 1
-            val assignedWorkerCount = tasksBySlot.keys.count { router.assignedWorker(it) != null }
-            val activeWorkerCount = tasksBySlot.keys.count { slotIndex ->
+            val assignedWorkerCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { router.assignedWorker(it) != null }
+            val activeWorkerCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { slotIndex ->
                 val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
                 StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
             }
-            router.updateStatus(true, roster.size, assignedWorkerCount, activeWorkerCount)
+            router.updateStatus(true, linkedPasture.tetheredPokemon.size, assignedWorkerCount, activeWorkerCount)
             router.updatePowered(activeWorkerCount > 0)
-            if (changed) {
-                CobblePalsSaveData.markDirty(world)
-            }
             return
         }
+
+        val pasturePos = linkedPasture.pos.toImmutable()
+        val augments = router.installedAugments()
+        val tasksBySlot = buildTasksBySlot(world, router, augments)
+        val roster = collectRoster(linkedPasture)
 
         val manualAssignments = roster.count { candidate ->
             TagAssignmentManager.has(candidate.pokemonId) && TagAssignmentManager.getControllerBinding(candidate.pokemonId) == null

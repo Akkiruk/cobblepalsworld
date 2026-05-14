@@ -8,6 +8,7 @@ import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
 import com.cobblepalsworld.gui.pasture.PastureSnapshot
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.behavior.TagExecutionEngine
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import dev.architectury.networking.NetworkManager
 import net.minecraft.network.RegistryByteBuf
 import net.minecraft.network.codec.PacketCodec
@@ -200,7 +201,7 @@ object CobblePalsNetworking {
         val pos = pasturePos.toImmutable()
         val pasture = world.getBlockEntity(pos) as? PokemonPastureBlockEntity ?: return
 
-        val snapshot = PastureSnapshotFactory.create(world, pasture)
+        val snapshot = ServerScaleRuntime.cachedSnapshot(world, pos) { PastureSnapshotFactory.create(world, pasture) }
 
         NetworkManager.sendToPlayer(player, ManagerDataS2C(snapshot))
     }
@@ -237,6 +238,7 @@ object CobblePalsNetworking {
 
         // Clean up any active work state
         TagExecutionEngine.cleanup(pokemonId, world, entity?.blockPos ?: targetPasturePos)
+        ServerScaleRuntime.invalidateSnapshot(world, targetPasturePos)
 
         // Teleport to pasture block
         if (entity != null) {
