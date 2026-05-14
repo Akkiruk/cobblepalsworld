@@ -35,7 +35,10 @@ object WorkerNavigationManager {
         }
 
         val travelTarget = SafePositionResolver.standNear(world, immutableDestination, entity.blockPos)
-            ?: immutableDestination
+            ?: run {
+                failedDestinations[failureKey] = now + FAILURE_CACHE_TICKS
+                return NavigationAttempt.UNREACHABLE
+            }
         ensureSession(entity, immutableDestination, travelTarget, state, purpose)
 
         recoveryAttempt(entity, immutableDestination, travelTarget, state, purpose)?.let { attempt ->
@@ -67,7 +70,7 @@ object WorkerNavigationManager {
     }
 
     fun isAtPosition(entity: PokemonEntity, pos: BlockPos, tolerance: Double): Boolean {
-        val travelTarget = SafePositionResolver.standNear(entity.world, pos, entity.blockPos) ?: pos
+        val travelTarget = SafePositionResolver.standNear(entity.world, pos, entity.blockPos) ?: return false
         val dx = entity.x - (travelTarget.x + 0.5)
         val dy = entity.y - (travelTarget.y + 0.5)
         val dz = entity.z - (travelTarget.z + 0.5)

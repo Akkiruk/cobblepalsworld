@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.11
+
+- Fixed worker navigation resolving solid job targets to the top of the target column or nearby high terrain, which could make pals climb hills with a job icon and then drop the job as if pathing had completed.
+- Made unreachable job targets fail before starting movement when no adjacent safe standing spot exists, instead of handing a solid block position to Minecraft pathfinding.
+
 ## 0.2.10
 
 - Added a shared pasture work-range leash so bound job targets, controller buffers, cached containers, and follow-up targets outside the active pasture range are rejected instead of sending pals across the world.

@@ -10,9 +10,14 @@ object SafePositionResolver {
 
         return candidateOffsets(2)
             .asSequence()
+            .filterNot { it.x == 0 && it.z == 0 }
             .map { target.add(it.x, it.y, it.z) }
             .filter { isSafeStandPosition(world, it) }
-            .sortedWith(compareBy<BlockPos> { it.getSquaredDistance(target) }.thenBy { origin?.let(it::getSquaredDistance) ?: 0.0 })
+            .sortedWith(
+                compareBy<BlockPos> { horizontalDistanceSquared(it, target) }
+                    .thenBy { abs(it.y - target.y) }
+                    .thenBy { origin?.let(it::getSquaredDistance) ?: 0.0 }
+            )
             .firstOrNull()
             ?.toImmutable()
     }
@@ -22,7 +27,11 @@ object SafePositionResolver {
             .asSequence()
             .map { current.add(it.x, it.y, it.z) }
             .filter { isSafeStandPosition(world, it) }
-            .sortedWith(compareBy<BlockPos> { it.getSquaredDistance(destination) }.thenBy { it.getSquaredDistance(current) })
+            .sortedWith(
+                compareBy<BlockPos> { horizontalDistanceSquared(it, destination) }
+                    .thenBy { abs(it.y - destination.y) }
+                    .thenBy { it.getSquaredDistance(current) }
+            )
             .firstOrNull()
             ?.toImmutable()
     }
@@ -38,6 +47,12 @@ object SafePositionResolver {
         val floorPos = pos.down()
         val floor = world.getBlockState(floorPos).getCollisionShape(world, floorPos)
         return !floor.isEmpty
+    }
+
+    private fun horizontalDistanceSquared(pos: BlockPos, target: BlockPos): Int {
+        val dx = pos.x - target.x
+        val dz = pos.z - target.z
+        return dx * dx + dz * dz
     }
 
     private fun candidateOffsets(radius: Int): List<BlockPos> {
