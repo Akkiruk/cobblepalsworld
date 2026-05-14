@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.21
+
+- Rebuilt the Command Post crew-source packet model around fixed Party slots and PC box slots, including empty slots, box labels, and real slot coordinates.
+- Changed the Crew tab source picker to browse actual PC boxes instead of paged non-empty Pokemon rows, making it behave much closer to Cobblemon's pasture/PC selection flow.
+- Added source-slot selection for empty and occupied Party/PC cells while preserving native crew add, drop, return-home, mode, and fallback controls.
+
 ## 0.2.20
 
 - Reworked the Command Post Crew tab into visual Crew and Party/PC box grids instead of dense text lists.

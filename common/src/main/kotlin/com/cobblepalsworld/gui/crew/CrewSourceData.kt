@@ -78,22 +78,84 @@ data class CrewSourcePokemonSnapshot(
     }
 }
 
-data class CrewSourceSnapshot(
+data class CrewSourceSlotSnapshot(
     val sourceType: CrewSourceType,
-    val entries: List<CrewSourcePokemonSnapshot>
+    val boxIndex: Int,
+    val slotIndex: Int,
+    val pokemon: CrewSourcePokemonSnapshot?
 ) {
     fun writeToBuf(buf: PacketByteBuf) {
         buf.writeVarInt(sourceType.ordinal)
-        buf.writeVarInt(entries.size)
-        entries.forEach { it.writeToBuf(buf) }
+        buf.writeVarInt(boxIndex)
+        buf.writeVarInt(slotIndex)
+        buf.writeBoolean(pokemon != null)
+        pokemon?.writeToBuf(buf)
+    }
+
+    companion object {
+        fun readFromBuf(buf: PacketByteBuf): CrewSourceSlotSnapshot {
+            val sourceType = CrewSourceType.fromOrdinal(buf.readVarInt())
+            val boxIndex = buf.readVarInt()
+            val slotIndex = buf.readVarInt()
+            val pokemon = if (buf.readBoolean()) CrewSourcePokemonSnapshot.readFromBuf(buf) else null
+            return CrewSourceSlotSnapshot(sourceType, boxIndex, slotIndex, pokemon)
+        }
+    }
+}
+
+data class CrewSourceBoxSnapshot(
+    val boxIndex: Int,
+    val label: String,
+    val slots: List<CrewSourceSlotSnapshot>
+) {
+    val occupiedCount: Int get() = slots.count { it.pokemon != null }
+
+    fun writeToBuf(buf: PacketByteBuf) {
+        buf.writeVarInt(boxIndex)
+        buf.writeString(label)
+        buf.writeVarInt(slots.size)
+        slots.forEach { it.writeToBuf(buf) }
+    }
+
+    companion object {
+        fun readFromBuf(buf: PacketByteBuf): CrewSourceBoxSnapshot {
+            val boxIndex = buf.readVarInt()
+            val label = buf.readString()
+            return CrewSourceBoxSnapshot(
+                boxIndex = boxIndex,
+                label = label,
+                slots = (0 until buf.readVarInt()).map { CrewSourceSlotSnapshot.readFromBuf(buf) }
+            )
+        }
+    }
+}
+
+data class CrewSourceSnapshot(
+    val sourceType: CrewSourceType,
+    val boxCount: Int,
+    val slotCount: Int,
+    val boxes: List<CrewSourceBoxSnapshot>
+) {
+    val entries: List<CrewSourcePokemonSnapshot> get() = boxes.flatMap { box -> box.slots.mapNotNull { it.pokemon } }
+
+    fun writeToBuf(buf: PacketByteBuf) {
+        buf.writeVarInt(sourceType.ordinal)
+        buf.writeVarInt(boxCount)
+        buf.writeVarInt(slotCount)
+        buf.writeVarInt(boxes.size)
+        boxes.forEach { it.writeToBuf(buf) }
     }
 
     companion object {
         fun readFromBuf(buf: PacketByteBuf): CrewSourceSnapshot {
             val sourceType = CrewSourceType.fromOrdinal(buf.readVarInt())
+            val boxCount = buf.readVarInt()
+            val slotCount = buf.readVarInt()
             return CrewSourceSnapshot(
                 sourceType = sourceType,
-                entries = (0 until buf.readVarInt()).map { CrewSourcePokemonSnapshot.readFromBuf(buf) }
+                boxCount = boxCount,
+                slotCount = slotCount,
+                boxes = (0 until buf.readVarInt()).map { CrewSourceBoxSnapshot.readFromBuf(buf) }
             )
         }
     }

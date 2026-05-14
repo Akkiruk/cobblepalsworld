@@ -1,13 +1,15 @@
 package com.cobblepalsworld.networking
 
 import com.cobblemon.mod.common.Cobblemon
+import com.cobblemon.mod.common.api.storage.pc.POKEMON_PER_BOX
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
-import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.gui.crew.CrewSourceBoxSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
+import com.cobblepalsworld.gui.crew.CrewSourceSlotSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceType
 import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshot
@@ -357,25 +359,40 @@ object CobblePalsNetworking {
         val dimensionId = world.registryKey.value.toString()
         val controllerPos = router.pos.toImmutable()
 
-        val partyEntries = (0 until party.size())
-            .mapNotNull { slot -> party.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PARTY, -1, slot, dimensionId, controllerPos) }
-
-        val pcEntries = buildList {
-            pc.boxes.forEachIndexed { boxIndex, box ->
-                box.getNonEmptySlots().entries.sortedBy { it.key }.forEach { entry ->
-                    add(entry.value.toCrewSourceSnapshot(CrewSourceType.PC, boxIndex, entry.key, dimensionId, controllerPos))
-                }
-            }
+        val partySlots = (0 until party.size()).map { slot ->
+            CrewSourceSlotSnapshot(
+                sourceType = CrewSourceType.PARTY,
+                boxIndex = -1,
+                slotIndex = slot,
+                pokemon = party.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PARTY, -1, slot, dimensionId, controllerPos)
+            )
         }
-        val knownIds = (partyEntries.asSequence() + pcEntries.asSequence()).map { it.pokemonId }.toSet()
-        val missingCrewEntries = CommandPostCrewManager.findMembers(dimensionId, controllerPos)
-            .filter { it.pokemonId !in knownIds }
-            .map { it.toMissingCrewSnapshot() }
-        val missingByType = missingCrewEntries.groupBy { it.sourceType }
+
+        val pcBoxes = pc.boxes.mapIndexed { boxIndex, box ->
+            val slots = (0 until POKEMON_PER_BOX).map { slot ->
+                CrewSourceSlotSnapshot(
+                    sourceType = CrewSourceType.PC,
+                    boxIndex = boxIndex,
+                    slotIndex = slot,
+                    pokemon = box[slot]?.toCrewSourceSnapshot(CrewSourceType.PC, boxIndex, slot, dimensionId, controllerPos)
+                )
+            }
+            CrewSourceBoxSnapshot(boxIndex, box.name ?: "Box ${boxIndex + 1}", slots)
+        }
 
         val sources = listOf(
-            CrewSourceSnapshot(CrewSourceType.PARTY, partyEntries + missingByType[CrewSourceType.PARTY].orEmpty()),
-            CrewSourceSnapshot(CrewSourceType.PC, pcEntries + missingByType[CrewSourceType.PC].orEmpty())
+            CrewSourceSnapshot(
+                sourceType = CrewSourceType.PARTY,
+                boxCount = 1,
+                slotCount = partySlots.size,
+                boxes = listOf(CrewSourceBoxSnapshot(-1, "Party", partySlots))
+            ),
+            CrewSourceSnapshot(
+                sourceType = CrewSourceType.PC,
+                boxCount = pc.boxes.size,
+                slotCount = POKEMON_PER_BOX,
+                boxes = pcBoxes
+            )
         )
         NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, sources))
     }
@@ -386,32 +403,6 @@ object CobblePalsNetworking {
         val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
         if (!router.canAccess(player)) return
         NetworkManager.sendToPlayer(player, CommandPostCrewS2C(CommandPostCrewSnapshotFactory.create(world, router)))
-    }
-
-    private fun CommandPostCrewMember.toMissingCrewSnapshot(): CrewSourcePokemonSnapshot {
-        val sourceType = runCatching { CrewSourceType.valueOf(this.sourceType) }.getOrDefault(CrewSourceType.PC)
-        val assignmentView = TagAssignmentManager.getView(pokemonId)
-        val inventory = InventoryManager.get(pokemonId)
-        val cargoSummary = inventory?.let { inv ->
-            val carried = (0 until inv.size()).sumOf { slot -> inv.getStack(slot).count }
-            if (carried > 0) "Cargo $carried" else ""
-        } ?: ""
-        return CrewSourcePokemonSnapshot(
-            pokemonId = pokemonId,
-            sourceType = sourceType,
-            boxIndex = boxIndex,
-            slotIndex = slotIndex,
-            displayName = displayName,
-            species = species,
-            level = level,
-            isFainted = false,
-            isCrewMember = true,
-            tagTypeId = assignmentView?.tag?.type?.id,
-            workStatus = "Missing",
-            cargoSummary = cargoSummary,
-            isAvailable = false,
-            unavailableReason = "Storage moved"
-        )
     }
 
     private fun Pokemon.toCrewSourceSnapshot(
@@ -566,9 +557,10 @@ object CobblePalsNetworking {
         }
         val pc = storage.getPC(player.uuid, registries)
         pc.boxes.forEachIndexed { boxIndex, box ->
-            box.getNonEmptySlots().entries.forEach { entry ->
-                if (entry.value.uuid == pokemonId) {
-                    return LocatedPokemon(entry.value, CrewSourceType.PC, boxIndex, entry.key)
+            for (slot in 0 until POKEMON_PER_BOX) {
+                val pokemon = box[slot] ?: continue
+                if (pokemon.uuid == pokemonId) {
+                    return LocatedPokemon(pokemon, CrewSourceType.PC, boxIndex, slot)
                 }
             }
         }
