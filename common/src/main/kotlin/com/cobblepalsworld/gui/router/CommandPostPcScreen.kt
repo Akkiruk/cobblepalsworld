@@ -13,7 +13,6 @@ import com.cobblemon.mod.common.api.gui.blitk
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.client.gui.drawProfilePokemon
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState
-import com.cobblemon.mod.common.client.render.renderScaledGuiItemIcon
 import com.cobblemon.mod.common.pokemon.RenderablePokemon
 import com.cobblepalsworld.gui.CobblemonUiChrome
 import com.cobblepalsworld.gui.crew.CommandPostCrewMemberSnapshot
@@ -27,6 +26,7 @@ import com.cobblepalsworld.gui.crew.CrewSourceType
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
+import com.cobblepalsworld.tag.TagSpec
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.TagTypePresentation
 import net.minecraft.client.MinecraftClient
@@ -42,55 +42,24 @@ import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import org.joml.Quaternionf
 import java.util.UUID
-import kotlin.math.max
-import kotlin.math.min
+import java.util.Locale
 
 class CommandPostPcScreen(
     handler: RouterScreenHandler,
     inventory: PlayerInventory,
     title: Text
 ) : HandledScreen<RouterScreenHandler>(handler, inventory, title) {
-    private data class SlotHit(val slot: CrewSourceSlotSnapshot, val left: Int, val top: Int)
-    private data class CrewHit(val member: CommandPostCrewMemberSnapshot, val left: Int, val top: Int)
     private data class HoverTooltip(val id: String, val lines: List<Text>)
     private data class TextureButton(val id: String, val left: Int, val top: Int, val width: Int, val height: Int, val texture: Identifier)
-
-    private interface RenderPokemonView {
-        val pokemonId: UUID
-        val displayName: String
-        val species: String
-        val speciesIdentifier: String
-        val aspects: Set<String>
-        val heldItemId: String
-        val level: Int
-        val isFainted: Boolean
-    }
-
-    private data class SourcePokemonView(val source: CrewSourcePokemonSnapshot) : RenderPokemonView {
-        override val pokemonId: UUID get() = source.pokemonId
-        override val displayName: String get() = source.displayName
-        override val species: String get() = source.species
-        override val speciesIdentifier: String get() = source.speciesIdentifier
-        override val aspects: Set<String> get() = source.aspects
-        override val heldItemId: String get() = source.heldItemId
-        override val level: Int get() = source.level
-        override val isFainted: Boolean get() = source.isFainted
-    }
-
-    private data class CrewPokemonView(val member: CommandPostCrewMemberSnapshot) : RenderPokemonView {
-        override val pokemonId: UUID get() = member.pokemonId
-        override val displayName: String get() = member.displayName
-        override val species: String get() = member.species
-        override val speciesIdentifier: String get() = member.speciesIdentifier
-        override val aspects: Set<String> get() = member.aspects
-        override val heldItemId: String get() = member.heldItemId
-        override val level: Int get() = member.level
-        override val isFainted: Boolean get() = member.isFainted
-    }
+    private data class PanelHit(val left: Int, val top: Int, val width: Int, val height: Int, val action: () -> Boolean)
+    private data class ModuleView(val rowIndex: Int, val moduleIndex: Int, val stack: ItemStack, val tagType: TagType, val spec: TagSpec)
 
     private var sourceType = CrewSourceType.PC
     private var sourceBoxIndex = 0
     private var pastureScrollIndex = 0
+    private var commandMode = CommandPostMode.SOURCE
+    private var rosterFilter = CommandPostRosterFilter.ALL
+    private var rosterSort = CommandPostRosterSort.STATUS
     private var selectedPokemonId: UUID? = null
     private var nextCrewRefreshAtMs = 0L
     private var nextSourceRefreshAtMs = 0L
@@ -100,8 +69,10 @@ class CommandPostPcScreen(
     private var hoveredSource: CrewSourcePokemonSnapshot? = null
     private var hoveredCrew: CommandPostCrewMemberSnapshot? = null
     private var hoveredTooltip: HoverTooltip? = null
-    private var slotHits: List<SlotHit> = emptyList()
-    private var crewHits: List<CrewHit> = emptyList()
+    private var slotHits: List<CommandPostStorageSlot.Hit> = emptyList()
+    private var crewHits: List<CommandPostPastureScrollList.CrewHit> = emptyList()
+    private var modeHits: List<CommandPostModeDrawer.ModeHit> = emptyList()
+    private var panelHits: List<PanelHit> = emptyList()
 
     private val renderStates = mutableMapOf<UUID, FloatingState>()
 
@@ -141,6 +112,7 @@ class CommandPostPcScreen(
         hoveredSource = null
         hoveredCrew = null
         hoveredTooltip = null
+        panelHits = emptyList()
         renderBackground(context, mouseX, mouseY, delta)
         super.render(context, mouseX, mouseY, delta)
         drawMouseoverTooltip(context, mouseX, mouseY)
@@ -153,13 +125,20 @@ class CommandPostPcScreen(
         val sources = CrewSourceSnapshotCache.get(handler.routerPos)
         val crew = CommandPostCrewSnapshotCache.get(handler.routerPos)
         val currentBox = currentSourceBox(sources)
-        val preview = previewPokemon(currentBox, crew?.members.orEmpty())
+        val allMembers = crew?.members.orEmpty()
+        val members = filteredMembers(allMembers)
+        val preview = previewPokemon(currentBox, allMembers)
 
         drawPortrait(context, preview, delta)
         drawBase(context)
-        drawSourceModeButton(context, localMouseX, localMouseY)
-        drawStorageScreen(context, currentBox, localMouseX, localMouseY, delta)
-        drawPasturePanel(context, crew?.members.orEmpty(), localMouseX, localMouseY, delta)
+        drawModeControls(context, localMouseX, localMouseY)
+        when (commandMode) {
+            CommandPostMode.SOURCE -> drawStorageScreen(context, currentBox, localMouseX, localMouseY, delta)
+            CommandPostMode.JOBS -> drawJobsPanel(context, localMouseX, localMouseY)
+            CommandPostMode.POLICY -> drawPolicyPanel(context, localMouseX, localMouseY)
+            CommandPostMode.LOGISTICS -> drawLogisticsPanel(context)
+        }
+        drawPasturePanel(context, members, localMouseX, localMouseY, delta)
         drawInfoBox(context, preview)
         drawRouterSlots(context)
         drawExitButton(context, localMouseX, localMouseY)
@@ -178,15 +157,43 @@ class CommandPostPcScreen(
             return true
         }
 
-        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.PREV_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
+        modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
+            commandMode = hit.mode
+            selectedPokemonId = null
+            play(CobblemonSounds.PC_CLICK)
+            return true
+        }
+
+        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+            rosterFilter = CommandPostRosterFilter.entries[(rosterFilter.ordinal + 1) % CommandPostRosterFilter.entries.size]
+            pastureScrollIndex = 0
+            play(CobblemonSounds.PC_CLICK)
+            return true
+        }
+
+        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+            rosterSort = CommandPostRosterSort.entries[(rosterSort.ordinal + 1) % CommandPostRosterSort.entries.size]
+            pastureScrollIndex = 0
+            play(CobblemonSounds.PC_CLICK)
+            return true
+        }
+
+        panelHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, hit.width, hit.height) }?.let { hit ->
+            if (hit.action()) {
+                play(CobblemonSounds.PC_CLICK)
+                return true
+            }
+        }
+
+        if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.PREV_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
             changeBox(-1)
             return true
         }
-        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.NEXT_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
+        if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.NEXT_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
             changeBox(1)
             return true
         }
-        if (contains(localMouseX, localMouseY, SOURCE_BUTTON_LEFT, SOURCE_BUTTON_TOP, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_SIZE)) {
+        if (commandMode == CommandPostMode.SOURCE && contains(localMouseX, localMouseY, SOURCE_BUTTON_LEFT, SOURCE_BUTTON_TOP, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_SIZE)) {
             sourceType = if (sourceType == CrewSourceType.PC) CrewSourceType.PARTY else CrewSourceType.PC
             selectedPokemonId = null
             play(CobblemonSounds.PC_CLICK)
@@ -226,7 +233,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        slotHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostStorageWidget.SLOT_SIZE, CommandPostStorageWidget.SLOT_SIZE) }?.slot?.pokemon?.let { pokemon ->
+        if (commandMode == CommandPostMode.SOURCE) slotHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, hit.size, hit.size) }?.slot?.pokemon?.let { pokemon ->
             selectedPokemonId = pokemon.pokemonId
             if (pokemon.isCrewMember) {
                 CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, pokemon.pokemonId)
@@ -269,7 +276,7 @@ class CommandPostPcScreen(
             pastureScrollIndex = (pastureScrollIndex - verticalAmount.toInt()).coerceIn(0, maxScroll)
             return true
         }
-        if (sourceType == CrewSourceType.PC && CommandPostStorageWidget.contains(localMouseX, localMouseY)) {
+        if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && CommandPostStorageWidget.contains(localMouseX, localMouseY)) {
             changeBox(if (verticalAmount > 0) -1 else 1)
             return true
         }
@@ -280,165 +287,81 @@ class CommandPostPcScreen(
         CommandPostPcShell.drawBase(context, x, y)
     }
 
-    private fun drawPortrait(context: DrawContext, preview: RenderPokemonView?, delta: Float) {
+    private fun drawPortrait(context: DrawContext, preview: CommandPostPokemonRenderView?, delta: Float) {
         CommandPostPcShell.drawPortraitPanel(context, x, y)
         if (preview != null) {
             renderPokemon(context, preview, x + 39, y + 26, delta, 7.0F, 3.2F)
         }
     }
 
-    private fun drawInfoBox(context: DrawContext, preview: RenderPokemonView?) {
-        CommandPostPcShell.drawInfoBox(context, x, y)
-        drawSmallText(context, "COMMAND POST", 17, 131, 0xFFEFE7D7.toInt(), true)
-
-        if (preview == null) {
-            drawSmallText(context, "No Pokemon", 18, 145, 0xFFB8C3C7.toInt(), false)
-            drawSmallText(context, "Hover a slot", 18, 156, 0xFF8FA0A8.toInt(), false)
-            return
-        }
-
-        drawSmallText(context, fit(preview.displayName, 58), 15, 145, 0xFFFFFFFF.toInt(), true)
-        drawSmallText(context, "Lv.${preview.level} ${friendlySpecies(preview.species)}", 15, 156, 0xFFDDE7EA.toInt(), false)
-        val gender = when {
-            "male" in preview.aspects -> "M"
-            "female" in preview.aspects -> "F"
-            else -> ""
-        }
-        if (gender.isNotEmpty()) {
-            drawSmallText(context, gender, 63, 156, if (gender == "M") 0xFF32CBFF.toInt() else 0xFFFC5454.toInt(), true)
-        }
-        val status = when {
-            preview.isFainted -> "Fainted"
-            selectedPokemonId == preview.pokemonId -> "Selected"
-            else -> "Ready"
-        }
-        drawSmallText(context, status, 15, 169, if (preview.isFainted) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
-        heldStack(preview.heldItemId)?.let { stack ->
-            renderScaledGuiItemIcon(itemStack = stack, x = x + 55.0, y = y + 176.0, scale = 0.5, matrixStack = context.matrices)
-        }
+    private fun drawInfoBox(context: DrawContext, preview: CommandPostPokemonRenderView?) {
+        CommandPostInfoPanel.draw(context, textRenderer, x, y, preview, detailLines(preview), ::heldStack, ::fit)
     }
 
     private fun drawStorageScreen(context: DrawContext, box: CrewSourceBoxSnapshot?, localMouseX: Int, localMouseY: Int, delta: Float) {
         val title = if (sourceType == CrewSourceType.PARTY) "Party" else box?.label ?: "Box ${sourceBoxIndex + 1}"
         CommandPostStorageWidget.drawTitle(context, textRenderer, x, y, title)
 
-        if (sourceType == CrewSourceType.PC) {
+        if (sourceType == CrewSourceType.PARTY) {
+            CommandPostPartyWidget.drawPanel(context, textRenderer, x, y)
+        } else {
             CommandPostStorageWidget.drawNavigation(context, x, y, localMouseX, localMouseY)
+            CommandPostStorageWidget.drawFrame(context, x, y)
         }
 
-        CommandPostStorageWidget.drawFrame(context, x, y)
-
-        val hits = mutableListOf<SlotHit>()
+        val hits = mutableListOf<CommandPostStorageSlot.Hit>()
         val slots = box?.slots.orEmpty()
         slots.forEachIndexed { index, slot ->
-            val gridIndex = if (sourceType == CrewSourceType.PARTY) index else slot.slotIndex
-            if (gridIndex !in 0 until CommandPostStorageWidget.BOX_SLOT_COUNT) return@forEachIndexed
-            val left = CommandPostStorageWidget.slotLeft(gridIndex)
-            val top = CommandPostStorageWidget.slotTop(gridIndex)
-            hits += SlotHit(slot, left, top)
-            drawSourceSlot(context, slot, left, top, localMouseX, localMouseY, delta)
+            val left: Int
+            val top: Int
+            val size: Int
+            if (sourceType == CrewSourceType.PARTY) {
+                if (index !in 0..5) return@forEachIndexed
+                left = CommandPostPartyWidget.slotLeft(index)
+                top = CommandPostPartyWidget.slotTop(index)
+                size = CommandPostPartyWidget.SLOT_SIZE
+            } else {
+                val gridIndex = slot.slotIndex
+                if (gridIndex !in 0 until CommandPostStorageWidget.BOX_SLOT_COUNT) return@forEachIndexed
+                left = CommandPostStorageWidget.slotLeft(gridIndex)
+                top = CommandPostStorageWidget.slotTop(gridIndex)
+                size = CommandPostStorageWidget.SLOT_SIZE
+            }
+            hits += CommandPostStorageSlot.Hit(slot, left, top, size)
+            CommandPostStorageSlot.draw(context, textRenderer, x, y, slot, left, top, size, localMouseX, localMouseY, delta, selectedPokemonId, pointerOffsetY, ::heldStack) { view, centerX, topY, renderDelta, modelScale, matrixScale ->
+                renderPokemon(context, view, centerX, topY, renderDelta, modelScale, matrixScale)
+            }?.let { hover ->
+                hoveredSource = hover.pokemon
+                hoveredTooltip = HoverTooltip("source-${hover.pokemon.pokemonId}", sourceTooltip(hover.pokemon))
+            }
         }
         slotHits = hits
-    }
-
-    private fun drawSourceSlot(context: DrawContext, slot: CrewSourceSlotSnapshot, left: Int, top: Int, localMouseX: Int, localMouseY: Int, delta: Float) {
-        val pokemon = slot.pokemon ?: return
-        val hovered = contains(localMouseX, localMouseY, left, top, CommandPostStorageWidget.SLOT_SIZE, CommandPostStorageWidget.SLOT_SIZE)
-        if (hovered) {
-            hoveredSource = pokemon
-            hoveredTooltip = HoverTooltip("source-${pokemon.pokemonId}", sourceTooltip(pokemon))
-        }
-
-        val selected = selectedPokemonId == pokemon.pokemonId || hovered
-        renderPokemon(context, SourcePokemonView(pokemon), x + left + CommandPostStorageWidget.SLOT_SIZE / 2, y + top + 1, delta, 4.5F, 2.5F)
-
-        context.matrices.push()
-        context.matrices.translate(0.0, 0.0, 140.0)
-        drawSmallTextAbsolute(context, "Lv.${pokemon.level}", x + left + 1, y + top + 1, 0xFFFFFFFF.toInt(), true)
-        if ("male" in pokemon.aspects || "female" in pokemon.aspects) {
-            blitk(
-                matrixStack = context.matrices,
-                texture = if ("male" in pokemon.aspects) CommandPostPcShell.GENDER_MALE else CommandPostPcShell.GENDER_FEMALE,
-                x = (x + left + 21) / CommandPostPcShell.TEXTURE_SCALE,
-                y = (y + top + 1) / CommandPostPcShell.TEXTURE_SCALE,
-                width = 6,
-                height = 8,
-                scale = CommandPostPcShell.TEXTURE_SCALE
-            )
-        }
-        heldStack(pokemon.heldItemId)?.let { stack ->
-            renderScaledGuiItemIcon(itemStack = stack, x = x + left + 16.0, y = y + top + 16.0, scale = 0.5, matrixStack = context.matrices)
-        }
-        context.matrices.pop()
-
-        context.matrices.push()
-        context.matrices.translate(0.0, 0.0, 500.0)
-        if (pokemon.isCrewMember || !pokemon.isAvailable) {
-            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left, y = y + top, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = if (pokemon.isCrewMember) 1.0F else 0.72F)
-        }
-        if (pokemon.isCrewMember) {
-            blitk(matrixStack = context.matrices, texture = CommandPostPastureWidget.SLOT_PASTURE_ICON, x = (x + left + 7.5) / CommandPostPcShell.TEXTURE_SCALE, y = (y + top + 7.5) / CommandPostPcShell.TEXTURE_SCALE, width = 20, height = 20, scale = CommandPostPcShell.TEXTURE_SCALE)
-        } else if (hovered && pokemon.isAvailable) {
-            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left, y = y + top, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE)
-            blitk(matrixStack = context.matrices, texture = CommandPostPastureWidget.SLOT_MOVE_ICON, x = (x + left + 7.5) / CommandPostPcShell.TEXTURE_SCALE, y = (y + top + 7.5) / CommandPostPcShell.TEXTURE_SCALE, width = 20, height = 20, scale = CommandPostPcShell.TEXTURE_SCALE)
-        }
-        if (selected) {
-            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.POINTER, x = (x + left + 10) / CommandPostPcShell.TEXTURE_SCALE, y = ((y + top - 3) / CommandPostPcShell.TEXTURE_SCALE) - pointerOffsetY, width = 11, height = 8, scale = CommandPostPcShell.TEXTURE_SCALE)
-        }
-        context.matrices.pop()
     }
 
     private fun drawPasturePanel(context: DrawContext, members: List<CommandPostCrewMemberSnapshot>, localMouseX: Int, localMouseY: Int, delta: Float) {
         val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
         pastureScrollIndex = pastureScrollIndex.coerceIn(0, maxScroll)
-        val visibleMembers = members.drop(pastureScrollIndex).take(CommandPostPastureWidget.VISIBLE_ROWS)
-        val hits = mutableListOf<CrewHit>()
         val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
 
         CommandPostPastureWidget.drawPanel(context, textRenderer, x, y)
-        context.enableScissor(x + CommandPostPastureWidget.LIST_LEFT, y + CommandPostPastureWidget.LIST_TOP - 1, x + CommandPostPastureWidget.LIST_LEFT + CommandPostPastureWidget.LIST_WIDTH, y + CommandPostPastureWidget.LIST_TOP + CommandPostPastureWidget.LIST_HEIGHT)
-        visibleMembers.forEachIndexed { index, member ->
-            val row = CommandPostPastureWidget.rowBounds(index)
-            hits += CrewHit(member, row.left, row.top)
-            drawPastureRow(context, member, row.left, row.top, localMouseX, localMouseY, delta)
+        val (hits, hover) = CommandPostPastureScrollList.draw(context, textRenderer, x, y, members, pastureScrollIndex, selectedPokemonId, localMouseX, localMouseY, delta, ::heldStack, ::fit) { view, centerX, topY, renderDelta, modelScale, matrixScale ->
+            renderPokemon(context, view, centerX, topY, renderDelta, modelScale, matrixScale)
         }
-        context.disableScissor()
         crewHits = hits
+        hover?.let {
+            hoveredCrew = it.member
+            hoveredTooltip = HoverTooltip("crew-${it.member.pokemonId}", crewTooltip(it.member))
+        }
 
         CommandPostPastureWidget.drawScrollOverlay(context, x, y)
-    CommandPostPastureWidget.drawControls(context, textRenderer, x, y, members.size, maxWorkers, localMouseX, localMouseY)
+        CommandPostPastureWidget.drawControls(context, textRenderer, x, y, members.size, maxWorkers, localMouseX, localMouseY)
         if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
             hoveredTooltip = HoverTooltip("recall", listOf(Text.literal("Recall all Command Post Pokemon")))
         }
     }
 
-    private fun drawPastureRow(context: DrawContext, member: CommandPostCrewMemberSnapshot, left: Int, top: Int, localMouseX: Int, localMouseY: Int, delta: Float) {
-        val hovered = contains(localMouseX, localMouseY, left, top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT)
-        if (hovered) {
-            hoveredCrew = member
-            hoveredTooltip = HoverTooltip("crew-${member.pokemonId}", crewTooltip(member))
-        }
-
-        CommandPostPastureWidget.drawRowFrame(context, x, y, left, top, member.isActive(), hovered)
-
-        renderPokemon(context, CrewPokemonView(member), x + left + 23, y + top - 1, delta, 4.5F, 2.5F)
-        heldStack(member.heldItemId)?.let { stack ->
-            renderScaledGuiItemIcon(itemStack = stack, x = x + left + 23.5, y = y + top + 13.0, scale = 0.5, matrixStack = context.matrices)
-        }
-        drawSmallTextAbsolute(context, "Lv.${member.level}", x + left + 44, y + top + 17, 0xFFFFFFFF.toInt(), true)
-        drawSmallTextAbsolute(context, fit(member.displayName, 50), x + left + 11, y + top + 24, 0xFFEAF4F5.toInt(), false)
-
-        CommandPostPastureWidget.drawSlotIcon(context, x, y, CommandPostPastureWidget.SLOT_MOVE_ICON, left + 2, top + 11, hovered = contains(localMouseX, localMouseY, left + 2, top + 11, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE))
-        CommandPostPastureWidget.drawSlotIcon(context, x, y, CommandPostPastureWidget.SLOT_DEFEND_ICON, left + 44, top + 3, hovered = contains(localMouseX, localMouseY, left + 44, top + 3, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE))
-
-        if (member.isBlocked()) {
-            context.fill(x + left + 1, y + top + 1, x + left + 4, y + top + 4, 0xFFFF5555.toInt())
-        } else if (member.isReady()) {
-            context.fill(x + left + 1, y + top + 1, x + left + 4, y + top + 4, 0xFF74E08A.toInt())
-        }
-    }
-
     private fun drawRouterSlots(context: DrawContext) {
+        if (commandMode == CommandPostMode.SOURCE) return
         for (row in 0 until RouterScreenHandler.MODULE_ROWS) {
             for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
                 val left = MODULE_SLOT_LEFT + col * 18
@@ -451,6 +374,134 @@ class CommandPostPcScreen(
             val top = UPGRADE_SLOT_TOP + (index / 3) * 18
             blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = 0.38F)
         }
+    }
+
+    private fun drawModeControls(context: DrawContext, localMouseX: Int, localMouseY: Int) {
+        modeHits = CommandPostModeDrawer.drawModeButtons(context, x, y, localMouseX, localMouseY, commandMode)
+        CommandPostModeDrawer.drawToolButtons(context, x, y, localMouseX, localMouseY)
+        CommandPostModeDrawer.drawDrawerLabel(context, textRenderer, x, y, rosterFilter, rosterSort)
+        modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
+            hoveredTooltip = HoverTooltip("mode-${hit.mode.name}", listOf(Text.literal(hit.mode.tooltip)))
+        }
+        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+            hoveredTooltip = HoverTooltip("filter", listOf(Text.literal("Roster filter: ${rosterFilter.label}")))
+        }
+        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+            hoveredTooltip = HoverTooltip("sort", listOf(Text.literal("Roster sort: ${rosterSort.label}")))
+        }
+        if (commandMode == CommandPostMode.SOURCE) {
+            drawSourceModeButton(context, localMouseX, localMouseY)
+        }
+    }
+
+    private fun drawJobsPanel(context: DrawContext, localMouseX: Int, localMouseY: Int) {
+        drawOperationalFrame(context, "JOBS")
+        val views = moduleViews()
+        if (views.isEmpty()) {
+            drawSmallText(context, "Install tag cards", CommandPostStorageWidget.X + 14, CommandPostStorageWidget.Y + 24, 0xFFB8C3C7.toInt(), false)
+            slotHits = emptyList()
+            return
+        }
+        val hits = mutableListOf<PanelHit>()
+        views.take(6).forEachIndexed { row, view ->
+            val top = CommandPostStorageWidget.Y + 20 + row * 19
+            val active = handler.moduleActive(view.moduleIndex)
+            val assigned = handler.moduleAssigned(view.moduleIndex)
+            val rowColor = when {
+                active -> 0xFF6FEA8A.toInt()
+                assigned -> 0xFFFFD166.toInt()
+                else -> 0xFFEAF4F5.toInt()
+            }
+            context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 15, if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 17)) 0x5522343A else 0x3318242A)
+            drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 14, top, rowColor, true)
+            drawSmallText(context, TagTypePresentation.familyOf(view.tagType).label, CommandPostStorageWidget.X + 92, top, 0xFFB8C3C7.toInt(), false)
+            drawSmallText(context, if (active) "Active" else if (assigned) "Staffed" else "Open", CommandPostStorageWidget.X + 124, top + 8, rowColor, false)
+            hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 156, 17) {
+                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + view.rowIndex)
+                true
+            }
+        }
+        panelHits = hits
+        slotHits = emptyList()
+    }
+
+    private fun drawPolicyPanel(context: DrawContext, localMouseX: Int, localMouseY: Int) {
+        drawOperationalFrame(context, "POLICY")
+        val views = moduleViews()
+        if (views.isEmpty()) {
+            drawSmallText(context, "No role cards", CommandPostStorageWidget.X + 14, CommandPostStorageWidget.Y + 24, 0xFFB8C3C7.toInt(), false)
+            slotHits = emptyList()
+            return
+        }
+        val hits = mutableListOf<PanelHit>()
+        views.take(5).forEachIndexed { row, view ->
+            val top = CommandPostStorageWidget.Y + 18 + row * 24
+            context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 20, if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 20)) 0x5522343A else 0x3318242A)
+            drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 13, top, 0xFFEAF4F5.toInt(), true)
+            drawSmallText(context, "${humanValue(view.spec.filter.matchMode.name)} ${if (view.spec.filter.whitelist) "Allow" else "Deny"}", CommandPostStorageWidget.X + 13, top + 9, 0xFFB8C3C7.toInt(), false)
+            val signalLeft = CommandPostStorageWidget.X + 91
+            val targetLeft = CommandPostStorageWidget.X + 115
+            val runLeft = CommandPostStorageWidget.X + 139
+            drawMiniChip(context, signalLeft, top + 5, compactValue(view.spec.settings.redstoneMode.id), localMouseX, localMouseY)
+            drawMiniChip(context, targetLeft, top + 5, compactValue(view.spec.settings.targetStrategy.id), localMouseX, localMouseY)
+            drawMiniChip(context, runLeft, top + 5, if (view.spec.settings.terminateAfterSuccess) "1" else "Loop", localMouseX, localMouseY)
+            hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 80, 20) {
+                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + view.rowIndex)
+                true
+            }
+            hits += PanelHit(signalLeft, top + 5, 20, 10) {
+                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_CYCLE_SIGNAL))
+                true
+            }
+            hits += PanelHit(targetLeft, top + 5, 20, 10) {
+                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_CYCLE_TARGET))
+                true
+            }
+            hits += PanelHit(runLeft, top + 5, 20, 10) {
+                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_TOGGLE_RUN))
+                true
+            }
+        }
+        panelHits = hits
+        slotHits = emptyList()
+    }
+
+    private fun drawLogisticsPanel(context: DrawContext) {
+        drawOperationalFrame(context, "LOGISTICS")
+        val storageSlots = handler.slots.drop(RouterScreenHandler.STORAGE_SCREEN_SLOT_START).take(RouterBlockEntity.STORAGE_SLOT_COUNT)
+        val usedSlots = storageSlots.count { it.hasStack() }
+        val itemCount = storageSlots.sumOf { it.stack.count }
+        val moduleCount = moduleViews().size
+        val logisticsCount = moduleViews().count { TagTypePresentation.familyOf(it.tagType) == com.cobblepalsworld.tag.TagRoleFamily.Logistics }
+        val pressure = when {
+            usedSlots >= RouterBlockEntity.STORAGE_SLOT_COUNT -> "Full"
+            usedSlots >= RouterBlockEntity.STORAGE_SLOT_COUNT * 2 / 3 -> "High"
+            usedSlots > 0 -> "Flowing"
+            else -> "Empty"
+        }
+        drawSmallText(context, "Buffer", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 24, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$usedSlots/${RouterBlockEntity.STORAGE_SLOT_COUNT} slots", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 24, 0xFFDDE7EA.toInt(), false)
+        drawSmallText(context, "$itemCount items", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 40, 0xFFB8C3C7.toInt(), false)
+        drawSmallText(context, "Pressure $pressure", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 40, if (pressure == "Full") 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
+        drawSmallText(context, "Role cards", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 60, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$moduleCount installed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 60, 0xFFDDE7EA.toInt(), false)
+        drawSmallText(context, "Logistics", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 76, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$logisticsCount routes", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 76, 0xFFDDE7EA.toInt(), false)
+        drawSmallText(context, "Upgrade slots", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 96, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "Use lower-left sockets", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 108, 0xFFB8C3C7.toInt(), false)
+        panelHits = emptyList()
+        slotHits = emptyList()
+    }
+
+    private fun drawOperationalFrame(context: DrawContext, title: String) {
+        CommandPostStorageWidget.drawFrame(context, x, y)
+        CommandPostStorageWidget.drawTitle(context, textRenderer, x, y, title)
+    }
+
+    private fun drawMiniChip(context: DrawContext, left: Int, top: Int, value: String, localMouseX: Int, localMouseY: Int) {
+        val hovered = contains(localMouseX, localMouseY, left, top, 20, 10)
+        context.fill(x + left, y + top, x + left + 20, y + top + 10, if (hovered) 0xAA31444C.toInt() else 0x88233238.toInt())
+        drawSmallText(context, fit(value, 18), left + 2, top + 2, 0xFFEAF4F5.toInt(), false)
     }
 
     private fun drawSourceModeButton(context: DrawContext, localMouseX: Int, localMouseY: Int) {
@@ -468,7 +519,7 @@ class CommandPostPcScreen(
         CommandPostIconButton.draw(context, button.texture, x, y, button.left, button.top, button.width, button.height, localMouseX, localMouseY, scaled)
     }
 
-    private fun renderPokemon(context: DrawContext, view: RenderPokemonView, centerX: Int, topY: Int, delta: Float, modelScale: Float, matrixScale: Float) {
+    private fun renderPokemon(context: DrawContext, view: CommandPostPokemonRenderView, centerX: Int, topY: Int, delta: Float, modelScale: Float, matrixScale: Float) {
         val renderable = renderablePokemon(view) ?: return
         val state = renderStates.getOrPut(view.pokemonId) { FloatingState() }
         val clipHalfWidth = if (matrixScale > 3.0F) 36 else 18
@@ -489,7 +540,7 @@ class CommandPostPcScreen(
         context.disableScissor()
     }
 
-    private fun renderablePokemon(view: RenderPokemonView): RenderablePokemon? {
+    private fun renderablePokemon(view: CommandPostPokemonRenderView): RenderablePokemon? {
         val identifier = runCatching { Identifier.of(view.speciesIdentifier) }.getOrNull()
         val species = identifier?.let(PokemonSpecies::getByIdentifier)
             ?: PokemonSpecies.getByName(view.species.substringAfter(':'))
@@ -508,30 +559,31 @@ class CommandPostPcScreen(
     private fun currentSourceBox(sources: List<CrewSourceSnapshot>): CrewSourceBoxSnapshot? {
         val source = sources.firstOrNull { it.sourceType == sourceType } ?: return null
         if (sourceType == CrewSourceType.PARTY) return source.boxes.firstOrNull()
-        val boxCount = source.boxes.size
+        val boxCount = source.boxCount
         if (boxCount <= 0) return null
         sourceBoxIndex = sourceBoxIndex.coerceIn(0, boxCount - 1)
-        return source.boxes.getOrNull(sourceBoxIndex)
+        return source.boxes.firstOrNull { it.boxIndex == sourceBoxIndex } ?: source.boxes.firstOrNull()
     }
 
-    private fun previewPokemon(box: CrewSourceBoxSnapshot?, members: List<CommandPostCrewMemberSnapshot>): RenderPokemonView? {
-        hoveredSource?.let { return SourcePokemonView(it) }
-        hoveredCrew?.let { return CrewPokemonView(it) }
+    private fun previewPokemon(box: CrewSourceBoxSnapshot?, members: List<CommandPostCrewMemberSnapshot>): CommandPostPokemonRenderView? {
+        hoveredSource?.let { return SourcePokemonRenderView(it) }
+        hoveredCrew?.let { return CrewPokemonRenderView(it) }
         selectedPokemonId?.let { selected ->
-            box?.slots?.firstNotNullOfOrNull { it.pokemon?.takeIf { pokemon -> pokemon.pokemonId == selected } }?.let { return SourcePokemonView(it) }
-            members.firstOrNull { it.pokemonId == selected }?.let { return CrewPokemonView(it) }
+            box?.slots?.firstNotNullOfOrNull { it.pokemon?.takeIf { pokemon -> pokemon.pokemonId == selected } }?.let { return SourcePokemonRenderView(it) }
+            members.firstOrNull { it.pokemonId == selected }?.let { return CrewPokemonRenderView(it) }
         }
-        members.firstOrNull()?.let { return CrewPokemonView(it) }
-        box?.slots?.firstNotNullOfOrNull { it.pokemon }?.let { return SourcePokemonView(it) }
+        members.firstOrNull()?.let { return CrewPokemonRenderView(it) }
+        box?.slots?.firstNotNullOfOrNull { it.pokemon }?.let { return SourcePokemonRenderView(it) }
         return null
     }
 
     private fun changeBox(delta: Int) {
         val source = CrewSourceSnapshotCache.get(handler.routerPos).firstOrNull { it.sourceType == CrewSourceType.PC } ?: return
-        if (source.boxes.isEmpty()) return
-        sourceBoxIndex = Math.floorMod(sourceBoxIndex + delta, source.boxes.size)
+        if (source.boxCount <= 0) return
+        sourceBoxIndex = Math.floorMod(sourceBoxIndex + delta, source.boxCount)
         selectedPokemonId = null
         play(CobblemonSounds.PC_CLICK)
+        requestSourceRefresh()
     }
 
     private fun requestCrewRefresh() {
@@ -539,7 +591,69 @@ class CommandPostPcScreen(
     }
 
     private fun requestSourceRefresh() {
-        CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos)
+        CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos, sourceType, sourceBoxIndex, "")
+    }
+
+    private fun filteredMembers(members: List<CommandPostCrewMemberSnapshot>): List<CommandPostCrewMemberSnapshot> {
+        val filtered = members.filter { member ->
+            when (rosterFilter) {
+                CommandPostRosterFilter.ALL -> true
+                CommandPostRosterFilter.READY -> member.isReady()
+                CommandPostRosterFilter.ACTIVE -> member.isActive()
+                CommandPostRosterFilter.BLOCKED -> member.isBlocked()
+                CommandPostRosterFilter.CARGO -> member.carriedItemCount > 0
+                CommandPostRosterFilter.NEEDS_HELP -> member.isMissing || member.isFainted || member.isBlocked() || member.tagTypeId == null
+            }
+        }
+        return when (rosterSort) {
+            CommandPostRosterSort.STATUS -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName })
+            CommandPostRosterSort.ROLE -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.tagTypeId ?: "" }.thenBy { it.displayName })
+            CommandPostRosterSort.SOURCE -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sourceType }.thenBy { it.boxIndex }.thenBy { it.slotIndex })
+        }
+    }
+
+    private fun detailLines(preview: CommandPostPokemonRenderView?): List<CommandPostInfoPanel.DetailLine> {
+        if (preview == null) return emptyList()
+        val gender = when {
+            "male" in preview.aspects -> " M"
+            "female" in preview.aspects -> " F"
+            else -> ""
+        }
+        val base = CommandPostInfoPanel.DetailLine("Lv.${preview.level} ${friendlySpecies(preview.species)}$gender")
+        val status = when (preview) {
+            is SourcePokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.source.statusLabel(), if (preview.source.isAvailable) 0xFFBFE7C4.toInt() else 0xFFFFD166.toInt())
+            is CrewPokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.member.statusLabel(), if (preview.member.isBlocked() || preview.member.isFainted || preview.member.isMissing) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt())
+            else -> CommandPostInfoPanel.DetailLine(if (preview.isFainted) "Fainted" else "Ready")
+        }
+        val source = when (preview) {
+            is SourcePokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.source.sourceLabel(), 0xFFB8C3C7.toInt())
+            is CrewPokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.member.sourceLabel(), 0xFFB8C3C7.toInt())
+            else -> CommandPostInfoPanel.DetailLine("Selected", 0xFFB8C3C7.toInt())
+        }
+        val role = when (preview) {
+            is SourcePokemonRenderView -> preview.source.tagTypeId?.let { tagRoleLine(it) }
+                ?: CommandPostInfoPanel.DetailLine(preview.source.cargoSummary.ifBlank { "Crew candidate" }, 0xFF8FA0A8.toInt())
+            is CrewPokemonRenderView -> preview.member.tagTypeId?.let { tagRoleLine(it) }
+                ?: CommandPostInfoPanel.DetailLine(preview.member.assignmentLabel(), 0xFF8FA0A8.toInt())
+            else -> CommandPostInfoPanel.DetailLine("Ready", 0xFF8FA0A8.toInt())
+        }
+        return listOf(base, status, source, role)
+    }
+
+    private fun tagRoleLine(tagId: String): CommandPostInfoPanel.DetailLine {
+        val tagType = TagType.fromId(tagId)
+        val label = tagType?.let(TagTypePresentation::roleLabel) ?: tagId
+        return CommandPostInfoPanel.DetailLine(label, 0xFFEAF4F5.toInt(), true)
+    }
+
+    private fun moduleViews(): List<ModuleView> {
+        val registries = client?.world?.registryManager ?: return emptyList()
+        return (0 until RouterBlockEntity.MODULE_SLOT_COUNT).mapNotNull { moduleIndex ->
+            val stack = handler.slots.getOrNull(moduleIndex)?.stack ?: return@mapNotNull null
+            val tagItem = stack.item as? TagItem ?: return@mapNotNull null
+            val spec = TagItem.getSpec(stack, registries) ?: TagSpec(type = tagItem.tagType)
+            ModuleView(rowIndex = moduleIndex, moduleIndex = moduleIndex, stack = stack, tagType = tagItem.tagType, spec = spec)
+        }
     }
 
     private fun play(sound: SoundEvent) {
@@ -607,6 +721,22 @@ class CommandPostPcScreen(
     }
 
     private fun friendlySpecies(species: String): String = species.substringAfter(':').replace('_', ' ').replaceFirstChar { it.uppercaseChar() }
+
+    private fun humanValue(value: String): String = value
+        .lowercase(Locale.ROOT)
+        .split('_', '-')
+        .filter { it.isNotBlank() }
+        .joinToString(" ") { part -> part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
+
+    private fun compactValue(value: String): String {
+        val human = humanValue(value)
+        return when {
+            human.equals("terminate after success", ignoreCase = true) -> "Once"
+            human.length <= 4 -> human
+            human.contains(' ') -> human.split(' ').joinToString("") { it.firstOrNull()?.uppercaseChar()?.toString().orEmpty() }
+            else -> human.take(4)
+        }
+    }
 
     private fun fit(value: String, maxWidth: Int): String {
         if (textRenderer.getWidth(value) * CommandPostPcShell.TEXTURE_SCALE <= maxWidth) return value

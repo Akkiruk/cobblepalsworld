@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " F ",
+    "SNS",
+    " W "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "F": { "item": "minecraft:fishing_rod" },
+    "S": { "item": "minecraft:string" },
+    "W": { "item": "minecraft:water_bucket" }
+  },
+  "result": {
+    "id": "cobblepalsworld:fisher_tag",
+    "count": 1
+  }
+}

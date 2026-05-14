@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " G ",
+    "SNS",
+    " C "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "G": { "item": "minecraft:spyglass" },
+    "S": { "item": "minecraft:paper" },
+    "C": { "item": "minecraft:compass" }
+  },
+  "result": {
+    "id": "cobblepalsworld:scout_tag",
+    "count": 1
+  }
+}

@@ -30,17 +30,30 @@ import net.minecraft.util.math.BlockPos
 import java.util.UUID
 
 object CobblePalsNetworking {
-    class RequestCrewSourcesC2S(val routerPos: BlockPos) : CustomPayload {
+    class RequestCrewSourcesC2S(
+        val routerPos: BlockPos,
+        val sourceType: CrewSourceType,
+        val boxIndex: Int,
+        val query: String
+    ) : CustomPayload {
         override fun getId() = TYPE
         companion object {
             val TYPE = CustomPayload.Id<RequestCrewSourcesC2S>(Identifier.of(CobblePalsWorld.MODID, "request_crew_sources"))
             val CODEC = object : PacketCodec<RegistryByteBuf, RequestCrewSourcesC2S> {
                 override fun encode(buf: RegistryByteBuf, value: RequestCrewSourcesC2S) {
                     buf.writeBlockPos(value.routerPos)
+                    buf.writeVarInt(value.sourceType.ordinal)
+                    buf.writeVarInt(value.boxIndex)
+                    buf.writeString(value.query)
                 }
 
                 override fun decode(buf: RegistryByteBuf): RequestCrewSourcesC2S {
-                    return RequestCrewSourcesC2S(buf.readBlockPos())
+                    return RequestCrewSourcesC2S(
+                        routerPos = buf.readBlockPos(),
+                        sourceType = CrewSourceType.fromOrdinal(buf.readVarInt()),
+                        boxIndex = buf.readVarInt(),
+                        query = buf.readString()
+                    )
                 }
             }
         }
@@ -232,7 +245,7 @@ object CobblePalsNetworking {
         ) { payload, context ->
             context.queue {
                 val player = context.player as? ServerPlayerEntity ?: return@queue
-                handleCrewSourceRequest(player, payload.routerPos)
+                handleCrewSourceRequest(player, payload.routerPos, payload.sourceType, payload.boxIndex, payload.query)
             }
         }
 
@@ -317,8 +330,8 @@ object CobblePalsNetworking {
         players.forEach { player -> NetworkManager.sendToPlayer(player, payload) }
     }
 
-    fun sendCrewSourceRefresh(routerPos: BlockPos) {
-        NetworkManager.sendToServer(RequestCrewSourcesC2S(routerPos.toImmutable()))
+    fun sendCrewSourceRefresh(routerPos: BlockPos, sourceType: CrewSourceType = CrewSourceType.PC, boxIndex: Int = 0, query: String = "") {
+        NetworkManager.sendToServer(RequestCrewSourcesC2S(routerPos.toImmutable(), sourceType, boxIndex, query.take(40)))
     }
 
     fun sendCommandPostCrewRefresh(routerPos: BlockPos) {
@@ -346,7 +359,7 @@ object CobblePalsNetworking {
     }
 
 
-    private fun handleCrewSourceRequest(player: ServerPlayerEntity, routerPos: BlockPos) {
+    private fun handleCrewSourceRequest(player: ServerPlayerEntity, routerPos: BlockPos, requestedSourceType: CrewSourceType = CrewSourceType.PC, requestedBoxIndex: Int = 0, query: String = "") {
         val world = player.serverWorld
         CobblePalsSaveData.ensureLoaded(world)
         val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
@@ -359,43 +372,55 @@ object CobblePalsNetworking {
         val pc = storage.getPC(sourceOwnerUuid, registries)
         val dimensionId = world.registryKey.value.toString()
         val controllerPos = router.pos.toImmutable()
+        val normalizedQuery = query.trim().lowercase()
 
         val partySlots = (0 until party.size()).map { slot ->
+            val pokemon = party.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PARTY, -1, slot, dimensionId, controllerPos)
             CrewSourceSlotSnapshot(
                 sourceType = CrewSourceType.PARTY,
                 boxIndex = -1,
                 slotIndex = slot,
-                pokemon = party.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PARTY, -1, slot, dimensionId, controllerPos)
+                pokemon = pokemon?.takeIf { it.matchesSourceQuery(normalizedQuery) }
             )
         }
 
-        val pcBoxes = pc.boxes.mapIndexed { boxIndex, box ->
-            val slots = (0 until POKEMON_PER_BOX).map { slot ->
-                CrewSourceSlotSnapshot(
-                    sourceType = CrewSourceType.PC,
-                    boxIndex = boxIndex,
-                    slotIndex = slot,
-                    pokemon = box[slot]?.toCrewSourceSnapshot(CrewSourceType.PC, boxIndex, slot, dimensionId, controllerPos)
-                )
-            }
-            CrewSourceBoxSnapshot(boxIndex, box.name ?: "Box ${boxIndex + 1}", slots)
-        }
-
-        val sources = listOf(
+        val source = if (requestedSourceType == CrewSourceType.PARTY) {
             CrewSourceSnapshot(
                 sourceType = CrewSourceType.PARTY,
                 boxCount = 1,
                 slotCount = partySlots.size,
                 boxes = listOf(CrewSourceBoxSnapshot(-1, "Party", partySlots))
-            ),
+            )
+        } else {
+            val boxCount = pc.boxes.size
+            val boxIndex = requestedBoxIndex.coerceIn(0, (boxCount - 1).coerceAtLeast(0))
+            val box = pc.boxes.getOrNull(boxIndex)
+            val slots = (0 until POKEMON_PER_BOX).map { slot ->
+                val pokemon = box?.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PC, boxIndex, slot, dimensionId, controllerPos)
+                CrewSourceSlotSnapshot(
+                    sourceType = CrewSourceType.PC,
+                    boxIndex = boxIndex,
+                    slotIndex = slot,
+                    pokemon = pokemon?.takeIf { it.matchesSourceQuery(normalizedQuery) }
+                )
+            }
             CrewSourceSnapshot(
                 sourceType = CrewSourceType.PC,
-                boxCount = pc.boxes.size,
+                boxCount = boxCount,
                 slotCount = POKEMON_PER_BOX,
-                boxes = pcBoxes
+                boxes = listOf(CrewSourceBoxSnapshot(boxIndex, box?.name ?: "Box ${boxIndex + 1}", slots))
             )
-        )
-        NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, sources))
+        }
+        NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, listOf(source)))
+    }
+
+    private fun CrewSourcePokemonSnapshot.matchesSourceQuery(query: String): Boolean {
+        if (query.isBlank()) return true
+        return displayName.lowercase().contains(query) ||
+            species.lowercase().contains(query) ||
+            sourceLabel().lowercase().contains(query) ||
+            statusLabel().lowercase().contains(query) ||
+            tagTypeId?.lowercase()?.contains(query) == true
     }
 
     private fun handleCommandPostCrewRequest(player: ServerPlayerEntity, routerPos: BlockPos) {

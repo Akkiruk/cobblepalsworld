@@ -23,6 +23,8 @@ import net.minecraft.item.Items
 import net.minecraft.registry.Registries
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.sin
 
 object WorkerOverlayRenderer {
@@ -68,24 +70,27 @@ object WorkerOverlayRenderer {
         matrices.push()
         matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
 
-        overlays.values.forEach { entry ->
-            val entity = world.getEntityById(entry.snapshot.entityId) ?: return@forEach
-            if (entity.isRemoved) return@forEach
-            if (entity.squaredDistanceTo(cameraPos.x, cameraPos.y, cameraPos.z) > MAX_RENDER_DISTANCE_SQ) {
-                return@forEach
-            }
+        overlays.values.groupBy { it.worksitePos }.values.forEach { worksiteEntries ->
+            worksiteEntries.forEachIndexed { index, entry ->
+                val entity = world.getEntityById(entry.snapshot.entityId) ?: return@forEachIndexed
+                if (entity.isRemoved) return@forEachIndexed
+                if (entity.squaredDistanceTo(cameraPos.x, cameraPos.y, cameraPos.z) > MAX_RENDER_DISTANCE_SQ) {
+                    return@forEachIndexed
+                }
 
-            val bob = sin((world.time + entity.id) * 0.18).toDouble() * 0.045
-            renderIcons(
-                client = client,
-                matrices = matrices,
-                vertexConsumers = vertexConsumers,
-                snapshot = entry.snapshot,
-                x = entity.x,
-                y = entity.boundingBox.maxY + 0.65 + bob,
-                z = entity.z,
-                seed = entity.id
-            )
+                val bob = sin((world.time + entity.id) * 0.18).toDouble() * 0.045
+                val offset = crewOffset(index, worksiteEntries.size)
+                renderIcons(
+                    client = client,
+                    matrices = matrices,
+                    vertexConsumers = vertexConsumers,
+                    snapshot = entry.snapshot,
+                    x = entity.x + offset.first,
+                    y = entity.boundingBox.maxY + 0.65 + bob,
+                    z = entity.z + offset.second,
+                    seed = entity.id
+                )
+            }
         }
 
         vertexConsumers.draw()
@@ -299,7 +304,18 @@ object WorkerOverlayRenderer {
             WorkerStatusKind.BLOCKED -> 0xE57373.toInt()
             WorkerStatusKind.STANDBY -> 0xB794F4.toInt()
             WorkerStatusKind.WAITING -> 0xD9A84F
-            else -> phaseColor(snapshot.phase(), snapshot.hasCargo())
+            else -> if (snapshot.hasCargo()) phaseColor(snapshot.phase(), true) else familyColor(snapshot)
+        }
+    }
+
+    private fun familyColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+        return when (TagType.fromId(snapshot.tagTypeId)) {
+            TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM, TagType.FISHER, TagType.SCOUT -> 0x56CF7A
+            TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> 0x33C7C4
+            TagType.GUARDIAN -> 0xE57373.toInt()
+            TagType.ACTIVATOR, TagType.LOOKOUT -> 0xF3C969
+            TagType.SHEPHERD -> 0xF5A6C8.toInt()
+            null -> phaseColor(snapshot.phase(), snapshot.hasCargo())
         }
     }
 
@@ -320,6 +336,13 @@ object WorkerOverlayRenderer {
 
     private fun prune(now: Long) {
         overlays.entries.removeIf { (_, entry) -> now - entry.updatedAt > ENTRY_TTL_TICKS }
+    }
+
+    private fun crewOffset(index: Int, count: Int): Pair<Double, Double> {
+        if (count <= 4) return 0.0 to 0.0
+        val angle = (PI * 2.0 * index) / count.coerceAtLeast(1)
+        val radius = if (count > 10) 0.36 else 0.22
+        return cos(angle) * radius to sin(angle) * radius
     }
 
     private data class OverlayEntry(

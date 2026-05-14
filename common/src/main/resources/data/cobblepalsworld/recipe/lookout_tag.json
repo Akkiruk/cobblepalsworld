@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " R ",
+    "SNS",
+    " O "
+  ],
+  "key": {
+    "N": { "item": "minecraft:name_tag" },
+    "R": { "item": "minecraft:redstone_torch" },
+    "S": { "item": "minecraft:redstone" },
+    "O": { "item": "minecraft:observer" }
+  },
+  "result": {
+    "id": "cobblepalsworld:lookout_tag",
+    "count": 1
+  }
+}

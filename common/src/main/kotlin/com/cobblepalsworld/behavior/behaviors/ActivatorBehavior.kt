@@ -14,6 +14,7 @@ import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.platform.ActivatorPlatformBridge
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
+import com.cobblepalsworld.tag.TargetStrategy
 import com.cobblepalsworld.tag.filter.FilterMatcher
 import net.minecraft.entity.ItemEntity
 import net.minecraft.item.Item
@@ -102,6 +103,7 @@ object ActivatorBehavior : TagBehavior {
         for (sourceSlot in sourceSlots) {
             val heldStack = pokemonInv.getStack(sourceSlot).copy()
             if (heldStack.isEmpty) continue
+            val advancedMode = tag.settings.targetStrategy != TargetStrategy.ROUND_ROBIN
 
             prepareFakePlayer(player, entity, heldStack)
 
@@ -109,6 +111,8 @@ object ActivatorBehavior : TagBehavior {
                 syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)
                 return true
             }
+
+            if (!advancedMode) continue
 
             if (tryUseOnEntities(world, entity, player, target)) {
                 syncFakePlayerResult(world, entity, pokemonInv, player, sourceSlot)

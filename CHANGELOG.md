@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.29
+
+- Finished the Command Post Cobblemon UI fidelity pass with extracted source-slot, party-panel, pasture-scroll-list, info-panel, and mode-drawer widgets, plus a true Cobblemon party-panel layout for Party browsing.
+- Added in-shell Command Post modes for Party/PC source management, jobs, role policy, and logistics health, including roster filters/sorts and contextual policy quick actions without restoring the old tabbed dashboard.
+- Changed Party/PC source refreshes to request only the active source page/box instead of syncing the entire PC every refresh.
+- Added live Lookout, Scout, and Fisher tag roles from the gameplay audit, narrowed Activator's default behavior to predictable bound-block use, and added short-lived target caching for scan-heavy discovery/fishing work.
+- Improved in-world worker readability with family-colored role halos, large-crew overlay offsets, and completion particles for the new role families.
+
 ## 0.2.28
 
 - Split the Command Post PC/Pasture screen into dedicated Cobblemon-derived shell, storage, pasture, and textured button widgets instead of keeping the roster/grid anatomy buried in the screen class.

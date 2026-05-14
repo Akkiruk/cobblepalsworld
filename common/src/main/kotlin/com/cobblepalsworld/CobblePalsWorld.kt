@@ -46,12 +46,15 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(GuardianBehavior)
         TagBehaviorRegistry.register(HarvesterBehavior)
         TagBehaviorRegistry.register(VacuumBehavior)
+        TagBehaviorRegistry.register(FisherBehavior)
+        TagBehaviorRegistry.register(ScoutBehavior)
         TagBehaviorRegistry.register(SenderBehavior)
         TagBehaviorRegistry.register(PullerBehavior)
         TagBehaviorRegistry.register(DistributorBehavior)
         TagBehaviorRegistry.register(DropperBehavior)
         TagBehaviorRegistry.register(VoidBehavior)
         TagBehaviorRegistry.register(ActivatorBehavior)
+        TagBehaviorRegistry.register(LookoutBehavior)
         TagBehaviorRegistry.register(ShepherdBehavior)
     }
 
