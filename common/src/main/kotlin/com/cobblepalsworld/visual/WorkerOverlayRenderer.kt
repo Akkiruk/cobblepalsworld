@@ -33,11 +33,15 @@ object WorkerOverlayRenderer {
     private var worldKey: String? = null
 
     fun replacePastureVisuals(pasturePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
+        replaceWorksiteVisuals(pasturePos, visuals)
+    }
+
+    fun replaceWorksiteVisuals(worksitePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
         val client = MinecraftClient.getInstance()
         val world = client.world ?: return
         syncWorld(world.registryKey.value.toString())
 
-        val pasture = pasturePos.toImmutable()
+        val pasture = worksitePos.toImmutable()
         val now = world.time
         overlays.entries.removeIf { it.value.pasturePos == pasture }
         visuals.forEach { snapshot ->

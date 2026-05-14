@@ -24,8 +24,8 @@ import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.navigation.MovementPurpose
 import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.navigation.WorkerNavigationManager
-import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.RedstoneControlMode
@@ -168,7 +168,7 @@ object TagExecutionEngine {
         val inventory = InventoryManager.remove(pokemonId)
         if (inventory != null && world != null && pos != null) {
             recoverCarriedInventory(pokemonId, world, pos, inventory)
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
     }
 
@@ -463,7 +463,7 @@ object TagExecutionEngine {
                     // Remember where we got items from so we don't deposit back there
                     state.workSourcePos = target
                     storeItems(world, entity, pokemon, result.items)
-                    PastureWorkerManager.markDirtyNow(world)
+                    (world as? ServerWorld)?.let(CobblePalsSaveData::markDirty)
                     state.phase = WorkerPhase.DEPOSITING
                     state.setStatus(WorkerStatusReason.DEPOSITING, "Returning gathered cargo to storage")
                 } else {

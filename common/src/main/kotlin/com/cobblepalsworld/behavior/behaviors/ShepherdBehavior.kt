@@ -8,7 +8,7 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ContainerFinder
-import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import net.minecraft.entity.passive.AnimalEntity
@@ -100,7 +100,7 @@ object ShepherdBehavior : TagBehavior {
             trackedAnimals.remove(entity.pokemon.uuid)
             stack.decrement(1)
             if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
             break
         }
 
@@ -196,7 +196,7 @@ object ShepherdBehavior : TagBehavior {
         }
         container.markDirty()
         if (extracted > 0) {
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
         return WorkResult.Done()
     }

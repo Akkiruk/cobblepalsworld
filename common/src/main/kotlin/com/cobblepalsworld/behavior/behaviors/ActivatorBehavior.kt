@@ -10,7 +10,7 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
-import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.platform.ActivatorPlatformBridge
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
@@ -226,7 +226,7 @@ object ActivatorBehavior : TagBehavior {
         }
 
         if (changed) {
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
     }
 
@@ -263,7 +263,7 @@ object ActivatorBehavior : TagBehavior {
         }
         container.markDirty()
         if (extracted > 0) {
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
         return WorkResult.Done()
     }

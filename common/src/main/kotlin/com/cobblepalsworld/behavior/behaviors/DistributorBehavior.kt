@@ -8,7 +8,7 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ContainerFinder
-import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TargetStrategy
 import com.cobblepalsworld.tag.TagType
@@ -173,7 +173,7 @@ object DistributorBehavior : TagBehavior {
         }
         source.markDirty()
         if (extracted > 0) {
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
         return WorkResult.Done()  // Items stored directly for Phase 2 distribution
     }
@@ -207,7 +207,7 @@ object DistributorBehavior : TagBehavior {
         }
 
         if (changed) {
-            PastureWorkerManager.markDirtyNow(world)
+            (world as? net.minecraft.server.world.ServerWorld)?.let(CobblePalsSaveData::markDirty)
         }
     }
 

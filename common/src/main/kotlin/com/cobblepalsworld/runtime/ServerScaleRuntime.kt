@@ -36,6 +36,10 @@ object ServerScaleRuntime {
     private val pokemonPastureIndex = ConcurrentHashMap<UUID, WorldPosKey>()
 
     fun beforePastureTick(world: ServerWorld) {
+        beforeWorksiteTick(world)
+    }
+
+    fun beforeWorksiteTick(world: ServerWorld) {
         CobblePalsSaveData.ensureLoaded(world)
         val server = world.server
         if (lastMaintenanceTick.put(server, world.time) == world.time) return
@@ -67,6 +71,12 @@ object ServerScaleRuntime {
         return true
     }
 
+    fun shouldSendWorksiteVisuals(
+        world: ServerWorld,
+        worksitePos: BlockPos,
+        visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>
+    ): Boolean = shouldSendWorkerVisuals(world, worksitePos, visuals)
+
     fun nearbyPlayers(world: ServerWorld, pasturePos: BlockPos): List<ServerPlayerEntity> {
         val key = WorldPosKey(world.registryKey, pasturePos.toImmutable())
         val cached = nearbyPlayerCache[key]
@@ -85,6 +95,8 @@ object ServerScaleRuntime {
         nearbyPlayerCache[key] = NearbyPlayersState(world.time, players)
         return players
     }
+
+    fun nearbyWorksitePlayers(world: ServerWorld, worksitePos: BlockPos): List<ServerPlayerEntity> = nearbyPlayers(world, worksitePos)
 
     fun cachedSnapshot(world: ServerWorld, pasturePos: BlockPos, builder: () -> PastureSnapshot): PastureSnapshot {
         val key = WorldPosKey(world.registryKey, pasturePos.toImmutable())

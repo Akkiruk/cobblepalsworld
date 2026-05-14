@@ -4,15 +4,22 @@ import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.behavior.state.WorkerStatusKind
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
+import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagInstance
+import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -22,6 +29,7 @@ object RouterExecutionEngine {
 
     fun tick(world: ServerWorld, pos: BlockPos, _state: net.minecraft.block.BlockState, router: RouterBlockEntity) {
         CobblePalsSaveData.ensureLoaded(world)
+        ServerScaleRuntime.beforeWorksiteTick(world)
         val dimensionId = world.registryKey.value.toString()
         var changed = false
 
@@ -60,7 +68,7 @@ object RouterExecutionEngine {
                 val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
                 StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
             }
-            router.updateStatus(linkedPasture != null, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
+            router.updateStatus(linkedPasture != null || hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
             router.updatePowered(activeWorkerCount > 0)
             return
         }
@@ -76,6 +84,12 @@ object RouterExecutionEngine {
         val rosterById = roster.associateBy { it.pokemonId }
         val claimed = mutableSetOf<UUID>()
         val controlledThisTick = mutableSetOf<UUID>()
+        val navigationBudget = if (hasNativeCrew) {
+            ServerScaleRuntime.navigationBudget(world, ConfigManager.config.general.maxPathStartsPerPastureTick)
+        } else {
+            null
+        }
+        val activeVisuals = mutableListOf<CobblePalsNetworking.WorkerVisualSnapshot>()
 
         var assignedWorkerCount = 0
         var activeWorkerCount = 0
@@ -125,6 +139,15 @@ object RouterExecutionEngine {
                 changed = true
             }
 
+            if (hasNativeCrew && navigationBudget != null && chosen.pokemon != null && chosen.entity != null) {
+                try {
+                    TagExecutionEngine.tick(world, chosen.entity, chosen.pokemon, tag, originPos, navigationBudget)
+                    buildWorkerVisual(chosen.entity, chosen.pokemonId)?.let(activeVisuals::add)
+                } catch (e: Exception) {
+                    com.cobblepalsworld.CobblePalsWorld.LOGGER.error("Error ticking native Command Post worker", e)
+                }
+            }
+
             assignedWorkerCount += 1
             if (StateManager.get(chosen.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) {
                 activeWorkerCount += 1
@@ -135,7 +158,15 @@ object RouterExecutionEngine {
             changed = true
         }
 
-        router.updateStatus(linkedPasture != null, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
+        if (hasNativeCrew) {
+            markIdleNativeCrew(roster, controlledThisTick, activeVisuals)
+            val nearbyPlayers = ServerScaleRuntime.nearbyWorksitePlayers(world, pos)
+            if (nearbyPlayers.isNotEmpty() && ServerScaleRuntime.shouldSendWorksiteVisuals(world, pos, activeVisuals)) {
+                CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
+            }
+        }
+
+        router.updateStatus(linkedPasture != null || hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
         router.updatePowered(activeWorkerCount > 0)
         router.cooldownTicks = BASE_COOLDOWN
 
@@ -183,8 +214,58 @@ object RouterExecutionEngine {
             if (pokemon.isFainted()) return@mapNotNull null
             val entity = CommandPostCrewLifecycle.ensureEntity(world, router.pos, pokemon) ?: return@mapNotNull null
             if (entity.dataTracker.get(PokemonEntity.POSE_TYPE) == PoseType.SLEEP) return@mapNotNull null
-            WorkerCandidate(member.pokemonId)
+            WorkerCandidate(member.pokemonId, pokemon, entity)
         }
+    }
+
+    private fun markIdleNativeCrew(
+        roster: List<WorkerCandidate>,
+        controlledThisTick: Set<UUID>,
+        activeVisuals: MutableList<CobblePalsNetworking.WorkerVisualSnapshot>
+    ) {
+        roster.forEach { candidate ->
+            if (candidate.pokemonId in controlledThisTick) return@forEach
+            val entity = candidate.entity ?: return@forEach
+            val state = StateManager.getOrCreate(candidate.pokemonId)
+            state.lastSeenTick = entity.world.time
+            if (state.phase == WorkerPhase.IDLE) {
+                state.setStatus(WorkerStatusReason.READY, "Waiting for a Command Post role card")
+            }
+            buildWorkerVisual(entity, candidate.pokemonId)?.let(activeVisuals::add)
+        }
+    }
+
+    private fun buildWorkerVisual(entity: PokemonEntity, pokemonId: UUID): CobblePalsNetworking.WorkerVisualSnapshot? {
+        val assignmentView = TagAssignmentManager.getView(pokemonId) ?: return null
+        val state = StateManager.get(pokemonId)
+
+        var primaryCarriedItemId: String? = null
+        var carriedItemCount = 0
+        InventoryManager.get(pokemonId)?.let { inventory ->
+            for (slot in 0 until inventory.size()) {
+                val stack = inventory.getStack(slot)
+                if (stack.isEmpty) continue
+                carriedItemCount += stack.count
+                if (primaryCarriedItemId == null) {
+                    primaryCarriedItemId = Registries.ITEM.getId(stack.item).toString()
+                }
+            }
+        }
+
+        val phase = state?.phase ?: WorkerPhase.IDLE
+        val statusKind = state?.statusReason?.kind
+        if (phase == WorkerPhase.IDLE && primaryCarriedItemId == null && statusKind != WorkerStatusKind.BLOCKED && statusKind != WorkerStatusKind.STANDBY) {
+            return null
+        }
+
+        return CobblePalsNetworking.WorkerVisualSnapshot(
+            entityId = entity.id,
+            tagTypeId = assignmentView.tag.type.id,
+            phaseOrdinal = phase.ordinal,
+            statusReasonOrdinal = state?.statusReason?.ordinal ?: WorkerStatusReason.READY.ordinal,
+            primaryCarriedItemId = primaryCarriedItemId,
+            carriedItemCount = carriedItemCount
+        )
     }
 
     private fun migrateLinkedPastureCrew(
@@ -309,6 +390,6 @@ object RouterExecutionEngine {
         return changed
     }
 
-    private data class WorkerCandidate(val pokemonId: UUID)
+    private data class WorkerCandidate(val pokemonId: UUID, val pokemon: Pokemon? = null, val entity: PokemonEntity? = null)
     private data class CrewSourceLocation(val sourceType: String, val boxIndex: Int, val slotIndex: Int)
 }

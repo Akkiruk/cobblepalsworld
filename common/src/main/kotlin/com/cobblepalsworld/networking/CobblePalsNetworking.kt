@@ -12,6 +12,8 @@ import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceType
+import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshot
+import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotFactory
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
@@ -103,6 +105,38 @@ object CobblePalsNetworking {
         }
     }
 
+    class RequestCommandPostCrewC2S(val routerPos: BlockPos) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            val TYPE = CustomPayload.Id<RequestCommandPostCrewC2S>(Identifier.of(CobblePalsWorld.MODID, "request_command_post_crew"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, RequestCommandPostCrewC2S> {
+                override fun encode(buf: RegistryByteBuf, value: RequestCommandPostCrewC2S) {
+                    buf.writeBlockPos(value.routerPos)
+                }
+
+                override fun decode(buf: RegistryByteBuf): RequestCommandPostCrewC2S {
+                    return RequestCommandPostCrewC2S(buf.readBlockPos())
+                }
+            }
+        }
+    }
+
+    class CommandPostCrewS2C(val snapshot: CommandPostCrewSnapshot) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            val TYPE = CustomPayload.Id<CommandPostCrewS2C>(Identifier.of(CobblePalsWorld.MODID, "command_post_crew"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, CommandPostCrewS2C> {
+                override fun encode(buf: RegistryByteBuf, value: CommandPostCrewS2C) {
+                    value.snapshot.writeToBuf(buf)
+                }
+
+                override fun decode(buf: RegistryByteBuf): CommandPostCrewS2C {
+                    return CommandPostCrewS2C(CommandPostCrewSnapshot.readFromBuf(buf))
+                }
+            }
+        }
+    }
+
     class MutateCrewC2S(val routerPos: BlockPos, val pokemonId: UUID, val addToCrew: Boolean) : CustomPayload {
         override fun getId() = TYPE
         companion object {
@@ -133,6 +167,26 @@ object CobblePalsNetworking {
 
                 override fun decode(buf: RegistryByteBuf): ReturnCrewHomeC2S {
                     return ReturnCrewHomeC2S(buf.readBlockPos(), buf.readUuid())
+                }
+            }
+        }
+    }
+
+    class CrewProfileActionC2S(val routerPos: BlockPos, val pokemonId: UUID, val actionId: Int) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            const val ACTION_CYCLE_MODE = 0
+            const val ACTION_TOGGLE_FALLBACK = 1
+            val TYPE = CustomPayload.Id<CrewProfileActionC2S>(Identifier.of(CobblePalsWorld.MODID, "crew_profile_action"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, CrewProfileActionC2S> {
+                override fun encode(buf: RegistryByteBuf, value: CrewProfileActionC2S) {
+                    buf.writeBlockPos(value.routerPos)
+                    buf.writeUuid(value.pokemonId)
+                    buf.writeVarInt(value.actionId)
+                }
+
+                override fun decode(buf: RegistryByteBuf): CrewProfileActionC2S {
+                    return CrewProfileActionC2S(buf.readBlockPos(), buf.readUuid(), buf.readVarInt())
                 }
             }
         }
@@ -218,6 +272,7 @@ object CobblePalsNetworking {
     fun registerS2CType() {
         NetworkManager.registerS2CPayloadType(ManagerDataS2C.TYPE, ManagerDataS2C.CODEC)
         NetworkManager.registerS2CPayloadType(CrewSourcesS2C.TYPE, CrewSourcesS2C.CODEC)
+        NetworkManager.registerS2CPayloadType(CommandPostCrewS2C.TYPE, CommandPostCrewS2C.CODEC)
         NetworkManager.registerS2CPayloadType(WorkerVisualsS2C.TYPE, WorkerVisualsS2C.CODEC)
     }
 
@@ -258,6 +313,17 @@ object CobblePalsNetworking {
 
         NetworkManager.registerReceiver(
             NetworkManager.Side.C2S,
+            RequestCommandPostCrewC2S.TYPE,
+            RequestCommandPostCrewC2S.CODEC
+        ) { payload, context ->
+            context.queue {
+                val player = context.player as? ServerPlayerEntity ?: return@queue
+                handleCommandPostCrewRequest(player, payload.routerPos)
+            }
+        }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.C2S,
             MutateCrewC2S.TYPE,
             MutateCrewC2S.CODEC
         ) { payload, context ->
@@ -277,11 +343,23 @@ object CobblePalsNetworking {
                 handleReturnCrewHome(player, payload.routerPos, payload.pokemonId)
             }
         }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.C2S,
+            CrewProfileActionC2S.TYPE,
+            CrewProfileActionC2S.CODEC
+        ) { payload, context ->
+            context.queue {
+                val player = context.player as? ServerPlayerEntity ?: return@queue
+                handleCrewProfileAction(player, payload.routerPos, payload.pokemonId, payload.actionId)
+            }
+        }
     }
 
     fun registerClient(
         onReceive: (PastureSnapshot) -> Unit,
         onCrewSources: (BlockPos, List<CrewSourceSnapshot>) -> Unit,
+        onCommandPostCrew: (CommandPostCrewSnapshot) -> Unit,
         onWorkerVisuals: (BlockPos, List<WorkerVisualSnapshot>) -> Unit
     ) {
         NetworkManager.registerReceiver(
@@ -298,6 +376,14 @@ object CobblePalsNetworking {
             CrewSourcesS2C.CODEC
         ) { payload, context ->
             context.queue { onCrewSources(payload.routerPos, payload.sources) }
+        }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.S2C,
+            CommandPostCrewS2C.TYPE,
+            CommandPostCrewS2C.CODEC
+        ) { payload, context ->
+            context.queue { onCommandPostCrew(payload.snapshot) }
         }
 
         NetworkManager.registerReceiver(
@@ -352,6 +438,10 @@ object CobblePalsNetworking {
         NetworkManager.sendToServer(RequestCrewSourcesC2S(routerPos.toImmutable()))
     }
 
+    fun sendCommandPostCrewRefresh(routerPos: BlockPos) {
+        NetworkManager.sendToServer(RequestCommandPostCrewC2S(routerPos.toImmutable()))
+    }
+
     fun sendAssignCrewPokemon(routerPos: BlockPos, pokemonId: UUID) {
         NetworkManager.sendToServer(MutateCrewC2S(routerPos.toImmutable(), pokemonId, true))
     }
@@ -362,6 +452,14 @@ object CobblePalsNetworking {
 
     fun sendReturnCrewPokemon(routerPos: BlockPos, pokemonId: UUID) {
         NetworkManager.sendToServer(ReturnCrewHomeC2S(routerPos.toImmutable(), pokemonId))
+    }
+
+    fun sendCycleCrewMode(routerPos: BlockPos, pokemonId: UUID) {
+        NetworkManager.sendToServer(CrewProfileActionC2S(routerPos.toImmutable(), pokemonId, CrewProfileActionC2S.ACTION_CYCLE_MODE))
+    }
+
+    fun sendToggleCrewFallback(routerPos: BlockPos, pokemonId: UUID) {
+        NetworkManager.sendToServer(CrewProfileActionC2S(routerPos.toImmutable(), pokemonId, CrewProfileActionC2S.ACTION_TOGGLE_FALLBACK))
     }
 
     fun sendTeleportHome(pasturePos: BlockPos, pokemonId: UUID) {
@@ -429,6 +527,14 @@ object CobblePalsNetworking {
             CrewSourceSnapshot(CrewSourceType.PC, pcEntries + missingByType[CrewSourceType.PC].orEmpty())
         )
         NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, sources))
+    }
+
+    private fun handleCommandPostCrewRequest(player: ServerPlayerEntity, routerPos: BlockPos) {
+        val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
+        val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
+        if (!router.canAccess(player)) return
+        NetworkManager.sendToPlayer(player, CommandPostCrewS2C(CommandPostCrewSnapshotFactory.create(world, router)))
     }
 
     private fun CommandPostCrewMember.toMissingCrewSnapshot(): CrewSourcePokemonSnapshot {
@@ -545,6 +651,7 @@ object CobblePalsNetworking {
             CobblePalsSaveData.markDirty(world)
             router.markDirty()
         }
+        handleCommandPostCrewRequest(player, controllerPos)
         handleCrewSourceRequest(player, controllerPos)
     }
 
@@ -561,6 +668,38 @@ object CobblePalsNetworking {
 
         TagExecutionEngine.cleanup(pokemonId, world, controllerPos)
         CommandPostCrewLifecycle.returnHome(world, controllerPos, member, router.ownerUuid() ?: player.uuid)
+        handleCommandPostCrewRequest(player, controllerPos)
+        handleCrewSourceRequest(player, controllerPos)
+    }
+
+    private fun handleCrewProfileAction(player: ServerPlayerEntity, routerPos: BlockPos, pokemonId: UUID, actionId: Int) {
+        val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
+        val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
+        if (!router.canAccess(player)) return
+
+        val dimensionId = world.registryKey.value.toString()
+        val controllerPos = router.pos.toImmutable()
+        val member = CommandPostCrewManager.memberFor(pokemonId) ?: return
+        if (member.binding.dimensionId != dimensionId || member.binding.pos != controllerPos) return
+
+        val current = TagAssignmentManager.getProfile(pokemonId)
+        when (actionId) {
+            CrewProfileActionC2S.ACTION_CYCLE_MODE -> {
+                val nextMode = com.cobblepalsworld.pasture.WorkerAssignmentMode.entries[
+                    (current.mode.ordinal + 1) % com.cobblepalsworld.pasture.WorkerAssignmentMode.entries.size
+                ]
+                TagAssignmentManager.updateProfile(pokemonId, mode = nextMode)
+            }
+            CrewProfileActionC2S.ACTION_TOGGLE_FALLBACK -> {
+                TagAssignmentManager.updateProfile(pokemonId, allowFallback = !current.allowFallback)
+            }
+            else -> return
+        }
+
+        CobblePalsSaveData.markDirty(world)
+        router.markDirty()
+        handleCommandPostCrewRequest(player, controllerPos)
         handleCrewSourceRequest(player, controllerPos)
     }
 

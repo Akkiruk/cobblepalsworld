@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.16
+
+- Cut native Command Post crews over to local work execution so spawned Party/PC workers are ticked directly by the Command Post through the existing tag engine, path budget, and worksite visual overlay flow.
+- Added a native Command Post crew snapshot packet/cache/factory, giving the Crew tab local roster state with source location, missing-storage status, cargo, active state, assignment mode, and fallback settings.
+- Added native crew row controls for return home, assignment mode, fallback, and drop actions without depending on the old pasture manager or Party/PC source row being present.
+- Removed routine tag-behavior persistence from the pasture manager dirty-marker path so shared worker logic saves correctly for native Command Post workers.
+
 ## 0.2.15
 
 - Added fallback identity data to native Command Post crew leases so missing or moved Pokemon remain visible in the crew roster instead of disappearing from management.

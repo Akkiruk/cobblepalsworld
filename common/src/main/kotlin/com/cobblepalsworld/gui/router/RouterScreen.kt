@@ -3,6 +3,8 @@ package com.cobblepalsworld.gui.router
 import com.cobblepalsworld.gui.CobblePalsUiTheme
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
+import com.cobblepalsworld.gui.crew.CommandPostCrewMemberSnapshot
+import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourceType
@@ -166,7 +168,7 @@ class RouterScreen(
     )
 
     private data class NativeRosterRow(
-        val source: CrewSourcePokemonSnapshot,
+        val source: CommandPostCrewMemberSnapshot,
         val accentColor: Int,
         val tooltipLines: List<Text>
     )
@@ -280,6 +282,7 @@ class RouterScreen(
     }
 
     private fun requestCrewRefresh() {
+        CobblePalsNetworking.sendCommandPostCrewRefresh(handler.routerPos)
         handler.linkedPasturePos?.let(CobblePalsNetworking::sendSnapshotRefresh)
     }
 
@@ -288,6 +291,8 @@ class RouterScreen(
     }
 
     private fun currentCrewSnapshot(): PastureSnapshot? = PastureSnapshotCache.get(handler.linkedPasturePos)
+
+    private fun currentNativeCrewSnapshot() = CommandPostCrewSnapshotCache.get(handler.routerPos)
 
     private fun currentCrewSources() = CrewSourceSnapshotCache.get(handler.routerPos)
 
@@ -330,7 +335,9 @@ class RouterScreen(
                 val baseLabel = TagTypePresentation.roleLabel(tagType)
                 val duplicateIndex = sameTypeCards.indexOfFirst { it.moduleIndex == card.moduleIndex }.takeIf { it >= 0 }?.plus(1) ?: 1
                 val roleLabel = if (sameTypeCards.size > 1) "$baseLabel $duplicateIndex" else baseLabel
-                val staffedPals = snapshot?.pals?.filter { it.tagTypeId == tagType.id } ?: emptyList()
+                val staffedNames = currentNativeCrewSnapshot()?.members?.filter { it.tagTypeId == tagType.id }?.map { it.displayName }
+                    ?: snapshot?.pals?.filter { it.tagTypeId == tagType.id }?.map { it.displayName }
+                    ?: emptyList()
                 val activeCount = if (handler.moduleActive(card.moduleIndex)) 1 else 0
                 val staffedCount = if (handler.moduleAssigned(card.moduleIndex)) 1 else 0
                 val issues = issuesByModule[card.moduleIndex].orEmpty()
@@ -386,7 +393,7 @@ class RouterScreen(
                     firstIssue = firstIssue,
                     pressureLabel = pressureLabel,
                     pressureColor = pressureColor,
-                    assignedNames = staffedPals.map { it.displayName },
+                    assignedNames = staffedNames,
                     tooltipLines = listOf(
                         Text.literal("${roleLabel} • ${"S${card.moduleIndex + 1}"}"),
                         Text.literal("${staffedCount}/1 staffed • $pressureLabel"),
@@ -565,10 +572,22 @@ class RouterScreen(
     }
 
     private fun nativeRosterRows(): List<NativeRosterRow> {
-        return allSourceRows()
-            .filter { it.snapshot.isCrewMember }
-            .sortedWith(compareBy<SourceRowSummary> { it.snapshot.displayName.lowercase(Locale.ROOT) }.thenBy { it.snapshot.sourceLabel() })
-            .map { row -> NativeRosterRow(row.snapshot, row.accentColor, row.tooltipLines) }
+        return currentNativeCrewSnapshot()?.members.orEmpty()
+            .sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName.lowercase(Locale.ROOT) })
+            .map { snapshot ->
+                NativeRosterRow(
+                    source = snapshot,
+                    accentColor = nativeStatusColor(snapshot),
+                    tooltipLines = listOf(
+                        Text.literal(snapshot.displayName),
+                        Text.literal("Lv.${snapshot.level} ${friendlyId(snapshot.species)}"),
+                        Text.literal(snapshot.sourceLabel()),
+                        Text.literal(snapshot.statusLabel()),
+                        Text.literal(snapshot.assignmentLabel()),
+                        Text.literal(snapshot.cargoSummary)
+                    )
+                )
+            }
     }
 
     private fun selectedPolicyRole(state: HomeState): RoleSummary? {
@@ -600,6 +619,17 @@ class RouterScreen(
             snapshot.isCrewMember -> CobblePalsUiTheme.ACCENT_CREW
             snapshot.sourceType == CrewSourceType.PARTY -> CobblePalsUiTheme.ACCENT_CREW
             else -> CobblePalsUiTheme.ACCENT_BUFFER
+        }
+    }
+
+    private fun nativeStatusColor(snapshot: CommandPostCrewMemberSnapshot): Int {
+        return when {
+            snapshot.isMissing -> CobblePalsUiTheme.ACCENT_DANGER
+            snapshot.isFainted -> CobblePalsUiTheme.ACCENT_DANGER
+            snapshot.isBlocked() -> CobblePalsUiTheme.ACCENT_DANGER
+            snapshot.isActive() -> CobblePalsUiTheme.ACCENT_WORK
+            snapshot.tagTypeId != null -> CobblePalsUiTheme.ACCENT_CREW
+            else -> CobblePalsUiTheme.TEXT_FAINT
         }
     }
 
@@ -743,7 +773,17 @@ class RouterScreen(
     private fun nativeRosterDetailButtons(selected: NativeRosterRow?): List<TextChipButton> {
         selected ?: return emptyList()
         return listOf(
-            TextChipButton("native-return-action", LIST_LEFT + 94, SOURCE_DETAIL_TOP + 27, 38, "", "Home", CobblePalsUiTheme.ACCENT_PURPLE, true, listOf(Text.literal("Return to Command Post"), Text.literal(selected.source.statusLabel())))
+            TextChipButton("native-return-action", LIST_LEFT + 94, SOURCE_DETAIL_TOP + 27, 38, "", "Home", CobblePalsUiTheme.ACCENT_PURPLE, !selected.source.isMissing, listOf(Text.literal("Return to Command Post"), Text.literal(selected.source.statusLabel())))
+        )
+    }
+
+    private fun nativeActionButtons(selected: NativeRosterRow?): List<TextChipButton> {
+        selected ?: return emptyList()
+        val crew = selected.source
+        return listOf(
+            TextChipButton("native-mode-action", SOURCE_LEFT + 6, SOURCE_DETAIL_TOP + 8, 56, "Mode", crew.assignmentLabel(), CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Crew mode"), Text.literal("Current: ${crew.assignmentLabel()}"))),
+            TextChipButton("native-fallback-action", SOURCE_LEFT + 66, SOURCE_DETAIL_TOP + 8, 56, "Fallback", if (crew.allowFallback) "On" else "Off", if (crew.allowFallback) CobblePalsUiTheme.ACCENT_CREW else CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Fallback"), Text.literal(if (crew.allowFallback) "Enabled" else "Locked"))),
+            TextChipButton("native-drop-action", SOURCE_LEFT + 82, SOURCE_DETAIL_TOP + 27, 40, "", "Drop", CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Remove from crew"), Text.literal(crew.statusLabel())))
         )
     }
 
@@ -915,7 +955,7 @@ class RouterScreen(
         val selectedNative = nativeRosterRows.firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
         val visibleSources = visibleSourceRows()
         val allSources = sourceRows()
-        val selectedSource = selectedSourceRow()
+        val selectedSource = if (selectedNative == null) selectedSourceRow() else null
         val rosterTotal = if (nativeRosterRows.isNotEmpty()) nativeRosterRows.size else snapshot?.pals?.size ?: 0
         val rosterVisible = if (nativeRosterRows.isNotEmpty()) nativeRosterRows.size else filtered.size
         context.drawText(textRenderer, Text.literal(fit("Roster • $rosterVisible/$rosterTotal visible", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
@@ -964,7 +1004,7 @@ class RouterScreen(
         } else {
             drawRosterDetail(context, selectedCrew)
         }
-        drawSourceDetail(context, selectedSource)
+        drawSourceDetail(context, selectedSource, selectedNative)
     }
 
     private fun drawNativeRosterDetail(context: DrawContext, selected: NativeRosterRow?) {
@@ -1034,8 +1074,14 @@ class RouterScreen(
         }
     }
 
-    private fun drawSourceDetail(context: DrawContext, selected: SourceRowSummary?) {
-        CobblePalsUiTheme.drawPlainPanel(context, SOURCE_LEFT, SOURCE_DETAIL_TOP, SOURCE_WIDTH, 42, selected?.accentColor ?: CobblePalsUiTheme.TEXT_FAINT)
+    private fun drawSourceDetail(context: DrawContext, selected: SourceRowSummary?, selectedNative: NativeRosterRow?) {
+        CobblePalsUiTheme.drawPlainPanel(context, SOURCE_LEFT, SOURCE_DETAIL_TOP, SOURCE_WIDTH, 42, selected?.accentColor ?: selectedNative?.accentColor ?: CobblePalsUiTheme.TEXT_FAINT)
+        if (selected == null && selectedNative != null) {
+            nativeActionButtons(selectedNative).forEach { chip ->
+                drawFixedChip(context, chip, false)
+            }
+            return
+        }
         if (selected == null) {
             context.drawText(textRenderer, Text.literal("Select source"), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
             context.drawText(textRenderer, Text.literal("Party or PC"), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 21, CobblePalsUiTheme.TEXT_FAINT, false)
@@ -1119,7 +1165,7 @@ class RouterScreen(
         context.fill(left, top, left + width, top + CREW_ROW_HEIGHT - 2, body)
         context.fill(left, top, left + 3, top + CREW_ROW_HEIGHT - 2, row.accentColor)
         context.drawText(textRenderer, Text.literal(fit(source.displayName, 70)), left + 7, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
-        context.drawText(textRenderer, Text.literal(fit(source.sourceType.label, 42)), left + width - 46, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit(source.sourceType, 42)), left + width - 46, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", 76)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
         context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 38)), left + width - 42, top + 12, row.accentColor, false)
     }
@@ -1190,10 +1236,22 @@ class RouterScreen(
             CommandPostView.Crew -> {
                 val selectedSource = selectedSourceRow()
                 val selectedNative = nativeRosterRows().firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
+                nativeActionButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
+                    val pokemonId = selectedNative?.source?.pokemonId ?: return true
+                    when (chip.id) {
+                        "native-mode-action" -> CobblePalsNetworking.sendCycleCrewMode(handler.routerPos, pokemonId)
+                        "native-fallback-action" -> CobblePalsNetworking.sendToggleCrewFallback(handler.routerPos, pokemonId)
+                        "native-drop-action" -> CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, pokemonId)
+                    }
+                    requestCrewRefresh()
+                    requestCrewSourceRefresh()
+                    return true
+                }
                 nativeRosterDetailButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
-                    if (chip.id == "native-return-action") {
+                    if (chip.id == "native-return-action" && chip.active) {
                         selectedNative?.source?.pokemonId?.let { pokemonId -> CobblePalsNetworking.sendReturnCrewPokemon(handler.routerPos, pokemonId) }
                         requestCrewSourceRefresh()
+                        requestCrewRefresh()
                     }
                     return true
                 }
@@ -1321,6 +1379,7 @@ class RouterScreen(
             CommandPostView.Crew -> {
                 val selectedSource = selectedSourceRow()
                 val selectedNative = nativeRosterRows().firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
+                nativeActionButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 nativeRosterDetailButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 sourceDetailButtons(selectedSource).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 crewFilterButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
