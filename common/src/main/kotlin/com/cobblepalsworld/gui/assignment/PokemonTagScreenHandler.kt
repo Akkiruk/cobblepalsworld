@@ -7,10 +7,14 @@ import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
+import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
+import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagRegistry
@@ -19,11 +23,17 @@ import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.item.ItemStack
+import net.minecraft.registry.RegistryKey
+import net.minecraft.registry.RegistryKeys
 import net.minecraft.screen.ArrayPropertyDelegate
 import net.minecraft.screen.PropertyDelegate
 import net.minecraft.screen.ScreenHandler
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory
 import net.minecraft.screen.slot.SlotActionType
 import net.minecraft.screen.slot.Slot
+import net.minecraft.text.Text
+import net.minecraft.util.Identifier
+import net.minecraft.world.World
 import java.util.UUID
 
 class PokemonTagScreenHandler : ScreenHandler {
@@ -52,6 +62,9 @@ class PokemonTagScreenHandler : ScreenHandler {
         const val PLAYER_SLOT_START = DISPLAY_SLOT_END // 13
         const val ACTION_CYCLE_ASSIGNMENT_MODE = 200
         const val ACTION_TOGGLE_FALLBACK = 201
+        const val ACTION_PREVIOUS_PAL = 202
+        const val ACTION_NEXT_PAL = 203
+        const val ACTION_OPEN_ROLE_POLICY = 204
     }
 
     // Client constructor
@@ -207,11 +220,60 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val current = TagAssignmentManager.getProfile(currentPokemonId)
                 TagAssignmentManager.updateProfile(currentPokemonId, allowFallback = !current.allowFallback)
             }
+            ACTION_PREVIOUS_PAL -> return openAdjacentPokemon(player, currentPokemonId, -1)
+            ACTION_NEXT_PAL -> return openAdjacentPokemon(player, currentPokemonId, 1)
+            ACTION_OPEN_ROLE_POLICY -> return openRolePolicy(player, currentPokemonId)
             else -> return false
         }
 
         CobblePalsSaveData.markDirty(player.world as net.minecraft.server.world.ServerWorld)
         sendContentUpdates()
+        return true
+    }
+
+    private fun openAdjacentPokemon(player: PlayerEntity, currentPokemonId: UUID, direction: Int): Boolean {
+        val world = player.world as? net.minecraft.server.world.ServerWorld ?: return false
+        val pasture = PastureWorkerManager.findPastureForPokemon(world, currentPokemonId) ?: return false
+        val snapshot = PastureSnapshotFactory.create(world, pasture)
+        val currentIndex = snapshot.pals.indexOfFirst { it.pokemonId == currentPokemonId }
+        if (currentIndex < 0 || snapshot.pals.size <= 1) return false
+
+        val nextIndex = Math.floorMod(currentIndex + direction, snapshot.pals.size)
+        val nextPokemonId = snapshot.pals[nextIndex].pokemonId
+
+        player.openHandledScreen(net.minecraft.screen.SimpleNamedScreenHandlerFactory(
+            { syncId, inv, _ -> PokemonTagScreenHandler(syncId, inv, nextPokemonId) },
+            net.minecraft.text.Text.translatable("screen.cobblepalsworld.pokemon_tag")
+        ))
+        return true
+    }
+
+    private fun openRolePolicy(player: PlayerEntity, currentPokemonId: UUID): Boolean {
+        val assignmentView = TagAssignmentManager.getView(currentPokemonId)
+        val tagType = assignmentView?.tag?.type ?: (tagInventory.getStack(0).item as? TagItem)?.tagType ?: return false
+        val title = Text.translatable("screen.cobblepalsworld.tag_filter")
+        val controllerBinding = assignmentView?.controllerBinding
+
+        if (controllerBinding != null) {
+            val server = player.server ?: return false
+            val controllerWorld = server.getWorld(RegistryKey.of(RegistryKeys.WORLD, Identifier.of(controllerBinding.dimensionId))) ?: return false
+            val router = controllerWorld.getBlockEntity(controllerBinding.pos) as? RouterBlockEntity ?: return false
+            val trackedSlotIndex = (RouterBlockEntity.MODULE_SLOT_START until RouterBlockEntity.MODULE_SLOT_END).firstOrNull { slotIndex ->
+                (router.getStack(slotIndex).item as? TagItem)?.tagType == tagType
+            } ?: return false
+
+            player.openHandledScreen(SimpleNamedScreenHandlerFactory(
+                { syncId, inv, _ -> TagFilterScreenHandler(syncId, inv, router, trackedSlotIndex) },
+                title
+            ))
+            return true
+        }
+
+        if (tagInventory.getStack(0).item !is TagItem) return false
+        player.openHandledScreen(SimpleNamedScreenHandlerFactory(
+            { syncId, inv, _ -> TagFilterScreenHandler(syncId, inv, tagInventory, 0) },
+            title
+        ))
         return true
     }
 

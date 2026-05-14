@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Finished the Command Post UI rework into a calmer jobs-first hub with dedicated Home, Crew, Policy, and Buffer views, authoritative linked-pasture roster data, and direct row-based drill-in for both pals and role policies.
+- Reworked the pal detail and role policy screens onto the shared CobblePals UI theme, added faster hover discovery, previous and next crew stepping, direct role-policy access from the pal inspector, and clearer tooltip language for role cards and augments.
+- Demoted the pasture surface into a local overview, hardened filter editor loading and match-mode parsing, and removed the obsolete dedicated Pokemon-tag and tag-filter GUI textures from the live asset path.
+
 ## 0.2.0
 
 - Added persistent crew identity controls to the Pokemon tag screen and worker session model, letting each pal be marked as preferred, restricted, reserved, or general with an explicit fallback policy that survives saves and feeds the same authoritative scheduler as the rest of the mod.

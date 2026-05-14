@@ -13,6 +13,8 @@ enum class UiGlyph(val pattern: Array<String>) {
     Target(arrayOf(".###.", "#.#.#", "..#..", "#.#.#", ".###.")),
     Stop(arrayOf("#####", "#...#", "#...#", "#...#", "#####")),
     Cycle(arrayOf(".###.", "#....", "#.###", "#...#", ".###.")),
+    Prev(arrayOf("..#..", ".##..", "#####", ".##..", "..#..")),
+    Next(arrayOf("..#..", "..##.", "#####", "..##.", "..#..")),
     Plus(arrayOf("..#..", "..#..", "#####", "..#..", "..#..")),
     Minus(arrayOf(".....", ".....", "#####", ".....", ".....")),
     Action(arrayOf("#....", "##...", "###..", "##...", "#...."))
@@ -34,17 +36,9 @@ object UiIconButtons {
         hovered: Boolean,
         active: Boolean = false
     ) {
-        val border = if (hovered) 0xFFF7EED4.toInt() else 0xFF06090C.toInt()
-        val body = when {
-            active -> 0xFF223240.toInt()
-            hovered -> 0xFF1A2530.toInt()
-            else -> 0xFF121A22.toInt()
-        }
-        val inner = when {
-            active -> 0xFF19242D.toInt()
-            hovered -> 0xFF16212A.toInt()
-            else -> 0xFF0D141A.toInt()
-        }
+        val border = CobblePalsUiTheme.buttonBorderColor(hovered)
+        val body = CobblePalsUiTheme.buttonBodyColor(hovered, active)
+        val inner = CobblePalsUiTheme.buttonInnerColor(hovered, active)
 
         context.fill(left - 1, top - 1, left + width + 1, top + height + 1, border)
         context.fill(left, top, left + width, top + height, body)

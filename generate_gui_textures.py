@@ -284,16 +284,8 @@ if __name__ == '__main__':
     tex_dir = os.path.join(base, 'common', 'src', 'main', 'resources', 'assets', 'cobblepalsworld', 'textures', 'gui')
     os.makedirs(tex_dir, exist_ok=True)
 
-    pokemon_tag = generate_pokemon_tag_texture()
-    pokemon_tag.save(os.path.join(tex_dir, 'pokemon_tag.png'))
-    print(f'Created pokemon_tag.png')
-
-    tag_filter = generate_tag_filter_texture()
-    tag_filter.save(os.path.join(tex_dir, 'tag_filter.png'))
-    print(f'Created tag_filter.png')
-
     widgets = generate_widgets_texture()
     widgets.save(os.path.join(tex_dir, 'widgets.png'))
     print(f'Created widgets.png')
 
-    print('All textures generated!')
+    print('Shared widget textures generated!')

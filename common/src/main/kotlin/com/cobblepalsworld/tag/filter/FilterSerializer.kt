@@ -18,6 +18,11 @@ object FilterSerializer {
     private const val KEY_MATCH_MOD_IDS = "MatchModIds"
     private const val KEY_MATCH_MODE = "MatchMode"
 
+    private fun parseMatchMode(value: String): FilterMatchMode {
+        return FilterMatchMode.entries.firstOrNull { it.name.equals(value, ignoreCase = true) }
+            ?: FilterMatchMode.ANY
+    }
+
     fun toNbt(filter: TagFilter, registries: RegistryWrapper.WrapperLookup): NbtCompound {
         val nbt = NbtCompound()
         nbt.putBoolean(KEY_WHITELIST, filter.whitelist)
@@ -54,7 +59,7 @@ object FilterSerializer {
         val whitelist = nbt.getBoolean(KEY_WHITELIST)
         val matchNbt = nbt.getBoolean(KEY_MATCH_NBT)
         val matchMode = if (nbt.contains(KEY_MATCH_MODE)) {
-            FilterMatchMode.valueOf(nbt.getString(KEY_MATCH_MODE))
+            parseMatchMode(nbt.getString(KEY_MATCH_MODE))
         } else {
             FilterMatchMode.ANY
         }

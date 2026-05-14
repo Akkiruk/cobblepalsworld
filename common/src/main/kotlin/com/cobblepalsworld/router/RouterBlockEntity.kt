@@ -67,13 +67,16 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                 1 -> linkedWorkerCount
                 2 -> assignedWorkerCount
                 3 -> activeWorkerCount
+                4 -> linkedPasturePos?.x ?: 0
+                5 -> linkedPasturePos?.y ?: 0
+                6 -> linkedPasturePos?.z ?: 0
                 else -> 0
             }
         }
 
         override fun set(index: Int, value: Int) {}
 
-        override fun size(): Int = 4
+        override fun size(): Int = 7
     }
 
     var cooldownTicks: Int = 0

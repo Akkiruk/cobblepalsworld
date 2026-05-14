@@ -24,7 +24,7 @@ import org.joml.Quaternionf
 import java.util.Locale
 import java.util.UUID
 
-class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.literal("CobblePals Manager")) {
+class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.literal("Pasture Overview")) {
 
     companion object {
         private const val PANEL_WIDTH = 284
@@ -75,7 +75,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         refreshTicks++
         if (refreshTicks >= REFRESH_INTERVAL_TICKS) {
             refreshTicks = 0
-            CobblePalsNetworking.sendOpenRequest(snapshot.pasturePos)
+            CobblePalsNetworking.sendSnapshotRefresh(snapshot.pasturePos)
         }
     }
 
@@ -115,7 +115,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         drawScaledText(
             context = context,
             font = CobblemonResources.DEFAULT_LARGE,
-            text = Text.literal("CobblePals Manager").styled { it.withBold(true) } as MutableText,
+            text = Text.literal("Pasture Overview").styled { it.withBold(true) } as MutableText,
             x = pL + PANEL_WIDTH / 2,
             y = pT + 4,
             centered = true,
@@ -144,7 +144,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
 
         drawScaledText(
             context = context,
-            text = Text.literal(operationSummary()) as MutableText,
+            text = Text.literal(guidanceLine()) as MutableText,
             x = pL + PANEL_WIDTH / 2,
             y = pT + 25,
             scale = 0.68F,
@@ -279,7 +279,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
             } else if (pal.isManagedByCommandPost) {
                 drawScaledText(
                     context = context,
-                    text = Text.literal("Command Post linked") as MutableText,
+                    text = Text.literal("Managed in Command Post") as MutableText,
                     x = nameX,
                     y = ey + 26,
                     scale = 0.65F,
@@ -494,12 +494,13 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         val closeX = panelLeft + PANEL_WIDTH - 12
         val closeY = panelTop + 3
         if (UiIconButtons.contains(mouseX, mouseY, closeX, closeY, 10, 10)) {
-            return listOf(Text.literal("Close manager"))
+            return listOf(Text.literal("Close overview"))
         }
 
         if (mouseX >= panelLeft && mouseX < panelLeft + PANEL_WIDTH && mouseY >= panelTop && mouseY < panelTop + HEADER_HEIGHT) {
             return buildList {
-                add(Text.literal("Pasture operation overview"))
+                add(Text.literal("Local pasture overview"))
+                add(Text.literal("Crew edits live in the linked Command Post"))
                 add(Text.literal(operationSummary()))
                 add(Text.literal(statusOverview()))
             }
@@ -534,7 +535,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
                         add(Text.literal("Cargo: ${pal.carriedItemCount} items across ${pal.carriedSlotCount} slots"))
                     }
                     if (pal.isManagedByCommandPost) {
-                        add(Text.literal("Managed by linked Command Post"))
+                        add(Text.literal("Crew edits live in the linked Command Post"))
                     }
                     if (pal.filterSummary != "No filter") {
                         add(Text.literal("Filter: ${pal.filterSummary}"))
@@ -670,6 +671,10 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
         } else {
             truncate("Orders $summary", 54)
         }
+    }
+
+    private fun guidanceLine(): String {
+        return truncate("Local view only - crew edits live in the Command Post", 54)
     }
 
     private fun statusOverview(): String {

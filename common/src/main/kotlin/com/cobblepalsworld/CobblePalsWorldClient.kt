@@ -6,6 +6,7 @@ import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.gui.filter.TagFilterScreen
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.gui.pasture.PastureManagerScreen
+import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
 import com.cobblepalsworld.gui.router.RouterScreen
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
@@ -29,9 +30,11 @@ object CobblePalsWorldClient {
             onReceive = { snapshot ->
                 val client = MinecraftClient.getInstance()
                 val currentScreen = client.currentScreen
+                PastureSnapshotCache.store(snapshot)
                 if (currentScreen is PastureManagerScreen && currentScreen.appliesTo(snapshot.pasturePos)) {
+                    PastureSnapshotCache.consumeManagerOpen(snapshot.pasturePos)
                     currentScreen.updateSnapshot(snapshot)
-                } else {
+                } else if (PastureSnapshotCache.consumeManagerOpen(snapshot.pasturePos)) {
                     client.setScreen(PastureManagerScreen(snapshot))
                 }
             },

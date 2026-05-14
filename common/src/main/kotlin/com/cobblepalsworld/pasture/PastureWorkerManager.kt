@@ -56,6 +56,13 @@ object PastureWorkerManager {
     private const val SAVE_INTERVAL = 200L // auto-save every 10 seconds
     private const val STALE_ENTRY_TTL = 20L * 30L
 
+    fun findPastureForPokemon(world: ServerWorld, pokemonId: UUID): PokemonPastureBlockEntity? {
+        val pasturePos = previousTethered.entries.firstOrNull { (key, tetheredIds) ->
+            key.dimension == world.registryKey && pokemonId in tetheredIds
+        }?.key?.pos ?: return null
+        return world.getBlockEntity(pasturePos) as? PokemonPastureBlockEntity
+    }
+
     fun tickPasture(world: World, pos: BlockPos, pasture: PokemonPastureBlockEntity) {
         if (world.isClient) return
         val serverWorld = world as? ServerWorld ?: return
