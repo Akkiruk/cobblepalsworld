@@ -13,7 +13,7 @@ data class CobblePalsConfig(
         /** Additional multiplier applied to worksite ticks when nobody is nearby. */
         val distantTickMultiplier: Int = 4,
         val idleSearchRetryTicks: Int = 20,
-        val maxWorkersPerPasture: Int = 6,
+        val maxWorkersPerPasture: Int = 9,
         val inventoryBstDivisor: Int = 100,
         val inventoryMinSlots: Int = 3,
         val inventoryMaxSlots: Int = 9,
@@ -37,7 +37,7 @@ data class CobblePalsConfig(
             nearbyPlayerRange = nearbyPlayerRange.coerceAtLeast(8),
             distantTickMultiplier = distantTickMultiplier.coerceAtLeast(1),
             idleSearchRetryTicks = idleSearchRetryTicks.coerceAtLeast(tickInterval.coerceAtLeast(1) * 4),
-            maxWorkersPerPasture = maxWorkersPerPasture.coerceAtLeast(1),
+            maxWorkersPerPasture = maxWorkersPerPasture.coerceAtLeast(9),
             inventoryBstDivisor = inventoryBstDivisor.coerceAtLeast(1),
             inventoryMinSlots = inventoryMinSlots.coerceAtLeast(1),
             inventoryMaxSlots = inventoryMaxSlots.coerceAtLeast(inventoryMinSlots.coerceAtLeast(1)),

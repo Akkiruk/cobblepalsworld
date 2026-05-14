@@ -36,8 +36,8 @@ internal object CommandPostStorageWidget {
     private val SCREEN_GRID = CommandPostPcShell.cobblemon("textures/gui/pc/pc_screen_grid.png")
     private val SCREEN_OVERLAY = CommandPostPcShell.cobblemon("textures/gui/pc/pc_screen_overlay.png")
     private val SCREEN_GLOW = CommandPostPcShell.cobblemon("textures/gui/pc/pc_screen_glow.png")
-    private val NAV_PREVIOUS = CommandPostPcShell.cobblemon("textures/gui/pc/pc_arrow_previous.png")
-    private val NAV_NEXT = CommandPostPcShell.cobblemon("textures/gui/pc/pc_arrow_next.png")
+    val NAV_PREVIOUS_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_arrow_previous.png")
+    val NAV_NEXT_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_arrow_next.png")
     val JOBS_BACKGROUND = cobblePals("textures/gui/command_post/jobs_background.png")
     val POLICY_BACKGROUND = cobblePals("textures/gui/command_post/policy_background.png")
     val LOGISTICS_BACKGROUND = cobblePals("textures/gui/command_post/logistics_background.png")
@@ -49,8 +49,8 @@ internal object CommandPostStorageWidget {
     }
 
     fun drawNavigation(context: DrawContext, originX: Int, originY: Int, localMouseX: Int, localMouseY: Int) {
-        CommandPostIconButton.draw(context, NAV_PREVIOUS, originX, originY, PREV_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, localMouseX, localMouseY, scaled = true)
-        CommandPostIconButton.draw(context, NAV_NEXT, originX, originY, NEXT_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, localMouseX, localMouseY, scaled = true)
+        CommandPostIconButton.draw(context, NAV_PREVIOUS_TEXTURE, originX, originY, PREV_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, localMouseX, localMouseY, scaled = true)
+        CommandPostIconButton.draw(context, NAV_NEXT_TEXTURE, originX, originY, NEXT_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, localMouseX, localMouseY, scaled = true)
     }
 
     fun drawFrame(context: DrawContext, originX: Int, originY: Int, background: Identifier = SCREEN_GRID) {

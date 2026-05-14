@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.35
+
+- Moved the Command Post search field, mode controls, toolbar actions, source toggle, box navigation, and pasture roster onto real child widgets so the screen behaves closer to Cobblemon's widget-owned PC flow.
+- Replaced the manual pasture-row router with a widget-owned scroll list while keeping the existing Cobblemon-style row art, mode toggle, recall action, and Pokemon model rendering.
+- Raised the Command Post pasture cap to 9 in config and live snapshot display, enforced that cap on the server mutation path, and nudged pasture-row Pokemon renders right to stop the left-edge crop.
+
 ## 0.2.34
 
 - Replaced the non-Pokemon Command Post page backgrounds with flat grey CobblePals textures and shifted the slot/chip chrome to neutral greys so item icons read more clearly.

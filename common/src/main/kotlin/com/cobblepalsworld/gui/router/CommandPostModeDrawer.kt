@@ -52,7 +52,7 @@ internal object CommandPostModeDrawer {
     const val TOOL_TOP = 186
     const val TOOL_SIZE = 8
 
-    private val BUTTON = CommandPostPcShell.cobblemon("textures/gui/pasture/pasture_button.png")
+    val BUTTON_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pasture/pasture_button.png")
     val FILTER_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_icon_filter.png")
     val OPTIONS_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_icon_options.png")
 
@@ -62,7 +62,7 @@ internal object CommandPostModeDrawer {
             val hovered = CommandPostIconButton.contains(localMouseX, localMouseY, left, MODE_TOP, MODE_SIZE, MODE_SIZE)
             blitk(
                 matrixStack = context.matrices,
-                texture = BUTTON,
+                texture = BUTTON_TEXTURE,
                 x = originX + left,
                 y = originY + MODE_TOP,
                 width = MODE_SIZE,

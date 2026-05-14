@@ -40,7 +40,7 @@ internal object CommandPostPastureSlot {
         val hovered = CommandPostIconButton.contains(localMouseX, localMouseY, left, top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT)
         CommandPostPastureWidget.drawRowFrame(context, originX, originY, left, top, member.isActive() || selectedPokemonId == member.pokemonId, hovered)
 
-        renderPokemon(CrewPokemonRenderView(member), originX + left + 23, originY + top - 1, delta, 4.5F, 2.5F, hovered || selectedPokemonId == member.pokemonId)
+        renderPokemon(CrewPokemonRenderView(member), originX + left + 25, originY + top - 1, delta, 4.5F, 2.5F, hovered || selectedPokemonId == member.pokemonId)
         heldStack(member.heldItemId)?.let { stack ->
             renderScaledGuiItemIcon(itemStack = stack, x = originX + left + 23.5, y = originY + top + 13.0, scale = 0.5, matrixStack = context.matrices)
         }

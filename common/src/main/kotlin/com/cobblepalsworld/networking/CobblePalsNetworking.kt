@@ -8,6 +8,7 @@ import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.gui.crew.CrewSourceBoxSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSlotSnapshot
@@ -496,6 +497,8 @@ object CobblePalsNetworking {
             val pokemon = locatedPokemon.pokemon
             if (pokemon.isFainted()) return
             if (CommandPostCrewManager.bindingFor(pokemonId) != null) return
+            val maxWorkers = ConfigManager.config.general.maxWorkersPerPasture
+            if (CommandPostCrewManager.countAt(dimensionId, controllerPos) >= maxWorkers) return
             val crewSource = if (locatedPokemon.sourceType == CrewSourceType.PARTY) {
                 movePartyPokemonToPc(player, locatedPokemon) ?: return
             } else {

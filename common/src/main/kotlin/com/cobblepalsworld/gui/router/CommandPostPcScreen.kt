@@ -34,6 +34,7 @@ import com.cobblepalsworld.tag.TagTypePresentation
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.ingame.HandledScreen
+import net.minecraft.client.gui.widget.TextFieldWidget
 import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.item.ItemStack
@@ -53,7 +54,6 @@ class CommandPostPcScreen(
     title: Text
 ) : HandledScreen<RouterScreenHandler>(handler, inventory, title) {
     private data class HoverTooltip(val id: String, val lines: List<Text>)
-    private data class TextureButton(val id: String, val left: Int, val top: Int, val width: Int, val height: Int, val texture: Identifier)
     private data class PanelHit(val left: Int, val top: Int, val width: Int, val height: Int, val action: () -> Boolean)
     private data class ModuleView(val rowIndex: Int, val moduleIndex: Int, val stack: ItemStack, val tagType: TagType, val spec: TagSpec)
     private data class RenderableCacheEntry(val signature: String, val renderable: RenderablePokemon)
@@ -86,6 +86,15 @@ class CommandPostPcScreen(
     private var modeHits: List<CommandPostModeDrawer.ModeHit> = emptyList()
     private var drawerHits: List<CommandPostFilterDrawer.Hit> = emptyList()
     private var panelHits: List<PanelHit> = emptyList()
+    private var searchField: TextFieldWidget? = null
+    private var pastureListWidget: CommandPostPastureListWidget? = null
+    private val modeButtons = mutableMapOf<CommandPostMode, CommandPostTextureButtonWidget>()
+    private var filterButton: CommandPostTextureButtonWidget? = null
+    private var optionsButton: CommandPostTextureButtonWidget? = null
+    private var exitButton: CommandPostTextureButtonWidget? = null
+    private var sourceToggleButton: CommandPostTextureButtonWidget? = null
+    private var previousBoxButton: CommandPostTextureButtonWidget? = null
+    private var nextBoxButton: CommandPostTextureButtonWidget? = null
 
     private val renderStates = mutableMapOf<String, FloatingState>()
     private val renderableCache = mutableMapOf<UUID, RenderableCacheEntry>()
@@ -102,6 +111,173 @@ class CommandPostPcScreen(
         backgroundWidth = CommandPostPcShell.BASE_WIDTH
         backgroundHeight = CommandPostPcShell.BASE_HEIGHT
         super.init()
+        modeButtons.clear()
+        CommandPostMode.entries.forEachIndexed { index, mode ->
+            val left = x + CommandPostModeDrawer.MODE_LEFT + index * (CommandPostModeDrawer.MODE_SIZE + CommandPostModeDrawer.MODE_GAP)
+            val top = y + CommandPostModeDrawer.MODE_TOP
+            modeButtons[mode] = addDrawableChild(
+                CommandPostTextureButtonWidget(
+                    x = left,
+                    y = top,
+                    width = CommandPostModeDrawer.MODE_SIZE,
+                    height = CommandPostModeDrawer.MODE_SIZE,
+                    texture = CommandPostModeDrawer.BUTTON_TEXTURE,
+                    highlighted = { commandMode == mode }
+                ) {
+                    commandMode = mode
+                    selectedPokemonId = null
+                    selectedModuleIndex = null
+                    searchField?.setFocused(false)
+                    sourceSearchActive = false
+                }
+            )
+        }
+        filterButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + CommandPostModeDrawer.FILTER_LEFT,
+                y = y + CommandPostModeDrawer.TOOL_TOP,
+                width = CommandPostModeDrawer.TOOL_SIZE,
+                height = CommandPostModeDrawer.TOOL_SIZE,
+                texture = CommandPostModeDrawer.FILTER_TEXTURE,
+                scaled = true,
+                highlighted = { drawerMode == CommandPostDrawerMode.FILTERS }
+            ) {
+                drawerMode = if (drawerMode == CommandPostDrawerMode.FILTERS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.FILTERS
+                if (drawerMode != CommandPostDrawerMode.FILTERS) {
+                    searchField?.setFocused(false)
+                }
+            }
+        )
+        optionsButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + CommandPostModeDrawer.OPTIONS_LEFT,
+                y = y + CommandPostModeDrawer.TOOL_TOP,
+                width = CommandPostModeDrawer.TOOL_SIZE,
+                height = CommandPostModeDrawer.TOOL_SIZE,
+                texture = CommandPostModeDrawer.OPTIONS_TEXTURE,
+                scaled = true,
+                highlighted = { drawerMode == CommandPostDrawerMode.OPTIONS }
+            ) {
+                drawerMode = if (drawerMode == CommandPostDrawerMode.OPTIONS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.OPTIONS
+                if (drawerMode != CommandPostDrawerMode.FILTERS) {
+                    searchField?.setFocused(false)
+                }
+            }
+        )
+        exitButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + CommandPostPcShell.EXIT_LEFT,
+                y = y + CommandPostPcShell.EXIT_TOP,
+                width = CommandPostPcShell.EXIT_WIDTH,
+                height = CommandPostPcShell.EXIT_HEIGHT,
+                texture = CommandPostPcShell.BACK_BUTTON
+            ) { close() }
+        )
+        sourceToggleButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + SOURCE_BUTTON_LEFT,
+                y = y + SOURCE_BUTTON_TOP,
+                width = SOURCE_BUTTON_SIZE,
+                height = SOURCE_BUTTON_SIZE,
+                texture = SOURCE_BUTTON_TEXTURE,
+                scaled = true
+            ) {
+                sourceType = if (sourceType == CrewSourceType.PC) CrewSourceType.PARTY else CrewSourceType.PC
+                selectedPokemonId = null
+                requestSourceRefresh()
+            }
+        )
+        previousBoxButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + CommandPostStorageWidget.PREV_LEFT,
+                y = y + CommandPostStorageWidget.NAV_TOP,
+                width = CommandPostStorageWidget.NAV_SIZE,
+                height = CommandPostStorageWidget.NAV_SIZE,
+                texture = CommandPostStorageWidget.NAV_PREVIOUS_TEXTURE,
+                scaled = true
+            ) { changeBox(-1) }
+        )
+        nextBoxButton = addDrawableChild(
+            CommandPostTextureButtonWidget(
+                x = x + CommandPostStorageWidget.NEXT_LEFT,
+                y = y + CommandPostStorageWidget.NAV_TOP,
+                width = CommandPostStorageWidget.NAV_SIZE,
+                height = CommandPostStorageWidget.NAV_SIZE,
+                texture = CommandPostStorageWidget.NAV_NEXT_TEXTURE,
+                scaled = true
+            ) { changeBox(1) }
+        )
+        pastureListWidget = addDrawableChild(
+            CommandPostPastureListWidget(
+                x = x + CommandPostPastureWidget.LIST_LEFT,
+                y = y + CommandPostPastureWidget.LIST_TOP - 4,
+                originX = { x },
+                originY = { y },
+                membersProvider = { filteredMembers(CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()) },
+                selectedPokemonId = { selectedPokemonId },
+                scrollIndexProvider = { pastureScrollIndex },
+                setScrollIndex = { pastureScrollIndex = it },
+                onHover = { member ->
+                    hoveredCrew = member
+                    if (member != null) {
+                        hoveredTooltip = HoverTooltip("crew-${member.pokemonId}", crewTooltip(member))
+                    }
+                },
+                onSelect = { member ->
+                    selectedPokemonId = member.pokemonId
+                    play(CobblemonSounds.PC_CLICK)
+                },
+                onRecall = { member ->
+                    selectedPokemonId = member.pokemonId
+                    CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, member.pokemonId)
+                    play(CobblemonSounds.PC_DROP)
+                    requestCrewRefresh()
+                    requestSourceRefresh()
+                },
+                onMode = { member ->
+                    selectedPokemonId = member.pokemonId
+                    CobblePalsNetworking.sendCycleCrewMode(handler.routerPos, member.pokemonId)
+                    play(CobblemonSounds.PC_CLICK)
+                    requestCrewRefresh()
+                },
+                heldStack = ::heldStack,
+                fit = ::fit,
+                renderPokemon = { context, view, centerX, topY, renderDelta, modelScale, matrixScale, animate ->
+                    renderPokemon(
+                        context = context,
+                        view = view,
+                        centerX = centerX,
+                        topY = topY,
+                        delta = renderDelta,
+                        modelScale = modelScale,
+                        matrixScale = matrixScale,
+                        stateKey = "pasture-row-${view.pokemonId}",
+                        animate = animate,
+                        clipHalfWidth = 16,
+                        clipHeight = 32
+                    )
+                }
+            )
+        )
+        searchField = addDrawableChild(
+            TextFieldWidget(
+                textRenderer,
+                x + CommandPostFilterDrawer.SEARCH_LEFT + 3,
+                y + CommandPostFilterDrawer.SEARCH_TOP + 1,
+                CommandPostFilterDrawer.SEARCH_WIDTH - 6,
+                CommandPostFilterDrawer.SEARCH_HEIGHT + 2,
+                Text.literal("Search")
+            ).apply {
+                setMaxLength(40)
+                setDrawsBackground(false)
+                setText(sourceQuery)
+                setChangedListener { value ->
+                    sourceQuery = value
+                    requestSourceRefresh()
+                }
+                visible = drawerMode == CommandPostDrawerMode.FILTERS
+            }
+        )
         applySlotLayout()
         requestCrewRefresh()
         requestSourceRefresh()
@@ -129,8 +305,16 @@ class CommandPostPcScreen(
         hoveredTooltip = null
         drawerHits = emptyList()
         panelHits = emptyList()
+        searchField?.visible = drawerMode == CommandPostDrawerMode.FILTERS
+        sourceSearchActive = searchField?.isFocused == true
+        sourceToggleButton?.visible = commandMode == CommandPostMode.SOURCE
+        previousBoxButton?.visible = commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC
+        nextBoxButton?.visible = commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC
+        pastureListWidget?.visible = true
         renderBackground(context, mouseX, mouseY, delta)
         super.render(context, mouseX, mouseY, delta)
+        val members = filteredMembers(CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty())
+        drawPastureChrome(context, members, mouseX - x, mouseY - y)
         drawMouseoverTooltip(context, mouseX, mouseY)
         hoveredTooltip?.let { context.drawTooltip(textRenderer, it.lines, mouseX, mouseY) }
     }
@@ -170,35 +354,6 @@ class CommandPostPcScreen(
         val localMouseX = (mouseX - x).toInt()
         val localMouseY = (mouseY - y).toInt()
 
-        if (contains(localMouseX, localMouseY, CommandPostPcShell.EXIT_LEFT, CommandPostPcShell.EXIT_TOP, CommandPostPcShell.EXIT_WIDTH, CommandPostPcShell.EXIT_HEIGHT)) {
-            play(CobblemonSounds.PC_CLICK)
-            close()
-            return true
-        }
-
-        modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
-            commandMode = hit.mode
-            selectedPokemonId = null
-            selectedModuleIndex = null
-            sourceSearchActive = false
-            play(CobblemonSounds.PC_CLICK)
-            return true
-        }
-
-        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            drawerMode = if (drawerMode == CommandPostDrawerMode.FILTERS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.FILTERS
-            sourceSearchActive = false
-            play(CobblemonSounds.PC_CLICK)
-            return true
-        }
-
-        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            drawerMode = if (drawerMode == CommandPostDrawerMode.OPTIONS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.OPTIONS
-            sourceSearchActive = false
-            play(CobblemonSounds.PC_CLICK)
-            return true
-        }
-
         drawerHits.firstOrNull { hit -> CommandPostFilterDrawer.contains(localMouseX, localMouseY, hit) }?.let { hit ->
             handleDrawerHit(hit.action)
             play(CobblemonSounds.PC_CLICK)
@@ -212,51 +367,12 @@ class CommandPostPcScreen(
             }
         }
 
-        if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.PREV_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
-            changeBox(-1)
-            return true
-        }
-        if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.NEXT_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
-            changeBox(1)
-            return true
-        }
-        if (commandMode == CommandPostMode.SOURCE && contains(localMouseX, localMouseY, SOURCE_BUTTON_LEFT, SOURCE_BUTTON_TOP, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_SIZE)) {
-            sourceType = if (sourceType == CrewSourceType.PC) CrewSourceType.PARTY else CrewSourceType.PC
-            selectedPokemonId = null
-            play(CobblemonSounds.PC_CLICK)
-            requestSourceRefresh()
-            return true
-        }
-
         if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
             val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
             members.forEach { CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, it.pokemonId) }
             play(CobblemonSounds.PC_RELEASE)
             requestCrewRefresh()
             requestSourceRefresh()
-            return true
-        }
-
-        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.RECALL && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
-            selectedPokemonId = hit.member.pokemonId
-            CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, hit.member.pokemonId)
-            play(CobblemonSounds.PC_DROP)
-            requestCrewRefresh()
-            requestSourceRefresh()
-            return true
-        }
-
-        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.MODE && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
-            selectedPokemonId = hit.member.pokemonId
-            CobblePalsNetworking.sendCycleCrewMode(handler.routerPos, hit.member.pokemonId)
-            play(CobblemonSounds.PC_CLICK)
-            requestCrewRefresh()
-            return true
-        }
-
-        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.SELECT && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
-            selectedPokemonId = hit.member.pokemonId
-            play(CobblemonSounds.PC_CLICK)
             return true
         }
 
@@ -297,12 +413,6 @@ class CommandPostPcScreen(
     override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
         val localMouseX = (mouseX - x).toInt()
         val localMouseY = (mouseY - y).toInt()
-        if (CommandPostPastureWidget.listContains(localMouseX, localMouseY)) {
-            val members = filteredMembers(CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty())
-            val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
-            pastureScrollIndex = (pastureScrollIndex - verticalAmount.toInt()).coerceIn(0, maxScroll)
-            return true
-        }
         if (commandMode == CommandPostMode.SOURCE && sourceType == CrewSourceType.PC && CommandPostStorageWidget.contains(localMouseX, localMouseY)) {
             changeBox(if (verticalAmount > 0) -1 else 1)
             return true
@@ -311,36 +421,14 @@ class CommandPostPcScreen(
     }
 
     override fun charTyped(chr: Char, modifiers: Int): Boolean {
-        if (sourceSearchActive && drawerMode == CommandPostDrawerMode.FILTERS && !chr.isISOControl() && sourceQuery.length < 40) {
-            sourceQuery += chr
-            requestSourceRefresh()
-            return true
-        }
         return super.charTyped(chr, modifiers)
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
-        if (sourceSearchActive && drawerMode == CommandPostDrawerMode.FILTERS) {
-            when (keyCode) {
-                GLFW.GLFW_KEY_BACKSPACE -> {
-                    if (sourceQuery.isNotEmpty()) {
-                        sourceQuery = sourceQuery.dropLast(1)
-                        requestSourceRefresh()
-                    }
-                    return true
-                }
-                GLFW.GLFW_KEY_DELETE -> {
-                    if (sourceQuery.isNotEmpty()) {
-                        sourceQuery = ""
-                        requestSourceRefresh()
-                    }
-                    return true
-                }
-                GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_ESCAPE -> {
-                    sourceSearchActive = false
-                    return true
-                }
-            }
+        if (searchField?.isFocused == true && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            searchField?.setFocused(false)
+            sourceSearchActive = false
+            return true
         }
         return super.keyPressed(keyCode, scanCode, modifiers)
     }
@@ -367,7 +455,6 @@ class CommandPostPcScreen(
         if (sourceType == CrewSourceType.PARTY) {
             CommandPostPartyWidget.drawPanel(context, textRenderer, x, y)
         } else {
-            CommandPostStorageWidget.drawNavigation(context, x, y, localMouseX, localMouseY)
             CommandPostStorageWidget.drawFrame(context, x, y)
         }
 
@@ -416,30 +503,13 @@ class CommandPostPcScreen(
     private fun drawPasturePanel(context: DrawContext, members: List<CommandPostCrewMemberSnapshot>, localMouseX: Int, localMouseY: Int, delta: Float) {
         val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
         pastureScrollIndex = pastureScrollIndex.coerceIn(0, maxScroll)
-        val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
 
         CommandPostPastureWidget.drawPanel(context, textRenderer, x, y)
-        val (hits, hover) = CommandPostPastureScrollList.draw(context, textRenderer, x, y, members, pastureScrollIndex, selectedPokemonId, localMouseX, localMouseY, delta, ::heldStack, ::fit) { view, centerX, topY, renderDelta, modelScale, matrixScale, animate ->
-            renderPokemon(
-                context = context,
-                view = view,
-                centerX = centerX,
-                topY = topY,
-                delta = renderDelta,
-                modelScale = modelScale,
-                matrixScale = matrixScale,
-                stateKey = "pasture-row-${view.pokemonId}",
-                animate = animate,
-                clipHalfWidth = 16,
-                clipHeight = 32
-            )
-        }
-        crewHits = hits
-        hover?.let {
-            hoveredCrew = it.member
-            hoveredTooltip = HoverTooltip("crew-${it.member.pokemonId}", crewTooltip(it.member))
-        }
+        crewHits = emptyList()
+    }
 
+    private fun drawPastureChrome(context: DrawContext, members: List<CommandPostCrewMemberSnapshot>, localMouseX: Int, localMouseY: Int) {
+        val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
         CommandPostPastureWidget.drawScrollOverlay(context, x, y)
         CommandPostPastureWidget.drawControls(context, textRenderer, x, y, members.size, maxWorkers, localMouseX, localMouseY)
         if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
@@ -475,20 +545,18 @@ class CommandPostPcScreen(
     }
 
     private fun drawModeControls(context: DrawContext, localMouseX: Int, localMouseY: Int) {
-        modeHits = CommandPostModeDrawer.drawModeButtons(context, x, y, localMouseX, localMouseY, commandMode)
-        CommandPostModeDrawer.drawToolButtons(context, x, y, localMouseX, localMouseY)
         CommandPostModeDrawer.drawDrawerLabel(context, textRenderer, x, y, roleFamilyFilter, stateFilter, rosterSort)
-        modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
-            hoveredTooltip = HoverTooltip("mode-${hit.mode.name}", listOf(Text.literal(hit.mode.tooltip)))
+        modeButtons.entries.firstOrNull { (_, button) -> button.isHovered }?.let { (mode, _) ->
+            hoveredTooltip = HoverTooltip("mode-${mode.name}", listOf(Text.literal(mode.tooltip)))
         }
-        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+        if (filterButton?.isHovered == true) {
             hoveredTooltip = HoverTooltip("filter", listOf(Text.literal("Filters"), Text.literal("${roleFamilyFilter.label} / ${stateFilter.label}")))
         }
-        if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
+        if (optionsButton?.isHovered == true) {
             hoveredTooltip = HoverTooltip("sort", listOf(Text.literal("Options"), Text.literal("Sort: ${rosterSort.label}")))
         }
-        if (commandMode == CommandPostMode.SOURCE) {
-            drawSourceModeButton(context, localMouseX, localMouseY)
+        if (sourceToggleButton?.visible == true && sourceToggleButton?.isHovered == true) {
+            hoveredTooltip = HoverTooltip("source-toggle", listOf(Text.literal(if (sourceType == CrewSourceType.PC) "Show Party" else "Show PC")))
         }
     }
 
@@ -686,8 +754,10 @@ class CommandPostPcScreen(
     private fun handleDrawerHit(action: CommandPostFilterDrawer.Action) {
         when (action) {
             CommandPostFilterDrawer.Action.SEARCH -> {
-                sourceSearchActive = true
                 drawerMode = CommandPostDrawerMode.FILTERS
+                searchField?.visible = true
+                searchField?.setFocused(true)
+                sourceSearchActive = true
             }
             CommandPostFilterDrawer.Action.ROLE -> {
                 sourceSearchActive = false
@@ -737,19 +807,7 @@ class CommandPostPcScreen(
         return values[(ordinal + 1) % values.size]
     }
 
-    private fun drawSourceModeButton(context: DrawContext, localMouseX: Int, localMouseY: Int) {
-        drawTextureButton(context, TextureButton("source", SOURCE_BUTTON_LEFT, SOURCE_BUTTON_TOP, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_TEXTURE), localMouseX, localMouseY, scaled = true)
-        if (contains(localMouseX, localMouseY, SOURCE_BUTTON_LEFT, SOURCE_BUTTON_TOP, SOURCE_BUTTON_SIZE, SOURCE_BUTTON_SIZE)) {
-            hoveredTooltip = HoverTooltip("source-toggle", listOf(Text.literal(if (sourceType == CrewSourceType.PC) "Show Party" else "Show PC")))
-        }
-    }
-
     private fun drawExitButton(context: DrawContext, localMouseX: Int, localMouseY: Int) {
-        CommandPostPcShell.drawExitButton(context, x, y, localMouseX, localMouseY)
-    }
-
-    private fun drawTextureButton(context: DrawContext, button: TextureButton, localMouseX: Int, localMouseY: Int, scaled: Boolean) {
-        CommandPostIconButton.draw(context, button.texture, x, y, button.left, button.top, button.width, button.height, localMouseX, localMouseY, scaled)
     }
 
     private fun renderPokemon(
