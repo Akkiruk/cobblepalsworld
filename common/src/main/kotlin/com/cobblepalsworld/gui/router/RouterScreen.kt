@@ -188,6 +188,14 @@ class RouterScreen(
         private const val DETAIL_LEFT = 166
         private const val DETAIL_WIDTH = 116
         private const val ROW_TOP = 228
+        private const val POLICY_LIST_LEFT = 16
+        private const val POLICY_LIST_TOP = 218
+        private const val POLICY_LIST_WIDTH = 132
+        private const val POLICY_ROW_HEIGHT = 22
+        private const val POLICY_DETAIL_LEFT = 154
+        private const val POLICY_DETAIL_WIDTH = 128
+        private const val POLICY_DETAIL_TOP = 218
+        private const val POLICY_ACTION_TOP = 300
         private const val CREW_INFO_TOP = 198
         private const val CREW_CHIP_TOP = 216
         private const val CREW_ROW_TOP = 254
@@ -596,26 +604,22 @@ class RouterScreen(
         val nbtMode = if (policy.filterMatchNbt) "Exact" else "Loose"
         val matchMode = if (policy.filterMatchMode == FilterMatchMode.ALL) "All" else "Any"
         val buttons = mutableListOf<TextChipButton>()
-        var top = 288
+        var top = POLICY_ACTION_TOP
         if (policy.tagType.usesFilter) {
-            buttons += TextChipButton("policy-mode", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Mode", filterMode, CobblePalsUiTheme.ACCENT_WORK, true, listOf(Text.literal("Filter mode")))
+            buttons += TextChipButton("policy-mode", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "Mode", filterMode, CobblePalsUiTheme.ACCENT_WORK, true, listOf(Text.literal("Filter mode")))
             top += 16
-            buttons += TextChipButton("policy-nbt", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "NBT", nbtMode, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("NBT match")))
+            buttons += TextChipButton("policy-nbt", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "NBT", nbtMode, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("NBT match")))
             top += 16
-            buttons += TextChipButton("policy-match", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Match", matchMode, CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Match mode"), Text.literal(matchModeHelp(policy.filterMatchMode))))
+            buttons += TextChipButton("policy-match", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "Match", matchMode, CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Match mode"), Text.literal(matchModeHelp(policy.filterMatchMode))))
             top += 16
         }
-        buttons += TextChipButton("policy-signal", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Signal", policy.redstoneLabel, CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Redstone mode")))
+        buttons += TextChipButton("policy-signal", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "Signal", policy.redstoneLabel, CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Redstone mode")))
         top += 16
         if (policy.tagType.supportsTargetList) {
-            buttons += TextChipButton("policy-target", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Target", policy.targetStrategyLabel, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Target order")))
+            buttons += TextChipButton("policy-target", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "Target", policy.targetStrategyLabel, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Target order")))
             top += 16
         }
-        buttons += TextChipButton("policy-run", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Run", policy.runLabel, CobblePalsUiTheme.ACCENT_PURPLE, true, listOf(Text.literal("Run mode")))
-        top += 16
-        buttons += TextChipButton("policy-reg", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Keep", policy.regulatorAmount.toString(), CobblePalsUiTheme.ACCENT_CREW, true, listOf(Text.literal("Regulator")))
-        top += 16
-        buttons += TextChipButton("policy-deep", DETAIL_LEFT + 6, top, DETAIL_WIDTH - 12, "Open", "Editor", CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Full editor")))
+        buttons += TextChipButton("policy-deep", POLICY_DETAIL_LEFT + 6, top, POLICY_DETAIL_WIDTH - 12, "Open", "Editor", CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Full editor")))
         return buttons
     }
 
@@ -790,9 +794,10 @@ class RouterScreen(
             return
         }
         val selected = selectedPolicyRole(state)
-        context.drawText(textRenderer, Text.literal("Installed role lines"), 16, 206, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal("Role Cards"), POLICY_LIST_LEFT, 200, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal("Details"), POLICY_DETAIL_LEFT, 200, CobblePalsUiTheme.TEXT_MUTED, false)
         state.roles.take(MAX_ROLE_ROWS).forEachIndexed { index, role ->
-            drawRoleRow(context, role, LIST_LEFT, ROW_TOP + index * ROLE_ROW_HEIGHT, LIST_WIDTH, index == selectedPolicyRowIndex)
+            drawPolicyRoleRow(context, role, POLICY_LIST_LEFT, POLICY_LIST_TOP + index * POLICY_ROW_HEIGHT, POLICY_LIST_WIDTH, index == selectedPolicyRowIndex)
         }
         drawPolicyDetail(context, localMouseX, localMouseY, selected)
     }
@@ -823,24 +828,33 @@ class RouterScreen(
     }
 
     private fun drawPolicyDetail(context: DrawContext, localMouseX: Int, localMouseY: Int, selected: RoleSummary?) {
-        CobblePalsUiTheme.drawPlainPanel(context, DETAIL_LEFT, ROW_TOP, DETAIL_WIDTH, 26, selected?.pressureColor ?: CobblePalsUiTheme.TEXT_FAINT)
+        CobblePalsUiTheme.drawPlainPanel(context, POLICY_DETAIL_LEFT, POLICY_DETAIL_TOP, POLICY_DETAIL_WIDTH, 74, selected?.pressureColor ?: CobblePalsUiTheme.TEXT_FAINT)
         if (selected == null) {
-            context.drawText(textRenderer, Text.literal("Select"), DETAIL_LEFT + 8, ROW_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
-            context.drawText(textRenderer, Text.literal("a role"), DETAIL_LEFT + 8, ROW_TOP + 20, CobblePalsUiTheme.TEXT_MUTED, false)
+            context.drawText(textRenderer, Text.literal("Select"), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
+            context.drawText(textRenderer, Text.literal("a role"), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 20, CobblePalsUiTheme.TEXT_MUTED, false)
             return
         }
-        context.drawText(textRenderer, Text.literal(fit(selected.label, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
-        context.drawText(textRenderer, Text.literal(fit(selected.pressureLabel, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 20, selected.pressureColor, false)
-        context.drawText(textRenderer, Text.literal(fit(selected.targetLabel, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit(selected.filterSummary, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 54, CobblePalsUiTheme.TEXT_FAINT, false)
+        context.drawText(textRenderer, Text.literal(fit(selected.label, POLICY_DETAIL_WIDTH - 14)), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
+        context.drawText(textRenderer, Text.literal(fit(selected.pressureLabel, POLICY_DETAIL_WIDTH - 14)), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 20, selected.pressureColor, false)
+        context.drawText(textRenderer, Text.literal(fit(selected.targetLabel, POLICY_DETAIL_WIDTH - 14)), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 38, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit(selected.filterSummary, POLICY_DETAIL_WIDTH - 14)), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 50, CobblePalsUiTheme.TEXT_FAINT, false)
         selected.firstIssue?.let { issue ->
-            context.drawText(textRenderer, Text.literal(fit(issue.label, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 66, selected.pressureColor, false)
-            context.drawText(textRenderer, Text.literal(fit(issue.detail, DETAIL_WIDTH - 14)), DETAIL_LEFT + 8, ROW_TOP + 78, CobblePalsUiTheme.TEXT_FAINT, false)
+            context.drawText(textRenderer, Text.literal(fit(issue.detail, POLICY_DETAIL_WIDTH - 14)), POLICY_DETAIL_LEFT + 8, POLICY_DETAIL_TOP + 62, selected.pressureColor, false)
         }
         policyDetailButtons(selected).forEach { chip ->
             val hovered = contains(localMouseX, localMouseY, chip.left, chip.top, chip.width, CHIP_HEIGHT)
             drawFixedChip(context, chip, hovered)
         }
+    }
+
+    private fun drawPolicyRoleRow(context: DrawContext, role: RoleSummary, left: Int, top: Int, width: Int, active: Boolean) {
+        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
+        context.fill(left, top, left + width, top + POLICY_ROW_HEIGHT - 2, body)
+        context.fill(left, top, left + 3, top + POLICY_ROW_HEIGHT - 2, role.pressureColor)
+        context.drawText(textRenderer, Text.literal(role.slotLabel), left + 7, top + 3, CobblePalsUiTheme.TEXT_FAINT, false)
+        context.drawText(textRenderer, Text.literal(fit(role.label, 72)), left + 25, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
+        context.drawText(textRenderer, Text.literal(fit(role.targetLabel, 64)), left + 7, top + 13, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit(role.pressureLabel, 54)), left + width - 58, top + 13, role.pressureColor, false)
     }
 
     private fun drawRoleRow(context: DrawContext, role: RoleSummary, left: Int, top: Int, width: Int, active: Boolean) {
@@ -886,7 +900,13 @@ class RouterScreen(
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
-        if (keyCode == GLFW.GLFW_KEY_R) {
+        if (keyCode == GLFW.GLFW_KEY_P) {
+            if (activeView == CommandPostView.Policy) {
+                selectedPolicyRowIndex?.let { rowIndex ->
+                    client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + rowIndex)
+                    return true
+                }
+            }
             val moduleIndex = hoveredModuleIndex() ?: return super.keyPressed(keyCode, scanCode, modifiers)
             val slot = handler.slots.getOrNull(moduleIndex) ?: return super.keyPressed(keyCode, scanCode, modifiers)
             if (slot.stack.item is TagItem) {
@@ -983,7 +1003,7 @@ class RouterScreen(
                     return true
                 }
 
-                state.roles.take(MAX_ROLE_ROWS).indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, ROW_TOP + index * ROLE_ROW_HEIGHT, LIST_WIDTH, ROLE_ROW_HEIGHT - 2) }?.let { rowIndex ->
+                state.roles.take(MAX_ROLE_ROWS).indices.firstOrNull { index -> contains(localMouseX, localMouseY, POLICY_LIST_LEFT, POLICY_LIST_TOP + index * POLICY_ROW_HEIGHT, POLICY_LIST_WIDTH, POLICY_ROW_HEIGHT - 2) }?.let { rowIndex ->
                     selectedPolicyRowIndex = rowIndex
                     return true
                 }
@@ -1019,7 +1039,7 @@ class RouterScreen(
             CommandPostView.Policy -> {
                 val selected = selectedPolicyRole(state)
                 policyDetailButtons(selected).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
-                state.roles.take(MAX_ROLE_ROWS).indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, ROW_TOP + index * ROLE_ROW_HEIGHT, LIST_WIDTH, ROLE_ROW_HEIGHT - 2) }?.let { index ->
+                state.roles.take(MAX_ROLE_ROWS).indices.firstOrNull { index -> contains(localMouseX, localMouseY, POLICY_LIST_LEFT, POLICY_LIST_TOP + index * POLICY_ROW_HEIGHT, POLICY_LIST_WIDTH, POLICY_ROW_HEIGHT - 2) }?.let { index ->
                     return HoverTooltip("policy-${state.roles[index].id}", state.roles[index].tooltipLines)
                 }
             }

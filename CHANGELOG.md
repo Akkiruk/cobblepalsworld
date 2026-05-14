@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.7
+
+- Cleaned up the Command Post Roles tab into a clearer card-list and detail flow, with roomier rows and a non-overlapping selected-role summary.
+- Reduced the Roles detail actions to the most useful quick policy controls plus the full editor entry, making the page less crowded during setup.
+- Moved the Command Post role-editor shortcut from `R` to `P` so recipe-viewer recipe lookup no longer intercepts the intended editor action.
+
 ## 0.2.6
 
 - Added indexed worker-session lookups for pasture and Command Post ownership, replacing global scans when cleaning recalled pals or resolving router-managed crews.
