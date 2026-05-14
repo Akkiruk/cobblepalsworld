@@ -2,13 +2,9 @@ package com.cobblepalsworld.gui.router
 
 import com.cobblepalsworld.augment.AugmentItem
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
-import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.persistence.CobblePalsSaveData
-import com.cobblepalsworld.pasture.TagAssignmentManager
-import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.router.RouterBlockEntity
-import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagSpec
 import com.cobblepalsworld.tag.TagType
@@ -55,10 +51,6 @@ class RouterScreenHandler : ScreenHandler {
         const val COMMAND_SLOT_COUNT = STORAGE_SCREEN_SLOT_START + RouterBlockEntity.STORAGE_SLOT_COUNT
         const val ACTION_EDIT_MODULE_BASE = 100
         const val ACTION_OPEN_POLICY_ROW_BASE = 200
-        const val ACTION_OPEN_CREW_ROW_BASE = 300
-        const val ACTION_CYCLE_CREW_MODE_BASE = 400
-        const val ACTION_TOGGLE_CREW_FALLBACK_BASE = 700
-        private const val DYNAMIC_CREW_ACTION_LIMIT = 256
         private const val ACTION_POLICY_QUICK_BASE = 1000
         private const val POLICY_ACTION_STRIDE = 16
         const val POLICY_ACTION_TOGGLE_WHITELIST = 0
@@ -198,51 +190,12 @@ class RouterScreenHandler : ScreenHandler {
                 openPolicyRow(player, id - ACTION_OPEN_POLICY_ROW_BASE)
             }
 
-            id in ACTION_OPEN_CREW_ROW_BASE until ACTION_OPEN_CREW_ROW_BASE + 9 -> {
-                openCrewRow(player, id - ACTION_OPEN_CREW_ROW_BASE)
-            }
-
-            id in ACTION_CYCLE_CREW_MODE_BASE until ACTION_CYCLE_CREW_MODE_BASE + DYNAMIC_CREW_ACTION_LIMIT -> {
-                cycleCrewMode(player, id - ACTION_CYCLE_CREW_MODE_BASE)
-            }
-
-            id in ACTION_TOGGLE_CREW_FALLBACK_BASE until ACTION_TOGGLE_CREW_FALLBACK_BASE + DYNAMIC_CREW_ACTION_LIMIT -> {
-                toggleCrewFallback(player, id - ACTION_TOGGLE_CREW_FALLBACK_BASE)
-            }
-
             id in ACTION_POLICY_QUICK_BASE until ACTION_POLICY_QUICK_BASE + POLICY_ACTION_STRIDE * 7 -> {
                 handlePolicyQuickAction(player, id)
             }
 
             else -> false
         }
-    }
-
-    private fun cycleCrewMode(player: PlayerEntity, snapshotIndex: Int): Boolean {
-        val pokemonId = resolveCrewPokemonId(player, snapshotIndex) ?: return false
-        val current = TagAssignmentManager.getProfile(pokemonId)
-        val nextMode = com.cobblepalsworld.pasture.WorkerAssignmentMode.entries[
-            (current.mode.ordinal + 1) % com.cobblepalsworld.pasture.WorkerAssignmentMode.entries.size
-        ]
-        TagAssignmentManager.updateProfile(pokemonId, mode = nextMode)
-        markAssignmentChange(player)
-        return true
-    }
-
-    private fun toggleCrewFallback(player: PlayerEntity, snapshotIndex: Int): Boolean {
-        val pokemonId = resolveCrewPokemonId(player, snapshotIndex) ?: return false
-        val current = TagAssignmentManager.getProfile(pokemonId)
-        TagAssignmentManager.updateProfile(pokemonId, allowFallback = !current.allowFallback)
-        markAssignmentChange(player)
-        return true
-    }
-
-    private fun resolveCrewPokemonId(player: PlayerEntity, snapshotIndex: Int): java.util.UUID? {
-        val serverWorld = player.world as? ServerWorld ?: return null
-        val router = routerInventory as? RouterBlockEntity ?: return null
-        val pasture = router.linkedPasture(serverWorld) ?: return null
-        val snapshot = ServerScaleRuntime.cachedSnapshot(serverWorld, pasture.pos) { PastureSnapshotFactory.create(serverWorld, pasture) }
-        return snapshot.pals.getOrNull(snapshotIndex)?.pokemonId
     }
 
     private fun handlePolicyQuickAction(player: PlayerEntity, id: Int): Boolean {
@@ -298,7 +251,6 @@ class RouterScreenHandler : ScreenHandler {
 
     private fun markAssignmentChange(player: PlayerEntity) {
         val serverWorld = player.world as? ServerWorld ?: return
-        linkedPasturePos?.let { ServerScaleRuntime.invalidateSnapshot(serverWorld, it) }
         CobblePalsSaveData.markDirty(serverWorld)
         sendContentUpdates()
     }
@@ -319,21 +271,6 @@ class RouterScreenHandler : ScreenHandler {
     private fun openPolicyRow(player: PlayerEntity, rowIndex: Int): Boolean {
         val targetModuleIndex = policyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
         return openRoleEditor(player, RouterBlockEntity.MODULE_SLOT_START + targetModuleIndex)
-    }
-
-    private fun openCrewRow(player: PlayerEntity, rowIndex: Int): Boolean {
-        if (player.world.isClient) return true
-        val serverWorld = player.world as? ServerWorld ?: return false
-        val router = routerInventory as? RouterBlockEntity ?: return false
-        val pasture = router.linkedPasture(serverWorld) ?: return false
-        val snapshot = ServerScaleRuntime.cachedSnapshot(serverWorld, pasture.pos) { PastureSnapshotFactory.create(serverWorld, pasture) }
-        val pal = snapshot.pals.getOrNull(rowIndex) ?: return false
-
-        player.openHandledScreen(SimpleNamedScreenHandlerFactory(
-            { syncId, inv, _ -> PokemonTagScreenHandler(syncId, inv, pal.pokemonId) },
-            Text.translatable("screen.cobblepalsworld.pokemon_tag")
-        ))
-        return true
     }
 
     private fun policyModules(): List<PolicyModuleTarget> {

@@ -16,7 +16,6 @@ import dev.architectury.event.events.common.LifecycleEvent
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.text.Text
-import net.minecraft.util.Formatting
 import net.minecraft.util.Hand
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
@@ -54,7 +53,7 @@ object CobblePalsWorld {
     }
 
     private fun registerInteractions() {
-        // Shift + right-click an owned Pokémon → open tag assignment GUI
+        // Shift + right-click an owned Pokemon -> open tag assignment GUI
         InteractionEvent.INTERACT_ENTITY.register { player, entity, hand ->
             if (!player.isSneaking || hand != Hand.MAIN_HAND || entity !is PokemonEntity) {
                 return@register EventResult.pass()
@@ -62,17 +61,6 @@ object CobblePalsWorld {
             val pokemon = entity.pokemon
             val owner = pokemon.getOwnerPlayer()
             if (owner?.uuid != player.uuid) return@register EventResult.pass()
-
-            if (pokemon.tetheringId == null) {
-                if (!player.world.isClient) {
-                    player.sendMessage(
-                        Text.literal("This Pokémon must be in a Pasture to assign tags!")
-                            .formatted(Formatting.RED),
-                        true
-                    )
-                }
-                return@register EventResult.interruptTrue()
-            }
 
             if (player is ServerPlayerEntity) {
                 player.openHandledScreen(SimpleNamedScreenHandlerFactory(

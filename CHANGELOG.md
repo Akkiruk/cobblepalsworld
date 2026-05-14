@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.17
+
+- Finished the Command Post Crew tab cutover to native roster snapshots for filtering, paging, selection, details, and tooltips instead of falling back to old pasture snapshots.
+- Removed obsolete router handler actions that edited crew rows through linked pasture snapshot indexes; native crew controls now use Command Post crew packets consistently.
+- Allowed owned Pokemon tag editing without requiring a Cobblemon Pasture tether, and moved the standalone tag screen's previous/next navigation to the native Command Post roster.
+
 ## 0.2.16
 
 - Cut native Command Post crews over to local work execution so spawned Party/PC workers are ticked directly by the Command Post through the existing tag engine, path budget, and worksite visual overlay flow.

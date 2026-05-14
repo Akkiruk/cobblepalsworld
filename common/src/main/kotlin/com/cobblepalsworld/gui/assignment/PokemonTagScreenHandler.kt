@@ -10,8 +10,7 @@ import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
-import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
-import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import com.cobblepalsworld.router.RouterBlockEntity
@@ -232,14 +231,14 @@ class PokemonTagScreenHandler : ScreenHandler {
     }
 
     private fun openAdjacentPokemon(player: PlayerEntity, currentPokemonId: UUID, direction: Int): Boolean {
-        val world = player.world as? net.minecraft.server.world.ServerWorld ?: return false
-        val pasture = PastureWorkerManager.findPastureForPokemon(world, currentPokemonId) ?: return false
-        val snapshot = PastureSnapshotFactory.create(world, pasture)
-        val currentIndex = snapshot.pals.indexOfFirst { it.pokemonId == currentPokemonId }
-        if (currentIndex < 0 || snapshot.pals.size <= 1) return false
+        val member = CommandPostCrewManager.memberFor(currentPokemonId) ?: return false
+        val roster = CommandPostCrewManager.findMembers(member.binding.dimensionId, member.binding.pos)
+            .sortedWith(compareBy<com.cobblepalsworld.crew.CommandPostCrewMember> { it.displayName.lowercase() }.thenBy { it.pokemonId.toString() })
+        val currentIndex = roster.indexOfFirst { it.pokemonId == currentPokemonId }
+        if (currentIndex < 0 || roster.size <= 1) return false
 
-        val nextIndex = Math.floorMod(currentIndex + direction, snapshot.pals.size)
-        val nextPokemonId = snapshot.pals[nextIndex].pokemonId
+        val nextIndex = Math.floorMod(currentIndex + direction, roster.size)
+        val nextPokemonId = roster[nextIndex].pokemonId
 
         player.openHandledScreen(net.minecraft.screen.SimpleNamedScreenHandlerFactory(
             { syncId, inv, _ -> PokemonTagScreenHandler(syncId, inv, nextPokemonId) },
