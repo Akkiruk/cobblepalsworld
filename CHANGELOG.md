@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.15
+
+- Added fallback identity data to native Command Post crew leases so missing or moved Pokemon remain visible in the crew roster instead of disappearing from management.
+- Added native crew return-home networking and UI controls for sending a selected worker back to the Command Post without relying on a pasture manager action.
+- Migrated old linked-pasture Command Posts into native crew leases on tick when a legacy roster is still present, then cleared the old link after successful migration.
+- Reworded the Command Post home and crew UI around native Party/PC crews instead of linked-pasture setup states.
+
 ## 0.2.14
 
 - Added native Command Post crew leases that remember each Pokemon's owner and Party/PC source slot, giving the rewrite stable metadata for routing and UI refreshes.

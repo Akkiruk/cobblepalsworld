@@ -12,7 +12,10 @@ data class CommandPostCrewMember(
     val binding: CommandPostCrewBinding,
     val sourceType: String,
     val boxIndex: Int,
-    val slotIndex: Int
+    val slotIndex: Int,
+    val displayName: String = "Unknown Pokemon",
+    val species: String = "unknown",
+    val level: Int = 0
 )
 
 object CommandPostCrewManager {
@@ -26,14 +29,17 @@ object CommandPostCrewManager {
         pos: BlockPos,
         sourceType: String,
         boxIndex: Int,
-        slotIndex: Int
+        slotIndex: Int,
+        displayName: String,
+        species: String,
+        level: Int
     ): Boolean {
         val binding = CommandPostCrewBinding(dimensionId, pos.toImmutable())
         val current = memberByPokemon[pokemonId]?.binding
         if (current == binding) return false
         if (current != null) return false
 
-        val member = CommandPostCrewMember(pokemonId, ownerUuid, binding, sourceType, boxIndex, slotIndex)
+        val member = CommandPostCrewMember(pokemonId, ownerUuid, binding, sourceType, boxIndex, slotIndex, displayName, species, level)
         crewByPost.getOrPut(binding) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
         memberByPokemon[pokemonId] = member
         return true

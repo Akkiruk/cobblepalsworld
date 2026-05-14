@@ -51,4 +51,17 @@ object CommandPostCrewLifecycle {
             pokemon.tryRecallWithAnimation()
         }
     }
+
+    fun returnHome(world: ServerWorld, anchor: BlockPos, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null): PokemonEntity? {
+        val pokemon = resolvePokemon(world, member, fallbackOwnerUuid) ?: return null
+        val spawnPos = SafePositionResolver.standNear(world, anchor.up(), anchor) ?: anchor.up()
+        val spawnVec = Vec3d(spawnPos.x + 0.5, spawnPos.y.toDouble(), spawnPos.z + 0.5)
+        val current = pokemon.entity
+        if (current != null && current.world === world) {
+            current.teleport(spawnVec.x, spawnVec.y, spawnVec.z, false)
+            current.navigation.stop()
+            return current
+        }
+        return ensureEntity(world, anchor, pokemon)
+    }
 }

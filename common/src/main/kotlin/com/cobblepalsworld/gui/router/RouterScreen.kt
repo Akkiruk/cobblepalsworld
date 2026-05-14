@@ -177,6 +177,7 @@ class RouterScreen(
         val queuedCount: Int,
         val augmentCount: Int,
         val setupIssueCount: Int,
+        val hasCrew: Boolean,
         val subtitle: String,
         val jobSummary: String,
         val crewSummary: String,
@@ -305,6 +306,7 @@ class RouterScreen(
         val installedCards = buildInstalledCards()
         val snapshot = currentCrewSnapshot()
         val jobCardCount = installedCards.size
+        val hasCrew = handler.rosterCount > 0
         val idleCount = (handler.assignedCount - handler.activeCount).coerceAtLeast(0)
         val queuedCount = (jobCardCount - handler.assignedCount).coerceAtLeast(0)
         val augmentCount = handler.slots
@@ -338,7 +340,7 @@ class RouterScreen(
                 val filterSummary = summarizeFilter(tagType, card.spec)
                 val pressureLabel = when {
                     firstActionIssue != null -> firstActionIssue.label
-                    !handler.linked -> "unlinked"
+                    !hasCrew -> "needs crew"
                     staffedCount <= 0 && handler.rosterCount > 0 -> "needs pal"
                     activeCount > 0 -> "active $activeCount"
                     staffedCount > 0 -> "covered"
@@ -348,7 +350,7 @@ class RouterScreen(
                 val pressureColor = when {
                     firstActionIssue?.severity == TagPolicySeverity.BLOCKING -> CobblePalsUiTheme.ACCENT_DANGER
                     firstActionIssue?.severity == TagPolicySeverity.WARNING -> CobblePalsUiTheme.ACCENT_POLICY
-                    !handler.linked -> CobblePalsUiTheme.ACCENT_DANGER
+                    !hasCrew -> CobblePalsUiTheme.ACCENT_DANGER
                     staffedCount <= 0 && handler.rosterCount > 0 -> 0xFFFF8A6B.toInt()
                     activeCount > 0 -> CobblePalsUiTheme.ACCENT_WORK
                     staffedCount > 0 -> CobblePalsUiTheme.ACCENT_CREW
@@ -396,9 +398,9 @@ class RouterScreen(
         val setupIssueCount = roles.count { role -> role.firstIssue?.severity?.let { it != TagPolicySeverity.INFO } == true }
 
         val subtitle = when {
-            !handler.linked -> "Link a pasture to start."
+            !hasCrew -> "Assign Party or PC Pokemon."
             jobCardCount <= 0 -> "Add role cards to begin."
-            else -> "Linked pasture command."
+            else -> "Native crew command."
         }
         val jobSummary = when {
             jobCardCount <= 0 -> "No roles installed"
@@ -418,6 +420,7 @@ class RouterScreen(
             queuedCount = queuedCount,
             augmentCount = augmentCount,
             setupIssueCount = setupIssueCount,
+            hasCrew = hasCrew,
             subtitle = subtitle,
             jobSummary = jobSummary,
             crewSummary = crewSummary,
@@ -431,9 +434,8 @@ class RouterScreen(
     private fun buildAlert(jobCardCount: Int, setupIssueCount: Int, queuedCount: Int): CommandAlert {
         return when {
             jobCardCount <= 0 -> CommandAlert("Empty", "Install role cards", CobblePalsUiTheme.TEXT_FAINT, CobblePalsUiTheme.TEXT_MUTED)
-            !handler.linked -> CommandAlert("Unlinked", "No pasture link", CobblePalsUiTheme.ACCENT_DANGER, 0xFFFFDCD6.toInt())
             setupIssueCount > 0 -> CommandAlert("Setup", "$setupIssueCount roles need targets", CobblePalsUiTheme.ACCENT_POLICY, 0xFFFFE3B2.toInt())
-            handler.rosterCount <= 0 -> CommandAlert("No Crew", "Linked pasture is empty", 0xFFCC8F62.toInt(), 0xFFF8DFC9.toInt())
+            handler.rosterCount <= 0 -> CommandAlert("No Crew", "Add Party or PC Pokemon", 0xFFCC8F62.toInt(), 0xFFF8DFC9.toInt())
             queuedCount > 0 -> CommandAlert("Queue", "$queuedCount roles await pals", CobblePalsUiTheme.ACCENT_BUFFER, 0xFFDCEBFF.toInt())
             handler.activeCount > 0 -> CommandAlert("Active", "Crew is working", CobblePalsUiTheme.ACCENT_WORK, 0xFFD7F7F0.toInt())
             else -> CommandAlert("Ready", "Crew is standing by", CobblePalsUiTheme.ACCENT_CREW, 0xFFE1F4D8.toInt())
@@ -662,7 +664,7 @@ class RouterScreen(
     private fun tabButtons(state: HomeState): List<TabButton> {
         return listOf(
             TabButton(CommandPostView.Home, 10, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Home"), Text.literal(state.jobSummary), Text.literal(state.crewSummary))),
-            TabButton(CommandPostView.Crew, 76, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Crew"), Text.literal("${handler.rosterCount} linked pals"))),
+            TabButton(CommandPostView.Crew, 76, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Crew"), Text.literal("${handler.rosterCount} crew members"))),
             TabButton(CommandPostView.Policy, 142, TAB_TOP, 70, TAB_HEIGHT, listOf(Text.literal("Roles"), Text.literal("${state.roles.size} installed role lines"))),
             TabButton(CommandPostView.Logistics, 216, TAB_TOP, 74, TAB_HEIGHT, listOf(Text.literal("Buffer"), Text.literal("Inventory and item flow")))
         )
@@ -734,7 +736,14 @@ class RouterScreen(
             TextChipButton("crew-mode-action", DETAIL_LEFT + 6, 342, DETAIL_WIDTH - 12, "Mode", pal.assignmentLabel(), CobblePalsUiTheme.ACCENT_BUFFER, pal.tagTypeId != null, listOf(Text.literal("Crew mode"), Text.literal("Current: ${pal.assignmentLabel()}"))),
             TextChipButton("crew-fallback-action", DETAIL_LEFT + 6, 358, DETAIL_WIDTH - 12, "Fallback", if (pal.allowFallback) "On" else "Off", if (pal.allowFallback) CobblePalsUiTheme.ACCENT_CREW else CobblePalsUiTheme.ACCENT_DANGER, pal.tagTypeId != null, listOf(Text.literal("Fallback"), Text.literal(if (pal.allowFallback) "Enabled" else "Locked"))),
             TextChipButton("crew-policy-action", DETAIL_LEFT + 6, 374, DETAIL_WIDTH - 12, "Role", if (pal.tagTypeId == null) "None" else "Policy", CobblePalsUiTheme.ACCENT_POLICY, pal.tagTypeId != null, listOf(Text.literal("Open role policy"))),
-            TextChipButton("crew-home-action", DETAIL_LEFT + 6, 390, DETAIL_WIDTH - 12, "Return", "Home", CobblePalsUiTheme.ACCENT_PURPLE, true, listOf(Text.literal("Return to pasture")))
+            TextChipButton("crew-home-action", DETAIL_LEFT + 6, 390, DETAIL_WIDTH - 12, "Return", "Home", CobblePalsUiTheme.ACCENT_PURPLE, true, listOf(Text.literal("Return to Command Post")))
+        )
+    }
+
+    private fun nativeRosterDetailButtons(selected: NativeRosterRow?): List<TextChipButton> {
+        selected ?: return emptyList()
+        return listOf(
+            TextChipButton("native-return-action", LIST_LEFT + 94, SOURCE_DETAIL_TOP + 27, 38, "", "Home", CobblePalsUiTheme.ACCENT_PURPLE, true, listOf(Text.literal("Return to Command Post"), Text.literal(selected.source.statusLabel())))
         )
     }
 
@@ -771,8 +780,8 @@ class RouterScreen(
     }
 
     private fun drawHeader(context: DrawContext, state: HomeState) {
-        val linkText = if (handler.linked) Text.literal("LINKED") else Text.literal("UNLINKED")
-        val chipStyle = if (handler.linked) CobblePalsUiTheme.linkedStateChip else CobblePalsUiTheme.unlinkedStateChip
+        val linkText = if (state.hasCrew) Text.literal("CREW") else Text.literal("EMPTY")
+        val chipStyle = if (state.hasCrew) CobblePalsUiTheme.linkedStateChip else CobblePalsUiTheme.unlinkedStateChip
         context.drawText(textRenderer, Text.literal("COMMAND POST"), 12, 8, CobblePalsUiTheme.HEADER_TEXT, false)
         context.drawText(textRenderer, Text.literal(fit(state.subtitle, 194)), 12, 20, CobblePalsUiTheme.SUBTITLE_TEXT, false)
         drawLocalHeaderChip(context, linkText, backgroundWidth - textRenderer.getWidth(linkText) - 22, 9, chipStyle)
@@ -968,7 +977,10 @@ class RouterScreen(
         val source = selected.source
         context.drawText(textRenderer, Text.literal(fit(source.displayName, LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 7, CobblePalsUiTheme.TEXT_PRIMARY, false)
         context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 19, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit("${source.statusLabel()} • ${source.sourceLabel()}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
+        context.drawText(textRenderer, Text.literal(fit("${source.statusLabel()} • ${source.sourceLabel()}", LIST_WIDTH - 58)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
+        nativeRosterDetailButtons(selected).forEach { chip ->
+            drawFixedChip(context, chip, false)
+        }
     }
 
     private fun drawRosterDetail(context: DrawContext, selected: CrewRowSummary?) {
@@ -1177,6 +1189,14 @@ class RouterScreen(
 
             CommandPostView.Crew -> {
                 val selectedSource = selectedSourceRow()
+                val selectedNative = nativeRosterRows().firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
+                nativeRosterDetailButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
+                    if (chip.id == "native-return-action") {
+                        selectedNative?.source?.pokemonId?.let { pokemonId -> CobblePalsNetworking.sendReturnCrewPokemon(handler.routerPos, pokemonId) }
+                        requestCrewSourceRefresh()
+                    }
+                    return true
+                }
                 sourceDetailButtons(selectedSource).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
                     if (chip.id == "source-crew-action" && selectedSource != null && chip.active) {
                         val pokemonId = selectedSource.snapshot.pokemonId
@@ -1300,6 +1320,8 @@ class RouterScreen(
             }
             CommandPostView.Crew -> {
                 val selectedSource = selectedSourceRow()
+                val selectedNative = nativeRosterRows().firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
+                nativeRosterDetailButtons(selectedNative).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 sourceDetailButtons(selectedSource).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 crewFilterButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 crewPageButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, it.height) }?.let { button -> return HoverTooltip(button.id, button.tooltip) }

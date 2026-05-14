@@ -116,6 +116,9 @@ class CobblePalsSaveData : PersistentState() {
                 idNbt.putString("SourceType", member.sourceType)
                 idNbt.putInt("BoxIndex", member.boxIndex)
                 idNbt.putInt("SlotIndex", member.slotIndex)
+                idNbt.putString("DisplayName", member.displayName)
+                idNbt.putString("Species", member.species)
+                idNbt.putInt("Level", member.level)
                 idsNbt.add(idNbt)
             }
             postNbt.put("Pokemon", idsNbt)
@@ -239,7 +242,10 @@ class CobblePalsSaveData : PersistentState() {
                                             binding = binding,
                                             sourceType = idNbt.getString("SourceType").ifBlank { "UNKNOWN" },
                                             boxIndex = idNbt.getInt("BoxIndex"),
-                                            slotIndex = idNbt.getInt("SlotIndex")
+                                            slotIndex = idNbt.getInt("SlotIndex"),
+                                            displayName = idNbt.getString("DisplayName").ifBlank { "Unknown Pokemon" },
+                                            species = idNbt.getString("Species").ifBlank { "unknown" },
+                                            level = if (idNbt.contains("Level")) idNbt.getInt("Level") else 0
                                         )
                                     )
                                 }

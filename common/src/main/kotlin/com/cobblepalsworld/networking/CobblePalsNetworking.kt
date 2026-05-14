@@ -5,6 +5,8 @@ import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
+import com.cobblepalsworld.crew.CommandPostCrewLifecycle
+import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
@@ -114,6 +116,23 @@ object CobblePalsNetworking {
 
                 override fun decode(buf: RegistryByteBuf): MutateCrewC2S {
                     return MutateCrewC2S(buf.readBlockPos(), buf.readUuid(), buf.readBoolean())
+                }
+            }
+        }
+    }
+
+    class ReturnCrewHomeC2S(val routerPos: BlockPos, val pokemonId: UUID) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            val TYPE = CustomPayload.Id<ReturnCrewHomeC2S>(Identifier.of(CobblePalsWorld.MODID, "return_crew_home"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, ReturnCrewHomeC2S> {
+                override fun encode(buf: RegistryByteBuf, value: ReturnCrewHomeC2S) {
+                    buf.writeBlockPos(value.routerPos)
+                    buf.writeUuid(value.pokemonId)
+                }
+
+                override fun decode(buf: RegistryByteBuf): ReturnCrewHomeC2S {
+                    return ReturnCrewHomeC2S(buf.readBlockPos(), buf.readUuid())
                 }
             }
         }
@@ -247,6 +266,17 @@ object CobblePalsNetworking {
                 handleCrewMutation(player, payload.routerPos, payload.pokemonId, payload.addToCrew)
             }
         }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.C2S,
+            ReturnCrewHomeC2S.TYPE,
+            ReturnCrewHomeC2S.CODEC
+        ) { payload, context ->
+            context.queue {
+                val player = context.player as? ServerPlayerEntity ?: return@queue
+                handleReturnCrewHome(player, payload.routerPos, payload.pokemonId)
+            }
+        }
     }
 
     fun registerClient(
@@ -330,6 +360,10 @@ object CobblePalsNetworking {
         NetworkManager.sendToServer(MutateCrewC2S(routerPos.toImmutable(), pokemonId, false))
     }
 
+    fun sendReturnCrewPokemon(routerPos: BlockPos, pokemonId: UUID) {
+        NetworkManager.sendToServer(ReturnCrewHomeC2S(routerPos.toImmutable(), pokemonId))
+    }
+
     fun sendTeleportHome(pasturePos: BlockPos, pokemonId: UUID) {
         NetworkManager.sendToServer(TeleportHomeC2S(pasturePos, pokemonId))
     }
@@ -368,8 +402,9 @@ object CobblePalsNetworking {
 
         val registries = player.server.registryManager
         val storage = Cobblemon.storage
-        val party = storage.getParty(player.uuid, registries)
-        val pc = storage.getPC(player.uuid, registries)
+        val sourceOwnerUuid = router.ownerUuid() ?: player.uuid
+        val party = storage.getParty(sourceOwnerUuid, registries)
+        val pc = storage.getPC(sourceOwnerUuid, registries)
         val dimensionId = world.registryKey.value.toString()
         val controllerPos = router.pos.toImmutable()
 
@@ -383,12 +418,43 @@ object CobblePalsNetworking {
                 }
             }
         }
+        val knownIds = (partyEntries.asSequence() + pcEntries.asSequence()).map { it.pokemonId }.toSet()
+        val missingCrewEntries = CommandPostCrewManager.findMembers(dimensionId, controllerPos)
+            .filter { it.pokemonId !in knownIds }
+            .map { it.toMissingCrewSnapshot() }
+        val missingByType = missingCrewEntries.groupBy { it.sourceType }
 
         val sources = listOf(
-            CrewSourceSnapshot(CrewSourceType.PARTY, partyEntries),
-            CrewSourceSnapshot(CrewSourceType.PC, pcEntries)
+            CrewSourceSnapshot(CrewSourceType.PARTY, partyEntries + missingByType[CrewSourceType.PARTY].orEmpty()),
+            CrewSourceSnapshot(CrewSourceType.PC, pcEntries + missingByType[CrewSourceType.PC].orEmpty())
         )
         NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, sources))
+    }
+
+    private fun CommandPostCrewMember.toMissingCrewSnapshot(): CrewSourcePokemonSnapshot {
+        val sourceType = runCatching { CrewSourceType.valueOf(this.sourceType) }.getOrDefault(CrewSourceType.PC)
+        val assignmentView = TagAssignmentManager.getView(pokemonId)
+        val inventory = InventoryManager.get(pokemonId)
+        val cargoSummary = inventory?.let { inv ->
+            val carried = (0 until inv.size()).sumOf { slot -> inv.getStack(slot).count }
+            if (carried > 0) "Cargo $carried" else ""
+        } ?: ""
+        return CrewSourcePokemonSnapshot(
+            pokemonId = pokemonId,
+            sourceType = sourceType,
+            boxIndex = boxIndex,
+            slotIndex = slotIndex,
+            displayName = displayName,
+            species = species,
+            level = level,
+            isFainted = false,
+            isCrewMember = true,
+            tagTypeId = assignmentView?.tag?.type?.id,
+            workStatus = "Missing",
+            cargoSummary = cargoSummary,
+            isAvailable = false,
+            unavailableReason = "Storage moved"
+        )
     }
 
     private fun Pokemon.toCrewSourceSnapshot(
@@ -459,7 +525,10 @@ object CobblePalsNetworking {
                 pos = controllerPos,
                 sourceType = locatedPokemon.sourceType.name,
                 boxIndex = locatedPokemon.boxIndex,
-                slotIndex = locatedPokemon.slotIndex
+                slotIndex = locatedPokemon.slotIndex,
+                displayName = pokemon.getDisplayName(false).string,
+                species = pokemon.species.name,
+                level = pokemon.level
             )
         } else {
             val removed = CommandPostCrewManager.remove(pokemonId, dimensionId, controllerPos)
@@ -467,7 +536,7 @@ object CobblePalsNetworking {
                 TagExecutionEngine.cleanup(pokemonId, world, controllerPos)
                 TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, controllerPos)
                 router.removeAssignedWorker(pokemonId)
-                com.cobblepalsworld.crew.CommandPostCrewLifecycle.recall(world, removed, player.uuid)
+                CommandPostCrewLifecycle.recall(world, removed, player.uuid)
             }
             removed != null
         }
@@ -479,8 +548,20 @@ object CobblePalsNetworking {
         handleCrewSourceRequest(player, controllerPos)
     }
 
-    private fun findOwnedPokemon(player: ServerPlayerEntity, pokemonId: UUID): Pokemon? {
-        return locateOwnedPokemon(player, pokemonId)?.pokemon
+    private fun handleReturnCrewHome(player: ServerPlayerEntity, routerPos: BlockPos, pokemonId: UUID) {
+        val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
+        val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
+        if (!router.canAccess(player)) return
+
+        val dimensionId = world.registryKey.value.toString()
+        val controllerPos = router.pos.toImmutable()
+        val member = CommandPostCrewManager.memberFor(pokemonId) ?: return
+        if (member.binding.dimensionId != dimensionId || member.binding.pos != controllerPos) return
+
+        TagExecutionEngine.cleanup(pokemonId, world, controllerPos)
+        CommandPostCrewLifecycle.returnHome(world, controllerPos, member, router.ownerUuid() ?: player.uuid)
+        handleCrewSourceRequest(player, controllerPos)
     }
 
     private fun locateOwnedPokemon(player: ServerPlayerEntity, pokemonId: UUID): LocatedPokemon? {
