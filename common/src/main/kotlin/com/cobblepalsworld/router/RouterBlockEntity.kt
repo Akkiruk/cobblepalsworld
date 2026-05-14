@@ -81,13 +81,16 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                     val pokemonId = assignedWorkers[moduleIndex]
                     if (pokemonId != null && StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
                 }
+                25 -> pos.x
+                26 -> pos.y
+                27 -> pos.z
                 else -> 0
             }
         }
 
         override fun set(index: Int, value: Int) {}
 
-        override fun size(): Int = 25
+        override fun size(): Int = 28
     }
 
     var cooldownTicks: Int = 0

@@ -80,13 +80,13 @@ class RouterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
         this.routerInventory = SimpleInventory(RouterBlockEntity.TOTAL_SLOTS)
-        this.routerData = ArrayPropertyDelegate(25)
+        this.routerData = ArrayPropertyDelegate(28)
         setupSlots(playerInventory)
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory, routerInventory: Inventory, routerData: PropertyDelegate) : super(MenuTypes.ROUTER.get(), syncId) {
         checkSize(routerInventory, RouterBlockEntity.TOTAL_SLOTS)
-        checkDataCount(routerData, 25)
+        checkDataCount(routerData, 28)
         this.routerInventory = routerInventory
         this.routerData = routerData
         setupSlots(playerInventory)
@@ -98,6 +98,7 @@ class RouterScreenHandler : ScreenHandler {
     val activeCount: Int get() = routerData.get(3)
     val linkedPasturePos: BlockPos?
         get() = if (linked) BlockPos(routerData.get(4), routerData.get(5), routerData.get(6)) else null
+    val routerPos: BlockPos get() = BlockPos(routerData.get(25), routerData.get(26), routerData.get(27))
 
     fun moduleAssigned(moduleIndex: Int): Boolean {
         if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false

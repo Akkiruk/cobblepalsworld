@@ -3,6 +3,7 @@ package com.cobblepalsworld
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.gui.assignment.PokemonTagScreen
 import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
+import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.filter.TagFilterScreen
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.gui.pasture.PastureManagerScreen
@@ -37,6 +38,9 @@ object CobblePalsWorldClient {
                 } else if (PastureSnapshotCache.consumeManagerOpen(snapshot.pasturePos)) {
                     client.setScreen(PastureManagerScreen(snapshot))
                 }
+            },
+            onCrewSources = { routerPos, sources ->
+                CrewSourceSnapshotCache.store(routerPos, sources)
             },
             onWorkerVisuals = { pasturePos, visuals ->
                 WorkerOverlayRenderer.replacePastureVisuals(pasturePos, visuals)

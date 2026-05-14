@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.12
+
+- Added a native Command Post crew-source foundation that reads the player's party and PC directly from Cobblemon storage.
+- Reworked the Command Post Crew tab into a split roster/source view so current workers and assignable Party/PC candidates are visible in one polished surface.
+- Added validated networking for Command Post crew-source snapshots without moving or spawning Pokemon yet, laying the safe groundwork for native crew assignment.
+
 ## 0.2.11
 
 - Fixed worker navigation resolving solid job targets to the top of the target column or nearby high terrain, which could make pals climb hills with a job icon and then drop the job as if pathing had completed.

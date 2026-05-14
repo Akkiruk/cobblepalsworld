@@ -2,12 +2,19 @@ package com.cobblepalsworld.networking
 
 import com.cobblemon.mod.common.api.pasture.PastureLinkManager
 import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
+import com.cobblemon.mod.common.Cobblemon
+import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
+import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
+import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
+import com.cobblepalsworld.gui.crew.CrewSourceType
 import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
 import com.cobblepalsworld.gui.pasture.PastureSnapshot
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.behavior.TagExecutionEngine
+import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.runtime.ServerScaleRuntime
 import dev.architectury.networking.NetworkManager
 import net.minecraft.network.RegistryByteBuf
@@ -48,6 +55,44 @@ object CobblePalsNetworking {
                 }
                 override fun decode(buf: RegistryByteBuf): ManagerDataS2C {
                     return ManagerDataS2C(PastureSnapshot.readFromBuf(buf))
+                }
+            }
+        }
+    }
+
+    class RequestCrewSourcesC2S(val routerPos: BlockPos) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            val TYPE = CustomPayload.Id<RequestCrewSourcesC2S>(Identifier.of(CobblePalsWorld.MODID, "request_crew_sources"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, RequestCrewSourcesC2S> {
+                override fun encode(buf: RegistryByteBuf, value: RequestCrewSourcesC2S) {
+                    buf.writeBlockPos(value.routerPos)
+                }
+
+                override fun decode(buf: RegistryByteBuf): RequestCrewSourcesC2S {
+                    return RequestCrewSourcesC2S(buf.readBlockPos())
+                }
+            }
+        }
+    }
+
+    class CrewSourcesS2C(val routerPos: BlockPos, val sources: List<CrewSourceSnapshot>) : CustomPayload {
+        override fun getId() = TYPE
+        companion object {
+            val TYPE = CustomPayload.Id<CrewSourcesS2C>(Identifier.of(CobblePalsWorld.MODID, "crew_sources"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, CrewSourcesS2C> {
+                override fun encode(buf: RegistryByteBuf, value: CrewSourcesS2C) {
+                    buf.writeBlockPos(value.routerPos)
+                    buf.writeVarInt(value.sources.size)
+                    value.sources.forEach { it.writeToBuf(buf) }
+                }
+
+                override fun decode(buf: RegistryByteBuf): CrewSourcesS2C {
+                    val routerPos = buf.readBlockPos()
+                    return CrewSourcesS2C(
+                        routerPos = routerPos,
+                        sources = (0 until buf.readVarInt()).map { CrewSourceSnapshot.readFromBuf(buf) }
+                    )
                 }
             }
         }
@@ -132,6 +177,7 @@ object CobblePalsNetworking {
 
     fun registerS2CType() {
         NetworkManager.registerS2CPayloadType(ManagerDataS2C.TYPE, ManagerDataS2C.CODEC)
+        NetworkManager.registerS2CPayloadType(CrewSourcesS2C.TYPE, CrewSourcesS2C.CODEC)
         NetworkManager.registerS2CPayloadType(WorkerVisualsS2C.TYPE, WorkerVisualsS2C.CODEC)
     }
 
@@ -158,10 +204,22 @@ object CobblePalsNetworking {
                 handleTeleportHome(player, payload.pasturePos, payload.pokemonId)
             }
         }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.C2S,
+            RequestCrewSourcesC2S.TYPE,
+            RequestCrewSourcesC2S.CODEC
+        ) { payload, context ->
+            context.queue {
+                val player = context.player as? ServerPlayerEntity ?: return@queue
+                handleCrewSourceRequest(player, payload.routerPos)
+            }
+        }
     }
 
     fun registerClient(
         onReceive: (PastureSnapshot) -> Unit,
+        onCrewSources: (BlockPos, List<CrewSourceSnapshot>) -> Unit,
         onWorkerVisuals: (BlockPos, List<WorkerVisualSnapshot>) -> Unit
     ) {
         NetworkManager.registerReceiver(
@@ -170,6 +228,14 @@ object CobblePalsNetworking {
             ManagerDataS2C.CODEC
         ) { payload, context ->
             context.queue { onReceive(payload.snapshot) }
+        }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.S2C,
+            CrewSourcesS2C.TYPE,
+            CrewSourcesS2C.CODEC
+        ) { payload, context ->
+            context.queue { onCrewSources(payload.routerPos, payload.sources) }
         }
 
         NetworkManager.registerReceiver(
@@ -220,6 +286,10 @@ object CobblePalsNetworking {
         NetworkManager.sendToServer(OpenManagerC2S(pasturePos.toImmutable()))
     }
 
+    fun sendCrewSourceRefresh(routerPos: BlockPos) {
+        NetworkManager.sendToServer(RequestCrewSourcesC2S(routerPos.toImmutable()))
+    }
+
     fun sendTeleportHome(pasturePos: BlockPos, pokemonId: UUID) {
         NetworkManager.sendToServer(TeleportHomeC2S(pasturePos, pokemonId))
     }
@@ -248,5 +318,65 @@ object CobblePalsNetworking {
 
         // Re-send updated manager data
         handleOpenRequest(player, targetPasturePos)
+    }
+
+    private fun handleCrewSourceRequest(player: ServerPlayerEntity, routerPos: BlockPos) {
+        val world = player.serverWorld
+        CobblePalsSaveData.ensureLoaded(world)
+        val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
+        if (!router.canAccess(player)) return
+
+        val registries = player.server.registryManager
+        val storage = Cobblemon.storage
+        val party = storage.getParty(player.uuid, registries)
+        val pc = storage.getPC(player.uuid, registries)
+        val dimensionId = world.registryKey.value.toString()
+        val controllerPos = router.pos.toImmutable()
+
+        val partyEntries = (0 until party.size())
+            .mapNotNull { slot -> party.get(slot)?.toCrewSourceSnapshot(CrewSourceType.PARTY, -1, slot, dimensionId, controllerPos) }
+
+        val pcEntries = buildList {
+            pc.boxes.forEachIndexed { boxIndex, box ->
+                box.getNonEmptySlots().entries.sortedBy { it.key }.forEach { entry ->
+                    add(entry.value.toCrewSourceSnapshot(CrewSourceType.PC, boxIndex, entry.key, dimensionId, controllerPos))
+                }
+            }
+        }
+
+        val sources = listOf(
+            CrewSourceSnapshot(CrewSourceType.PARTY, partyEntries),
+            CrewSourceSnapshot(CrewSourceType.PC, pcEntries)
+        )
+        NetworkManager.sendToPlayer(player, CrewSourcesS2C(controllerPos, sources))
+    }
+
+    private fun Pokemon.toCrewSourceSnapshot(
+        sourceType: CrewSourceType,
+        boxIndex: Int,
+        slotIndex: Int,
+        dimensionId: String,
+        controllerPos: BlockPos
+    ): CrewSourcePokemonSnapshot {
+        val controllerBinding = TagAssignmentManager.getControllerBinding(uuid)
+        val alreadyHere = controllerBinding?.dimensionId == dimensionId && controllerBinding.pos == controllerPos
+        val unavailableReason = when {
+            isFainted() -> "Needs healing"
+            alreadyHere -> "In crew"
+            controllerBinding != null -> "Other post"
+            else -> ""
+        }
+        return CrewSourcePokemonSnapshot(
+            pokemonId = uuid,
+            sourceType = sourceType,
+            boxIndex = boxIndex,
+            slotIndex = slotIndex,
+            displayName = getDisplayName(false).string,
+            species = species.name,
+            level = level,
+            isFainted = isFainted(),
+            isAvailable = unavailableReason.isBlank(),
+            unavailableReason = unavailableReason
+        )
     }
 }
