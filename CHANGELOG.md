@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.37
+
+- Fixed Command Post workers being immediately sent back out after `/kill @e`, which made entity cleanup commands keep finding the same worker entities again.
+- Command Post recall now waits for Cobblemon's recall animation/state cleanup before sending a worker out again, preventing recall-and-resend overlap from leaving extra Pokemon entities around.
+- Added short runtime suppression after a Command Post worker entity dies so admin cleanup and accidental worker deaths settle cleanly before the post resumes dispatch.
+
 ## 0.2.36
 
 - Fixed Command Post crew workers being recalled to the trainer after walking only a short distance from the post; distant same-world workers are now reseated at the Command Post without the owner recall beam.

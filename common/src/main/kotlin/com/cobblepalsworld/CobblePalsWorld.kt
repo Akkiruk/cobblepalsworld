@@ -14,6 +14,7 @@ import com.cobblepalsworld.router.RouterRegistry
 import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagRegistry
 import dev.architectury.event.EventResult
+import dev.architectury.event.events.common.EntityEvent
 import dev.architectury.event.events.common.InteractionEvent
 import dev.architectury.event.events.common.LifecycleEvent
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory
@@ -76,8 +77,16 @@ object CobblePalsWorld {
     }
 
     private fun registerLifecycle() {
+        EntityEvent.LIVING_DEATH.register { entity, _ ->
+            if (entity is PokemonEntity) {
+                CommandPostCrewLifecycle.handleWorkerDeath(entity)
+            }
+            EventResult.pass()
+        }
+
         LifecycleEvent.SERVER_STOPPING.register { server ->
             CommandPostCrewLifecycle.recallAll(server)
+            CommandPostCrewLifecycle.clearRuntimeState()
             CobblePalsSaveData.markDirty(server)
             TagExecutionEngine.resetRuntimeState()
             CobblePalsSaveData.clearLoaded(server)
