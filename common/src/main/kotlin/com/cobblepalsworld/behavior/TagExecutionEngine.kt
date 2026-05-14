@@ -197,7 +197,6 @@ object TagExecutionEngine {
         SenderBehavior.clearAllRuntimeState()
         DistributorBehavior.clearAllRuntimeState()
         ShepherdBehavior.clearAllRuntimeState()
-        WorkTargetCache.clear()
     }
 
     private fun recoverCarriedInventory(pokemonId: java.util.UUID, world: World, pos: BlockPos, inventory: PokemonInventory) {

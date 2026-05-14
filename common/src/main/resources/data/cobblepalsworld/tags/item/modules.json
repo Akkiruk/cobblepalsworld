@@ -5,13 +5,10 @@
     "cobblepalsworld:guardian_tag",
     "cobblepalsworld:harvester_tag",
     "cobblepalsworld:vacuum_tag",
-    "cobblepalsworld:fisher_tag",
-    "cobblepalsworld:scout_tag",
     "cobblepalsworld:sender_tag",
     "cobblepalsworld:puller_tag",
     "cobblepalsworld:distributor_tag",
     "cobblepalsworld:activator_tag",
-    "cobblepalsworld:lookout_tag",
     "cobblepalsworld:shepherd_tag"
   ]
 }

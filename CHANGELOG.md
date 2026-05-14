@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.30
+
+- Removed the unintended Fisher, Scout, and Lookout tag roles, including their behavior classes, recipes, item models, language keys, config defaults, and module tag entries.
+- Kept the release focused on the Cobblemon-style Command Post UI, source paging, role policy controls, and readability improvements for the existing tag systems.
+
 ## 0.2.29
 
 - Finished the Command Post Cobblemon UI fidelity pass with extracted source-slot, party-panel, pasture-scroll-list, info-panel, and mode-drawer widgets, plus a true Cobblemon party-panel layout for Party browsing.

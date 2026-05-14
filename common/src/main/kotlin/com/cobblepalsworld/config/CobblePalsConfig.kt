@@ -70,15 +70,12 @@ data class CobblePalsConfig(
             "guardian" to TagConfig(enabled = true, range = 12),
             "harvester" to TagConfig(enabled = true, range = 8),
             "vacuum" to TagConfig(enabled = true, range = 8),
-            "fisher" to TagConfig(enabled = true, range = 12),
-            "scout" to TagConfig(enabled = true, range = 16),
             "sender" to TagConfig(enabled = true, range = 16),
             "puller" to TagConfig(enabled = true, range = 16),
             "distributor" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "dropper" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "void" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "activator" to TagConfig(enabled = true, range = 8),
-            "lookout" to TagConfig(enabled = true, range = 16),
             "shepherd" to TagConfig(enabled = true, range = 12)
         )
 

@@ -71,25 +71,6 @@ enum class TagType(
         workParticle = ParticleTypes.PORTAL,
         workSound = SoundEvents.ENTITY_ITEM_PICKUP
     ),
-    FISHER(
-        id = "fisher",
-        bindingMode = BindingMode.AREA,
-        description = "Finds a safe shoreline spot and catches fish for the Command Post buffer",
-        usesFilter = false,
-        color = Formatting.AQUA,
-        arrivalParticle = ParticleTypes.SPLASH,
-        workParticle = ParticleTypes.FISHING,
-        workSound = SoundEvents.ENTITY_FISHING_BOBBER_SPLASH
-    ),
-    SCOUT(
-        id = "scout",
-        description = "Marks stable nearby discoveries so players can inspect useful blocks instead of chasing random pings",
-        usesFilter = false,
-        color = Formatting.GREEN,
-        arrivalParticle = ParticleTypes.COMPOSTER,
-        workParticle = ParticleTypes.HAPPY_VILLAGER,
-        workSound = SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP
-    ),
 
     // --- Logistics ---
     SENDER(
@@ -146,15 +127,6 @@ enum class TagType(
         arrivalParticle = ParticleTypes.WAX_ON,
         workParticle = ParticleTypes.WAX_ON,
         workSound = SoundEvents.BLOCK_DISPENSER_DISPENSE
-    ),
-    LOOKOUT(
-        id = "lookout",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Turns the Command Post's redstone output on when a bound or nearby inventory contains matching items",
-        color = Formatting.GOLD,
-        arrivalParticle = ParticleTypes.ELECTRIC_SPARK,
-        workParticle = ParticleTypes.ELECTRIC_SPARK,
-        workSound = SoundEvents.BLOCK_LEVER_CLICK
     ),
     SHEPHERD(
         id = "shepherd",
