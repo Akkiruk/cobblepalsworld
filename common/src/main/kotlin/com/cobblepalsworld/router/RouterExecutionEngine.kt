@@ -16,7 +16,7 @@ import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.persistence.CobblePalsSaveData
-import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagInstance
 import net.minecraft.registry.Registries
@@ -33,21 +33,24 @@ object RouterExecutionEngine {
         val dimensionId = world.registryKey.value.toString()
         var changed = false
 
-        var linkedPasture = router.linkedPasture(world)
-        if (linkedPasture != null && CommandPostCrewManager.countAt(dimensionId, pos) == 0) {
-            if (migrateLinkedPastureCrew(world, router, linkedPasture, dimensionId, pos)) {
+        val legacyPasture = router.linkedPasture(world)
+        if (legacyPasture != null && CommandPostCrewManager.countAt(dimensionId, pos) == 0) {
+            if (migrateLinkedPastureCrew(world, router, legacyPasture, dimensionId, pos)) {
                 changed = true
-                linkedPasture = null
             }
         }
+        if (legacyPasture != null) {
+            router.unlinkPasture()
+            changed = true
+        }
+
         val nativeCrewMembers = CommandPostCrewManager.findMembers(dimensionId, pos)
         val hasNativeCrew = nativeCrewMembers.isNotEmpty()
-        if (linkedPasture == null && !hasNativeCrew) {
-            if (releaseControlledWorkers(world, router, router.linkedPastureAnchor(), controlledWorkerIds(dimensionId, pos))) {
+        if (!hasNativeCrew) {
+            if (releaseControlledWorkers(world, router, pos.toImmutable(), controlledWorkerIds(dimensionId, pos))) {
                 changed = true
             }
             router.clearAssignedWorkers()
-            router.unlinkPasture()
             router.updateStatus(false, 0, 0, 0)
             router.updatePowered(false)
             router.cooldownTicks = 0
@@ -57,9 +60,9 @@ object RouterExecutionEngine {
             return
         }
 
-        val originPos = linkedPasture?.pos?.toImmutable() ?: pos.toImmutable()
-        val roster = if (hasNativeCrew) collectNativeRoster(world, router, nativeCrewMembers) else collectRoster(linkedPasture ?: return)
-        val visibleRosterCount = if (hasNativeCrew) nativeCrewMembers.size else roster.size
+        val originPos = pos.toImmutable()
+        val roster = collectNativeRoster(world, router, nativeCrewMembers)
+        val visibleRosterCount = nativeCrewMembers.size
 
         if (router.cooldownTicks > 0) {
             router.cooldownTicks -= 1
@@ -68,7 +71,7 @@ object RouterExecutionEngine {
                 val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
                 StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
             }
-            router.updateStatus(linkedPasture != null || hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
+            router.updateStatus(hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
             router.updatePowered(activeWorkerCount > 0)
             return
         }
@@ -84,11 +87,7 @@ object RouterExecutionEngine {
         val rosterById = roster.associateBy { it.pokemonId }
         val claimed = mutableSetOf<UUID>()
         val controlledThisTick = mutableSetOf<UUID>()
-        val navigationBudget = if (hasNativeCrew) {
-            ServerScaleRuntime.navigationBudget(world, ConfigManager.config.general.maxPathStartsPerPastureTick)
-        } else {
-            null
-        }
+        val navigationBudget = ServerScaleRuntime.navigationBudget(world, ConfigManager.config.general.maxPathStartsPerPastureTick)
         val activeVisuals = mutableListOf<CobblePalsNetworking.WorkerVisualSnapshot>()
 
         var assignedWorkerCount = 0
@@ -139,7 +138,7 @@ object RouterExecutionEngine {
                 changed = true
             }
 
-            if (hasNativeCrew && navigationBudget != null && chosen.pokemon != null && chosen.entity != null) {
+            if (chosen.pokemon != null && chosen.entity != null) {
                 try {
                     TagExecutionEngine.tick(world, chosen.entity, chosen.pokemon, tag, originPos, navigationBudget)
                     buildWorkerVisual(chosen.entity, chosen.pokemonId)?.let(activeVisuals::add)
@@ -158,15 +157,13 @@ object RouterExecutionEngine {
             changed = true
         }
 
-        if (hasNativeCrew) {
-            markIdleNativeCrew(roster, controlledThisTick, activeVisuals)
-            val nearbyPlayers = ServerScaleRuntime.nearbyWorksitePlayers(world, pos)
-            if (nearbyPlayers.isNotEmpty() && ServerScaleRuntime.shouldSendWorksiteVisuals(world, pos, activeVisuals)) {
-                CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
-            }
+        markIdleNativeCrew(roster, controlledThisTick, activeVisuals)
+        val nearbyPlayers = ServerScaleRuntime.nearbyWorksitePlayers(world, pos)
+        if (nearbyPlayers.isNotEmpty() && ServerScaleRuntime.shouldSendWorksiteVisuals(world, pos, activeVisuals)) {
+            CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
         }
 
-        router.updateStatus(linkedPasture != null || hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
+        router.updateStatus(hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
         router.updatePowered(activeWorkerCount > 0)
         router.cooldownTicks = BASE_COOLDOWN
 
@@ -187,24 +184,6 @@ object RouterExecutionEngine {
 
     private fun controlledWorkerIds(dimensionId: String, pos: BlockPos): Set<UUID> {
         return TagAssignmentManager.findControlledBy(dimensionId, pos)
-    }
-
-    private fun collectRoster(pasture: PokemonPastureBlockEntity): List<WorkerCandidate> {
-        return pasture.tetheredPokemon.mapNotNull { tethering ->
-            val pokemon = try {
-                tethering.getPokemon()
-            } catch (_: Exception) {
-                null
-            } ?: return@mapNotNull null
-            if (pokemon.isFainted()) return@mapNotNull null
-
-            val entity = pokemon.entity ?: return@mapNotNull null
-            if (entity.dataTracker.get(PokemonEntity.POSE_TYPE) == PoseType.SLEEP) {
-                return@mapNotNull null
-            }
-
-            WorkerCandidate(pokemon.uuid)
-        }
     }
 
     private fun collectNativeRoster(world: ServerWorld, router: RouterBlockEntity, crewMembers: List<com.cobblepalsworld.crew.CommandPostCrewMember>): List<WorkerCandidate> {
@@ -355,25 +334,25 @@ object RouterExecutionEngine {
         }
     }
 
-    private fun ensureAssignment(world: ServerWorld, controllerPos: BlockPos, pasturePos: BlockPos, pokemonId: UUID, tag: TagInstance): Boolean {
+    private fun ensureAssignment(world: ServerWorld, controllerPos: BlockPos, worksitePos: BlockPos, pokemonId: UUID, tag: TagInstance): Boolean {
         val dimensionId = world.registryKey.value.toString()
         val existing = TagAssignmentManager.getView(pokemonId)
         val sameController = existing?.controllerBinding?.let { binding ->
             binding.dimensionId == dimensionId && binding.pos == controllerPos
         } == true
-        val samePasture = existing?.pastureBinding?.let { binding ->
-            binding.dimensionId == dimensionId && binding.pos == pasturePos
+        val sameWorksite = existing?.worksiteBinding?.let { binding ->
+            binding.dimensionId == dimensionId && binding.pos == worksitePos
         } == true
-        if (sameController && samePasture && existing?.tag == tag) {
+        if (sameController && sameWorksite && existing?.tag == tag) {
             return false
         }
 
         if (existing != null && existing.tag != tag) {
-            TagExecutionEngine.cleanup(pokemonId, world, pasturePos)
+            TagExecutionEngine.cleanup(pokemonId, world, worksitePos)
         }
 
         TagAssignmentManager.assignFromController(pokemonId, tag, dimensionId, controllerPos)
-        TagAssignmentManager.associateWithPasture(pokemonId, dimensionId, pasturePos)
+        TagAssignmentManager.associateWithWorksite(pokemonId, dimensionId, worksitePos)
         return true
     }
 

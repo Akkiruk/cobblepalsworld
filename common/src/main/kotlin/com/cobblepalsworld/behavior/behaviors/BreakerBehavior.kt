@@ -53,22 +53,21 @@ object BreakerBehavior : TagBehavior {
     // Blocks identified by registry path patterns (catches all variants)
     private val BANNED_PATTERNS = listOf(
         "shulker_box",  // all colored shulker boxes
-        "pasture",      // Cobblemon pasture blocks — NEVER break your own home
+        "pasture",      // Cobblemon pasture blocks stay protected for migrated worlds
     )
 
-    /** Tracks the pasture origin per-pokemon so we never break our own pasture */
-    private val pastureOrigins = java.util.concurrent.ConcurrentHashMap<java.util.UUID, BlockPos>()
+    private val worksiteOrigins = java.util.concurrent.ConcurrentHashMap<java.util.UUID, BlockPos>()
 
-    fun setPastureOrigin(pokemonId: java.util.UUID, origin: BlockPos) {
-        pastureOrigins[pokemonId] = origin
+    fun setWorksiteOrigin(pokemonId: java.util.UUID, origin: BlockPos) {
+        worksiteOrigins[pokemonId] = origin
     }
 
-    fun clearPastureOrigin(pokemonId: java.util.UUID) {
-        pastureOrigins.remove(pokemonId)
+    fun clearWorksiteOrigin(pokemonId: java.util.UUID) {
+        worksiteOrigins.remove(pokemonId)
     }
 
-    fun clearAllPastureOrigins() {
-        pastureOrigins.clear()
+    fun clearAllWorksiteOrigins() {
+        worksiteOrigins.clear()
     }
 
     private fun isBlockBanned(block: Block, pos: BlockPos, pokemonId: java.util.UUID): Boolean {
@@ -77,8 +76,7 @@ object BreakerBehavior : TagBehavior {
         val blockId = Registries.BLOCK.getId(block).path
         if (BANNED_PATTERNS.any { pattern -> blockId.contains(pattern) }) return true
 
-        // Never break the pokemon's own pasture block
-        val origin = pastureOrigins[pokemonId]
+        val origin = worksiteOrigins[pokemonId]
         if (origin != null && pos == origin) return true
 
         return false
@@ -97,7 +95,7 @@ object BreakerBehavior : TagBehavior {
         tag: TagInstance, state: WorkerState
     ): BlockPos? {
         val pokemonId = entity.pokemon.uuid
-        setPastureOrigin(pokemonId, origin)
+        setWorksiteOrigin(pokemonId, origin)
 
         val boundPos = tag.boundPos ?: return null
         return if (isBreakable(world, boundPos, pokemonId)

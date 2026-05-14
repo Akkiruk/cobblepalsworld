@@ -32,7 +32,7 @@ class WorkerState(val pokemonId: UUID) {
     var idleTicks: Int = 0
     /** When true, worker is in low-power mode and ticks at ecoTickRate instead of normal rate. */
     var ecoMode: Boolean = false
-    /** Counts pasture ticks in eco mode — skips processing until it reaches ecoTickMultiplier. */
+    /** Counts worksite ticks in eco mode so processing can be skipped until ecoTickMultiplier is reached. */
     var ecoSkipCounter: Int = 0
 
     // --- Compiled cache (avoid recomputing per-tick) ---

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.19
+
+- Removed the detached Cobblemon Pasture Manager UI, packets, client widget button, pasture block tick mixin, and legacy pasture worker runtime.
+- Made Command Posts the only active crew worksite: Party/PC crew runs locally from native Command Post leases, while old linked-pasture data is consumed only as a one-time migration source.
+- Renamed assignment/session internals around worksites, added new worksite assignment NBT keys with old pasture keys still accepted for migration, and updated worker status/tooltips to Command Post language.
+- Moved shutdown/reset behavior onto generic Command Post runtime cleanup instead of pasture manager cleanup.
+
 ## 0.2.18
 
 - Added a native Command Post crew server-stop recall pass so locally managed workers are recalled before shared runtime state is reset during shutdown.

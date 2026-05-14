@@ -1,16 +1,16 @@
-package com.cobblepalsworld.pasture
+package com.cobblepalsworld.assignment
 
-import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.session.WorkerSessionManager
+import com.cobblepalsworld.tag.TagInstance
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
 
-data class PastureBinding(val dimensionId: String, val pos: BlockPos)
+data class WorksiteBinding(val dimensionId: String, val pos: BlockPos)
 data class ControllerBinding(val dimensionId: String, val pos: BlockPos)
 
 data class AssignmentView(
     val tag: TagInstance,
-    val pastureBinding: PastureBinding?,
+    val worksiteBinding: WorksiteBinding?,
     val controllerBinding: ControllerBinding?,
     val assignmentProfile: WorkerAssignmentProfile = WorkerAssignmentProfile()
 )
@@ -24,12 +24,8 @@ object TagAssignmentManager {
         WorkerSessionManager.assignFromController(pokemonId, tag, dimensionId, pos)
     }
 
-    fun associateWithPasture(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
-        WorkerSessionManager.associateWithPasture(pokemonId, dimensionId, pos)
-    }
-
-    fun findOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
-        return WorkerSessionManager.findOrphansAt(dimensionId, pos, currentIds)
+    fun associateWithWorksite(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
+        WorkerSessionManager.associateWithWorksite(pokemonId, dimensionId, pos)
     }
 
     fun get(pokemonId: UUID): TagInstance? = WorkerSessionManager.getAssignment(pokemonId)
@@ -70,11 +66,11 @@ object TagAssignmentManager {
 
     fun forEach(action: (UUID, TagInstance) -> Unit) = WorkerSessionManager.forEachAssignment(action)
 
-    fun forEachRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?) -> Unit) {
+    fun forEachRecord(action: (UUID, TagInstance, WorksiteBinding?, ControllerBinding?) -> Unit) {
         WorkerSessionManager.forEachAssignmentRecord(action)
     }
 
-    fun forEachRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
+    fun forEachRecord(action: (UUID, TagInstance, WorksiteBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
         WorkerSessionManager.forEachAssignmentRecord(action)
     }
 

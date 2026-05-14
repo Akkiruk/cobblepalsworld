@@ -7,14 +7,11 @@ import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
 import com.cobblepalsworld.gui.filter.TagFilterScreen
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
-import com.cobblepalsworld.gui.pasture.PastureManagerScreen
-import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
 import com.cobblepalsworld.gui.router.RouterScreen
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.visual.WorkerOverlayRenderer
 import dev.architectury.registry.menu.MenuRegistry
-import net.minecraft.client.MinecraftClient
 
 object CobblePalsWorldClient {
     fun init() {
@@ -29,25 +26,14 @@ object CobblePalsWorldClient {
         }
 
         CobblePalsNetworking.registerClient(
-            onReceive = { snapshot ->
-                val client = MinecraftClient.getInstance()
-                val currentScreen = client.currentScreen
-                PastureSnapshotCache.store(snapshot)
-                if (currentScreen is PastureManagerScreen && currentScreen.appliesTo(snapshot.pasturePos)) {
-                    PastureSnapshotCache.consumeManagerOpen(snapshot.pasturePos)
-                    currentScreen.updateSnapshot(snapshot)
-                } else if (PastureSnapshotCache.consumeManagerOpen(snapshot.pasturePos)) {
-                    client.setScreen(PastureManagerScreen(snapshot))
-                }
-            },
             onCrewSources = { routerPos, sources ->
                 CrewSourceSnapshotCache.store(routerPos, sources)
             },
             onCommandPostCrew = { snapshot ->
                 CommandPostCrewSnapshotCache.store(snapshot)
             },
-            onWorkerVisuals = { pasturePos, visuals ->
-                WorkerOverlayRenderer.replaceWorksiteVisuals(pasturePos, visuals)
+            onWorkerVisuals = { worksitePos, visuals ->
+                WorkerOverlayRenderer.replaceWorksiteVisuals(worksitePos, visuals)
             }
         )
     }

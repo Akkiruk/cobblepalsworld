@@ -5,7 +5,7 @@ import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.gui.CobblePalsUiTheme
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
-import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.tag.RedstoneControlMode
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagSpec
@@ -222,8 +222,8 @@ class PokemonTagScreen(
 
     private fun iconButtons(): List<IconActionButton> {
         return listOf(
-            IconActionButton("prev", 202, 10, 12, 12, PokemonTagScreenHandler.ACTION_PREVIOUS_PAL, UiGlyph.Prev, CobblePalsUiTheme.ACCENT_BUFFER, false, listOf(Text.literal("Previous pal"), Text.literal("Step through the pasture roster."))),
-            IconActionButton("next", 218, 10, 12, 12, PokemonTagScreenHandler.ACTION_NEXT_PAL, UiGlyph.Next, CobblePalsUiTheme.ACCENT_BUFFER, false, listOf(Text.literal("Next pal"), Text.literal("Step through the pasture roster.")))
+            IconActionButton("prev", 202, 10, 12, 12, PokemonTagScreenHandler.ACTION_PREVIOUS_PAL, UiGlyph.Prev, CobblePalsUiTheme.ACCENT_BUFFER, false, listOf(Text.literal("Previous pal"), Text.literal("Step through the Command Post crew."))),
+            IconActionButton("next", 218, 10, 12, 12, PokemonTagScreenHandler.ACTION_NEXT_PAL, UiGlyph.Next, CobblePalsUiTheme.ACCENT_BUFFER, false, listOf(Text.literal("Next pal"), Text.literal("Step through the Command Post crew.")))
         )
     }
 

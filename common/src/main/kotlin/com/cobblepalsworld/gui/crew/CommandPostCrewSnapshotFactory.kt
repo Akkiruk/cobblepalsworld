@@ -7,8 +7,8 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
-import com.cobblepalsworld.pasture.TagAssignmentManager
-import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.assignment.TagAssignmentManager
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld

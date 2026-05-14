@@ -8,9 +8,9 @@ data class CobblePalsConfig(
 ) {
     data class GeneralConfig(
         val tickInterval: Int = 5,
-        /** Full-speed worker ticking radius around a pasture. */
+        /** Full-speed worker ticking radius around a Command Post. */
         val nearbyPlayerRange: Int = 48,
-        /** Additional multiplier applied to pasture ticks when nobody is nearby. */
+        /** Additional multiplier applied to worksite ticks when nobody is nearby. */
         val distantTickMultiplier: Int = 4,
         val idleSearchRetryTicks: Int = 20,
         val maxWorkersPerPasture: Int = 6,
@@ -25,14 +25,12 @@ data class CobblePalsConfig(
         val ecoTickMultiplier: Int = 4,
         /** How long (ticks) to cache a found container position before re-searching. */
         val containerCacheTicks: Int = 100,
-        /** How many new pathing starts one pasture may trigger in a single tick pass. */
+        /** How many new pathing starts one Command Post may trigger in a single tick pass. */
         val maxPathStartsPerPastureTick: Int = 3,
-        /** Server-wide cap for fresh pathing starts, preventing many loaded pastures from stampeding at once. */
+        /** Server-wide cap for fresh pathing starts, preventing many loaded worksites from stampeding at once. */
         val maxGlobalPathStartsPerTick: Int = 64,
-        /** Minimum ticks between unchanged worker visual packets for a pasture. */
-        val visualUpdateIntervalTicks: Int = 10,
-        /** Ticks to reuse full pasture UI snapshots before rebuilding them. */
-        val managerSnapshotCacheTicks: Int = 10
+        /** Minimum ticks between unchanged worker visual packets for a Command Post. */
+        val visualUpdateIntervalTicks: Int = 10
     ) {
         fun validated() = GeneralConfig(
             tickInterval = tickInterval.coerceAtLeast(1),
@@ -50,8 +48,7 @@ data class CobblePalsConfig(
             containerCacheTicks = containerCacheTicks.coerceAtLeast(200),
             maxPathStartsPerPastureTick = maxPathStartsPerPastureTick.coerceAtLeast(1),
             maxGlobalPathStartsPerTick = if (maxGlobalPathStartsPerTick <= 0) 64 else maxGlobalPathStartsPerTick,
-            visualUpdateIntervalTicks = if (visualUpdateIntervalTicks <= 0) 10 else visualUpdateIntervalTicks,
-            managerSnapshotCacheTicks = if (managerSnapshotCacheTicks <= 0) 10 else managerSnapshotCacheTicks
+            visualUpdateIntervalTicks = if (visualUpdateIntervalTicks <= 0) 10 else visualUpdateIntervalTicks
         )
     }
 

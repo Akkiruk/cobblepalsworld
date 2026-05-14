@@ -4,11 +4,11 @@ import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.inventory.InventorySizeCalculator
 import com.cobblepalsworld.inventory.PokemonInventory
-import com.cobblepalsworld.pasture.AssignmentView
-import com.cobblepalsworld.pasture.ControllerBinding
-import com.cobblepalsworld.pasture.PastureBinding
-import com.cobblepalsworld.pasture.WorkerAssignmentMode
-import com.cobblepalsworld.pasture.WorkerAssignmentProfile
+import com.cobblepalsworld.assignment.AssignmentView
+import com.cobblepalsworld.assignment.ControllerBinding
+import com.cobblepalsworld.assignment.WorksiteBinding
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
+import com.cobblepalsworld.assignment.WorkerAssignmentProfile
 import com.cobblepalsworld.tag.TagInstance
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class WorkerSession(
     val pokemonId: UUID,
     var tag: TagInstance? = null,
-    var pastureBinding: PastureBinding? = null,
+    var worksiteBinding: WorksiteBinding? = null,
     var controllerBinding: ControllerBinding? = null,
     var state: WorkerState? = null,
     var inventory: PokemonInventory? = null,
@@ -28,7 +28,7 @@ private data class BindingIndexKey(val dimensionId: String, val pos: BlockPos)
 
 object WorkerSessionManager {
     private val sessions = ConcurrentHashMap<UUID, WorkerSession>()
-    private val pastureIndex = ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>()
+    private val worksiteIndex = ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>()
     private val controllerIndex = ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>()
 
     fun getSession(pokemonId: UUID): WorkerSession? = sessions[pokemonId]
@@ -38,7 +38,7 @@ object WorkerSessionManager {
         removeFromControllerIndex(pokemonId, session.controllerBinding)
         session.tag = tag.copy(controllerPos = null)
         session.controllerBinding = null
-        addToPastureIndex(pokemonId, session.pastureBinding)
+        addToWorksiteIndex(pokemonId, session.worksiteBinding)
     }
 
     fun assignFromController(pokemonId: UUID, tag: TagInstance, dimensionId: String, pos: BlockPos) {
@@ -48,32 +48,21 @@ object WorkerSessionManager {
         session.tag = tag.copy(controllerPos = controllerPos)
         session.controllerBinding = ControllerBinding(dimensionId, controllerPos)
         addToControllerIndex(pokemonId, session.controllerBinding)
-        addToPastureIndex(pokemonId, session.pastureBinding)
+        addToWorksiteIndex(pokemonId, session.worksiteBinding)
     }
 
-    fun associateWithPasture(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
+    fun associateWithWorksite(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
         sessions.computeIfPresent(pokemonId) { _, session ->
             if (session.tag != null) {
-                val nextBinding = PastureBinding(dimensionId, pos.toImmutable())
-                if (session.pastureBinding != nextBinding) {
-                    removeFromPastureIndex(pokemonId, session.pastureBinding)
-                    session.pastureBinding = nextBinding
-                    addToPastureIndex(pokemonId, session.pastureBinding)
+                val nextBinding = WorksiteBinding(dimensionId, pos.toImmutable())
+                if (session.worksiteBinding != nextBinding) {
+                    removeFromWorksiteIndex(pokemonId, session.worksiteBinding)
+                    session.worksiteBinding = nextBinding
+                    addToWorksiteIndex(pokemonId, session.worksiteBinding)
                 }
             }
             session
         }
-    }
-
-    fun findOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
-        val indexed = pastureIndex[BindingIndexKey(dimensionId, pos.toImmutable())] ?: return emptySet()
-        return indexed.asSequence()
-            .filter { pokemonId ->
-                val session = sessions[pokemonId]
-                val binding = session?.pastureBinding
-                session?.tag != null && binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
-            }
-            .toSet()
     }
 
     fun getAssignment(pokemonId: UUID): TagInstance? = sessions[pokemonId]?.tag
@@ -81,7 +70,7 @@ object WorkerSessionManager {
     fun getAssignmentView(pokemonId: UUID): AssignmentView? {
         val session = sessions[pokemonId] ?: return null
         val tag = session.tag ?: return null
-        return AssignmentView(tag, session.pastureBinding, session.controllerBinding, session.assignmentProfile)
+        return AssignmentView(tag, session.worksiteBinding, session.controllerBinding, session.assignmentProfile)
     }
 
     fun getAssignmentProfile(pokemonId: UUID): WorkerAssignmentProfile {
@@ -141,29 +130,29 @@ object WorkerSessionManager {
         }
     }
 
-    fun forEachAssignmentRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?) -> Unit) {
+    fun forEachAssignmentRecord(action: (UUID, TagInstance, WorksiteBinding?, ControllerBinding?) -> Unit) {
         sessions.forEach { (uuid, session) ->
-            session.tag?.let { action(uuid, it, session.pastureBinding, session.controllerBinding) }
+            session.tag?.let { action(uuid, it, session.worksiteBinding, session.controllerBinding) }
         }
     }
 
-    fun forEachAssignmentRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
+    fun forEachAssignmentRecord(action: (UUID, TagInstance, WorksiteBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
         sessions.forEach { (uuid, session) ->
-            session.tag?.let { action(uuid, it, session.pastureBinding, session.controllerBinding, session.assignmentProfile) }
+            session.tag?.let { action(uuid, it, session.worksiteBinding, session.controllerBinding, session.assignmentProfile) }
         }
     }
 
     fun clearAssignments() {
         sessions.forEach { (uuid, session) ->
-            removeFromPastureIndex(uuid, session.pastureBinding)
+            removeFromWorksiteIndex(uuid, session.worksiteBinding)
             removeFromControllerIndex(uuid, session.controllerBinding)
             session.tag = null
-            session.pastureBinding = null
+            session.worksiteBinding = null
             session.controllerBinding = null
             session.assignmentProfile = WorkerAssignmentProfile()
             discardIfEmpty(uuid, session)
         }
-        pastureIndex.clear()
+        worksiteIndex.clear()
         controllerIndex.clear()
     }
 
@@ -263,7 +252,7 @@ object WorkerSessionManager {
 
     fun clearAll() {
         sessions.clear()
-        pastureIndex.clear()
+        worksiteIndex.clear()
         controllerIndex.clear()
     }
 
@@ -273,24 +262,24 @@ object WorkerSessionManager {
 
     private fun clearAssignment(pokemonId: UUID, session: WorkerSession): TagInstance? {
         val tag = session.tag ?: return null
-        removeFromPastureIndex(pokemonId, session.pastureBinding)
+        removeFromWorksiteIndex(pokemonId, session.worksiteBinding)
         removeFromControllerIndex(pokemonId, session.controllerBinding)
         session.tag = null
-        session.pastureBinding = null
+        session.worksiteBinding = null
         session.controllerBinding = null
         session.assignmentProfile = WorkerAssignmentProfile()
         discardIfEmpty(pokemonId, session)
         return tag
     }
 
-    private fun addToPastureIndex(pokemonId: UUID, binding: PastureBinding?) {
+    private fun addToWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
         binding ?: return
-        pastureIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+        worksiteIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
     }
 
-    private fun removeFromPastureIndex(pokemonId: UUID, binding: PastureBinding?) {
+    private fun removeFromWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
         binding ?: return
-        removeFromIndex(pastureIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
+        removeFromIndex(worksiteIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
     private fun addToControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
@@ -315,7 +304,7 @@ object WorkerSessionManager {
         if (session.tag != null || session.state != null || session.inventory != null) {
             return
         }
-        if (session.pastureBinding != null || session.controllerBinding != null) {
+        if (session.worksiteBinding != null || session.controllerBinding != null) {
             return
         }
         sessions.remove(pokemonId, session)

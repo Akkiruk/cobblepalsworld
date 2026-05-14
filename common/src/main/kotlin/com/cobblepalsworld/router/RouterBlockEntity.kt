@@ -10,7 +10,7 @@ import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.persistence.CobblePalsSaveData
-import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagRegistry
@@ -53,8 +53,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         const val STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT
         const val TOTAL_SLOTS = STORAGE_SLOT_END
         private val AUTOMATION_SLOTS = IntArray(STORAGE_SLOT_COUNT) { STORAGE_SLOT_START + it }
-        private const val LINK_RADIUS = 12
-        private const val LINK_HEIGHT = 4
 
         fun tick(world: World, pos: BlockPos, state: BlockState, blockEntity: RouterBlockEntity) {
             val serverWorld = world as? ServerWorld ?: return
@@ -67,13 +65,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     private val propertyDelegate = object : PropertyDelegate {
         override fun get(index: Int): Int {
             return when (index) {
-                0 -> if (hasLinkedPasture()) 1 else 0
+                0 -> if (nativeCrewCount() > 0) 1 else 0
                 1 -> nativeCrewCount().takeIf { it > 0 } ?: linkedWorkerCount
                 2 -> assignedWorkerCount
                 3 -> activeWorkerCount
-                4 -> linkedPasturePos?.x ?: 0
-                5 -> linkedPasturePos?.y ?: 0
-                6 -> linkedPasturePos?.z ?: 0
+                4, 5, 6 -> 0
                 in 7 until 7 + MODULE_SLOT_COUNT -> {
                     val moduleIndex = index - 7
                     if (assignedWorkers[moduleIndex] != null) 1 else 0
@@ -133,42 +129,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     fun ownerUuid(): UUID? = ownerUuid
 
-    fun hasLinkedPasture(): Boolean = linkedPastureDimension != null && linkedPasturePos != null
-
-    fun linkedPastureAnchor(): BlockPos = linkedPasturePos ?: pos
-
-    fun linkedPastureLocation(): BlockPos? = linkedPasturePos?.toImmutable()
-
     fun linkedPasture(world: ServerWorld): PokemonPastureBlockEntity? {
         val dimensionId = linkedPastureDimension ?: return null
         val pasturePos = linkedPasturePos ?: return null
         if (dimensionId != world.registryKey.value.toString()) return null
         return world.getBlockEntity(pasturePos) as? PokemonPastureBlockEntity
-    }
-
-    fun relinkToNearbyPasture(world: World): Boolean {
-        val nearest = findNearbyPasture(world)
-        return if (nearest == null) {
-            unlinkPasture()
-            false
-        } else {
-            setLinkedPasture(world.registryKey.value.toString(), nearest.pos)
-            true
-        }
-    }
-
-    private fun findNearbyPasture(world: World): PokemonPastureBlockEntity? {
-        var nearest: PokemonPastureBlockEntity? = null
-        var nearestDistance = Double.MAX_VALUE
-        for (candidatePos in BlockPos.iterateOutwards(pos, LINK_RADIUS, LINK_HEIGHT, LINK_RADIUS)) {
-            val pasture = world.getBlockEntity(candidatePos) as? PokemonPastureBlockEntity ?: continue
-            val distance = candidatePos.getSquaredDistance(pos)
-            if (distance < nearestDistance) {
-                nearest = pasture
-                nearestDistance = distance
-            }
-        }
-        return nearest
     }
 
     fun tagInModuleSlot(index: Int, registries: RegistryWrapper.WrapperLookup, augments: AugmentSet): TagInstance? {
@@ -344,7 +309,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     fun clearControlledAssignments(world: ServerWorld) {
         val dimensionId = world.registryKey.value.toString()
-        val cleanupPos = linkedPastureAnchor()
+        val cleanupPos = pos.toImmutable()
         val controlled = TagAssignmentManager.findControlledBy(dimensionId, pos)
         val nativeCrew = CommandPostCrewManager.findMembers(dimensionId, pos)
         var changed = false
@@ -373,14 +338,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     fun unlinkPasture() {
         clearLinkedPasture()
-    }
-
-    private fun setLinkedPasture(dimensionId: String, pasturePos: BlockPos) {
-        val immutablePos = pasturePos.toImmutable()
-        if (linkedPastureDimension == dimensionId && linkedPasturePos == immutablePos) return
-        linkedPastureDimension = dimensionId
-        linkedPasturePos = immutablePos
-        markDirty()
     }
 
     private fun clearLinkedPasture() {

@@ -28,20 +28,6 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
         val CODEC: MapCodec<RouterBlock> = createCodec(::RouterBlock)
     }
 
-    private fun linkMessage(blockEntity: RouterBlockEntity, linked: Boolean): Text {
-        if (!linked) {
-            return Text.literal("No nearby pasture found for this Command Post.").formatted(Formatting.YELLOW)
-        }
-
-        val linkedPos = blockEntity.linkedPastureLocation()
-        return if (linkedPos != null) {
-            Text.literal("Command Post linked to pasture at ${linkedPos.x}, ${linkedPos.y}, ${linkedPos.z}.")
-                .formatted(Formatting.GREEN)
-        } else {
-            Text.literal("Command Post linked to a nearby pasture.").formatted(Formatting.GREEN)
-        }
-    }
-
     init {
         defaultState = stateManager.defaultState
             .with(Properties.HORIZONTAL_FACING, net.minecraft.util.math.Direction.NORTH)
@@ -72,12 +58,7 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
         }
 
         if (!world.isClient) {
-            if (player.isSneaking) {
-                val linked = blockEntity.relinkToNearbyPasture(world)
-                player.sendMessage(linkMessage(blockEntity, linked), true)
-            } else {
-                player.openHandledScreen(blockEntity)
-            }
+            player.openHandledScreen(blockEntity)
         }
         return ActionResult.SUCCESS
     }
@@ -87,10 +68,6 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
         val player = placer as? PlayerEntity ?: return
         val blockEntity = world.getBlockEntity(pos) as? RouterBlockEntity ?: return
         blockEntity.setOwner(player)
-        if (!world.isClient) {
-            val linked = blockEntity.relinkToNearbyPasture(world)
-            player.sendMessage(linkMessage(blockEntity, linked), true)
-        }
     }
 
     override fun onStateReplaced(state: BlockState, world: World, pos: BlockPos, newState: BlockState, moved: Boolean) {

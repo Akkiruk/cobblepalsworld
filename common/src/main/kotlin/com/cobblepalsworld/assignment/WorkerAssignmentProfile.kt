@@ -1,4 +1,4 @@
-package com.cobblepalsworld.pasture
+package com.cobblepalsworld.assignment
 
 enum class WorkerAssignmentMode(val label: String) {
     GENERAL("General"),
@@ -25,7 +25,7 @@ data class WorkerAssignmentProfile(
     }
 
     fun detail(): String = when {
-        mode == WorkerAssignmentMode.RESERVED -> "Held out of general pasture labor until released"
+        mode == WorkerAssignmentMode.RESERVED -> "Held out of general Command Post labor until released"
         mode == WorkerAssignmentMode.PREFERRED && !allowFallback -> "Preferred for this role and blocks general fallback while available"
         mode == WorkerAssignmentMode.PREFERRED -> "Preferred for this role but still allows general fallback"
         !allowFallback -> "Keeps fallback disabled for this assignment"

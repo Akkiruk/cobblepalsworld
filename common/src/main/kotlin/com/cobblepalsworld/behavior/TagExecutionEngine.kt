@@ -24,7 +24,7 @@ import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.navigation.MovementPurpose
 import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.navigation.WorkerNavigationManager
-import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
@@ -98,7 +98,7 @@ object TagExecutionEngine {
 
         val behavior = TagBehaviorRegistry.get(tag.type) ?: return
 
-        if (enforcePastureLeash(world, entity, tag, behavior, state, origin, navigationBudget)) {
+        if (enforceWorksiteLeash(world, entity, tag, behavior, state, origin, navigationBudget)) {
             return
         }
 
@@ -175,7 +175,7 @@ object TagExecutionEngine {
     fun cleanupRuntimeOnly(pokemonId: java.util.UUID) {
         ClaimManager.releaseAll(pokemonId)
         StateManager.remove(pokemonId)
-        BreakerBehavior.clearPastureOrigin(pokemonId)
+        BreakerBehavior.clearWorksiteOrigin(pokemonId)
         GuardianBehavior.cleanup(pokemonId)
         SenderBehavior.cleanup(pokemonId)
         DistributorBehavior.cleanup(pokemonId)
@@ -192,7 +192,7 @@ object TagExecutionEngine {
         StateManager.clear()
         ClaimManager.clear()
         WorkerNavigationManager.clearFailureCache()
-        BreakerBehavior.clearAllPastureOrigins()
+        BreakerBehavior.clearAllWorksiteOrigins()
         GuardianBehavior.clearAllRuntimeState()
         SenderBehavior.clearAllRuntimeState()
         DistributorBehavior.clearAllRuntimeState()
@@ -274,14 +274,14 @@ object TagExecutionEngine {
     ) {
         if (world.time < state.cooldownUntil) {
             state.setStatus(WorkerStatusReason.COOLDOWN, "Recovering before the next assignment")
-            // While on cooldown, drift back toward pasture if far away
+            // While on cooldown, drift back toward the Command Post if far away
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 applyNavigationStatus(
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = WorkerStatusReason.COOLDOWN,
-                    activeDetail = "Returning near the pasture while cooling down",
-                    failedDetail = "Could not path back toward the pasture"
+                    activeDetail = "Returning near the Command Post while cooling down",
+                    failedDetail = "Could not path back toward the Command Post"
                 )
             }
             return
@@ -301,8 +301,8 @@ object TagExecutionEngine {
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.SEARCH_DELAY,
-                    activeDetail = "Returning near the pasture before the next scan",
-                    failedDetail = "Could not path back toward the pasture"
+                    activeDetail = "Returning near the Command Post before the next scan",
+                    failedDetail = "Could not path back toward the Command Post"
                 )
             }
             return
@@ -334,15 +334,15 @@ object TagExecutionEngine {
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.NO_TARGET,
-                    activeDetail = "Returning near the pasture while idle",
-                    failedDetail = "Could not path back toward the pasture"
+                    activeDetail = "Returning near the Command Post while idle",
+                    failedDetail = "Could not path back toward the Command Post"
                 )
             }
             return
         }
         if (!isWithinWorkRange(origin, target, effectiveRange(tag, state))) {
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Ignored a job target outside this pasture's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Ignored a job target outside this Command Post's work range")
             return
         }
         // Found work — check claim first, then exit eco mode
@@ -386,7 +386,7 @@ object TagExecutionEngine {
             ClaimManager.release(target, world)
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target drifted outside this pasture's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target drifted outside this Command Post's work range")
             return
         }
 
@@ -477,7 +477,7 @@ object TagExecutionEngine {
                     ClaimManager.release(target, world)
                     resetToIdle(state)
                     state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was outside this pasture's work range")
+                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was outside this Command Post's work range")
                     return
                 }
                 ClaimManager.release(target, world)
@@ -528,7 +528,7 @@ object TagExecutionEngine {
             val controllerPos = ContainerFinder.controllerBufferPos(world, tag)
                 ?.takeIf { isWithinWorkRange(origin, it, searchRange) }
 
-            // Build exclusion set: never deposit back to source or the pasture block itself
+            // Build exclusion set: never deposit back to the source or Command Post origin
             val excludePositions = mutableSetOf(origin)
             state.workSourcePos
                 ?.takeUnless { it == controllerPos }
@@ -593,7 +593,7 @@ object TagExecutionEngine {
             if (state.cachedContainerPos == depositPos) {
                 state.cachedContainerPos = null
             }
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was outside this pasture's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was outside this Command Post's work range")
             return
         }
         if (NavigationHelper.isAtPosition(entity, depositPos)) {
@@ -665,7 +665,7 @@ object TagExecutionEngine {
     ) {
         when (attempt) {
             NavigationAttempt.STARTED, NavigationAttempt.THROTTLED -> state.setStatus(activeReason, activeDetail)
-            NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "Waiting for an open pasture pathing slot")
+            NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "Waiting for an open Command Post pathing slot")
             NavigationAttempt.RECOVERING -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Trying to hop or clear a stuck movement state")
             NavigationAttempt.RESCUED -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Reseated to a nearby safe spot after getting stuck")
             NavigationAttempt.UNREACHABLE -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
@@ -677,7 +677,7 @@ object TagExecutionEngine {
         state.reset()
     }
 
-    private fun enforcePastureLeash(
+    private fun enforceWorksiteLeash(
         world: World,
         entity: PokemonEntity,
         tag: TagInstance,
@@ -697,23 +697,23 @@ object TagExecutionEngine {
             state.cachedContainerPos = null
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Cleared a target outside this pasture's work range")
-            return guideBackToPasture(entity, state, origin, navigationBudget, range)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Cleared a target outside this Command Post's work range")
+            return guideBackToWorksite(entity, state, origin, navigationBudget, range)
         }
 
         if (!isEntityWithinLeash(entity, origin, range)) {
             state.targetPos?.let { ClaimManager.release(it, world) }
             resetToIdle(state)
-            recallToPasture(entity, state, origin)
+            recallToWorksite(entity, state, origin)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returned to pasture after leaving the safe work area")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returned to the Command Post after leaving the safe work area")
             return true
         }
 
         return false
     }
 
-    private fun guideBackToPasture(
+    private fun guideBackToWorksite(
         entity: PokemonEntity,
         state: WorkerState,
         origin: BlockPos,
@@ -721,20 +721,20 @@ object TagExecutionEngine {
         range: Int
     ): Boolean {
         if (!isEntityWithinLeash(entity, origin, range)) {
-            recallToPasture(entity, state, origin)
+            recallToWorksite(entity, state, origin)
             return true
         }
 
         val attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME)
         if (attempt == NavigationAttempt.UNREACHABLE) {
-            recallToPasture(entity, state, origin)
+            recallToWorksite(entity, state, origin)
         } else {
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returning to pasture after rejecting a distant target")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returning to the Command Post after rejecting a distant target")
         }
         return true
     }
 
-    private fun recallToPasture(entity: PokemonEntity, state: WorkerState, origin: BlockPos) {
+    private fun recallToWorksite(entity: PokemonEntity, state: WorkerState, origin: BlockPos) {
         val home = SafePositionResolver.standNear(entity.world, origin, entity.blockPos) ?: origin.up()
         NavigationHelper.stopNavigation(entity, state)
         entity.teleport(home.x + 0.5, home.y.toDouble(), home.z + 0.5, false)

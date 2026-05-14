@@ -3,13 +3,15 @@ package com.cobblepalsworld
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblepalsworld.augment.AugmentRegistry
 import com.cobblepalsworld.behavior.TagBehaviorRegistry
+import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.behaviors.*
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
-import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.router.RouterRegistry
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagRegistry
 import dev.architectury.event.EventResult
 import dev.architectury.event.events.common.InteractionEvent
@@ -76,7 +78,10 @@ object CobblePalsWorld {
     private fun registerLifecycle() {
         LifecycleEvent.SERVER_STOPPING.register { server ->
             CommandPostCrewLifecycle.recallAll(server)
-            PastureWorkerManager.onServerStopping(server)
+            CobblePalsSaveData.markDirty(server)
+            TagExecutionEngine.resetRuntimeState()
+            CobblePalsSaveData.clearLoaded(server)
+            ServerScaleRuntime.clear(server)
         }
     }
 }

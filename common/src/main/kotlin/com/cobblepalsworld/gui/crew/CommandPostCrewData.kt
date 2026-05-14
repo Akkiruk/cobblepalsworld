@@ -3,7 +3,7 @@ package com.cobblepalsworld.gui.crew
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
-import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import net.minecraft.network.PacketByteBuf
 import net.minecraft.util.math.BlockPos
 import java.util.UUID

@@ -88,8 +88,6 @@ class RouterScreenHandler : ScreenHandler {
     val rosterCount: Int get() = routerData.get(1)
     val assignedCount: Int get() = routerData.get(2)
     val activeCount: Int get() = routerData.get(3)
-    val linkedPasturePos: BlockPos?
-        get() = if (linked) BlockPos(routerData.get(4), routerData.get(5), routerData.get(6)) else null
     val routerPos: BlockPos get() = BlockPos(routerData.get(25), routerData.get(26), routerData.get(27))
 
     fun moduleAssigned(moduleIndex: Int): Boolean {

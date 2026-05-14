@@ -3,12 +3,8 @@
   "package": "com.cobblepalsworld.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
-  "client": [
-    "client.PastureWidgetMixin"
-  ],
-  "mixins": [
-    "PokemonPastureBlockEntityMixin"
-  ],
+  "client": [],
+  "mixins": [],
   "injectors": {
     "defaultRequire": 1
   }

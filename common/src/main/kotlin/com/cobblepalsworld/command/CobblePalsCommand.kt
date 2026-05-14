@@ -4,9 +4,9 @@ import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
-import com.cobblepalsworld.pasture.PastureWorkerManager
-import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.context.CommandContext
 import net.minecraft.entity.ItemEntity
@@ -44,7 +44,7 @@ object CobblePalsCommand {
 
     private fun runResetRuntime(ctx: CommandContext<ServerCommandSource>): Int {
         TagExecutionEngine.resetRuntimeState()
-        PastureWorkerManager.resetTransientState()
+        ServerScaleRuntime.clearTransient()
         markAllWorldsDirty(ctx.source)
         ctx.source.sendFeedback({ success("Cleared CobblePals runtime state and claims.") }, true)
         return 1
@@ -63,7 +63,7 @@ object CobblePalsCommand {
         val droppedStacks = spillInventoriesAtSource(ctx.source)
         TagAssignmentManager.clear()
         TagExecutionEngine.resetRuntimeState()
-        PastureWorkerManager.resetTransientState()
+        ServerScaleRuntime.clearTransient()
         markAllWorldsDirty(ctx.source)
         ctx.source.sendFeedback({
             success("Cleared CobblePals assignments, runtime state, and $droppedStacks carried stack${if (droppedStacks == 1) "" else "s"}.")

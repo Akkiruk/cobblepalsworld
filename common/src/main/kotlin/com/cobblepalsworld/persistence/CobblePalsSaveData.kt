@@ -9,10 +9,11 @@ import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
-import com.cobblepalsworld.pasture.ControllerBinding
-import com.cobblepalsworld.pasture.TagAssignmentManager
-import com.cobblepalsworld.pasture.WorkerAssignmentMode
-import com.cobblepalsworld.pasture.WorkerAssignmentProfile
+import com.cobblepalsworld.assignment.ControllerBinding
+import com.cobblepalsworld.assignment.TagAssignmentManager
+import com.cobblepalsworld.assignment.WorksiteBinding
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
+import com.cobblepalsworld.assignment.WorkerAssignmentProfile
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagSettings
 import com.cobblepalsworld.tag.TagSettingsSerializer
@@ -32,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 private data class AssignmentRecord(
     val tag: TagInstance,
-    val pastureBinding: com.cobblepalsworld.pasture.PastureBinding?,
+    val worksiteBinding: WorksiteBinding?,
     val controllerBinding: ControllerBinding?,
     val assignmentProfile: WorkerAssignmentProfile
 )
@@ -43,7 +44,7 @@ class CobblePalsSaveData : PersistentState() {
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
         for ((uuid, record) in getAllAssignments()) {
-            val (tag, pastureBinding, controllerBinding, assignmentProfile) = record
+            val (tag, worksiteBinding, controllerBinding, assignmentProfile) = record
             val tagNbt = NbtCompound()
             tagNbt.putString("Type", tag.type.id)
             tagNbt.put("Filter", FilterSerializer.toNbt(tag.filter, registries))
@@ -64,11 +65,11 @@ class CobblePalsSaveData : PersistentState() {
                 tagNbt.putInt("AreaMaxY", area.max.y)
                 tagNbt.putInt("AreaMaxZ", area.max.z)
             }
-            pastureBinding?.let { binding ->
-                tagNbt.putString("PastureDimension", binding.dimensionId)
-                tagNbt.putInt("PastureX", binding.pos.x)
-                tagNbt.putInt("PastureY", binding.pos.y)
-                tagNbt.putInt("PastureZ", binding.pos.z)
+            worksiteBinding?.let { binding ->
+                tagNbt.putString("WorksiteDimension", binding.dimensionId)
+                tagNbt.putInt("WorksiteX", binding.pos.x)
+                tagNbt.putInt("WorksiteY", binding.pos.y)
+                tagNbt.putInt("WorksiteZ", binding.pos.z)
             }
             controllerBinding?.let { binding ->
                 tagNbt.putString("ControllerDimension", binding.dimensionId)
@@ -131,8 +132,8 @@ class CobblePalsSaveData : PersistentState() {
 
     private fun getAllAssignments(): Map<UUID, AssignmentRecord> {
         val result = mutableMapOf<UUID, AssignmentRecord>()
-        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding, controllerBinding, assignmentProfile ->
-            result[uuid] = AssignmentRecord(tag, pastureBinding, controllerBinding, assignmentProfile)
+        TagAssignmentManager.forEachRecord { uuid, tag, worksiteBinding, controllerBinding, assignmentProfile ->
+            result[uuid] = AssignmentRecord(tag, worksiteBinding, controllerBinding, assignmentProfile)
         }
         return result
     }
@@ -202,13 +203,19 @@ class CobblePalsSaveData : PersistentState() {
                         } else {
                             TagAssignmentManager.assign(uuid, tag)
                         }
-                        if (tagNbt.contains("PastureDimension")) {
-                            val pasturePos = BlockPos(
-                                tagNbt.getInt("PastureX"),
-                                tagNbt.getInt("PastureY"),
-                                tagNbt.getInt("PastureZ")
+                        val worksiteDimension = when {
+                            tagNbt.contains("WorksiteDimension") -> tagNbt.getString("WorksiteDimension")
+                            tagNbt.contains("PastureDimension") -> tagNbt.getString("PastureDimension")
+                            else -> null
+                        }
+                        if (worksiteDimension != null) {
+                            val keyPrefix = if (tagNbt.contains("WorksiteDimension")) "Worksite" else "Pasture"
+                            val worksitePos = BlockPos(
+                                tagNbt.getInt("${keyPrefix}X"),
+                                tagNbt.getInt("${keyPrefix}Y"),
+                                tagNbt.getInt("${keyPrefix}Z")
                             )
-                            TagAssignmentManager.associateWithPasture(uuid, tagNbt.getString("PastureDimension"), pasturePos)
+                            TagAssignmentManager.associateWithWorksite(uuid, worksiteDimension, worksitePos)
                         }
                         TagAssignmentManager.updateProfile(
                             pokemonId = uuid,

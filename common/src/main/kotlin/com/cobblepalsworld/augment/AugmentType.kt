@@ -39,7 +39,7 @@ enum class AugmentType(
     REDSTONE(
         id = "redstone",
         maxLevel = 1,
-        description = "Pauses work when pasture receives redstone signal",
+        description = "Pauses work when the Command Post receives redstone signal",
         stackable = false
     ),
     XP_VACUUM(

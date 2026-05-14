@@ -32,20 +32,16 @@ object WorkerOverlayRenderer {
     private val overlays = linkedMapOf<Int, OverlayEntry>()
     private var worldKey: String? = null
 
-    fun replacePastureVisuals(pasturePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
-        replaceWorksiteVisuals(pasturePos, visuals)
-    }
-
     fun replaceWorksiteVisuals(worksitePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
         val client = MinecraftClient.getInstance()
         val world = client.world ?: return
         syncWorld(world.registryKey.value.toString())
 
-        val pasture = worksitePos.toImmutable()
+        val worksite = worksitePos.toImmutable()
         val now = world.time
-        overlays.entries.removeIf { it.value.pasturePos == pasture }
+        overlays.entries.removeIf { it.value.worksitePos == worksite }
         visuals.forEach { snapshot ->
-            overlays[snapshot.entityId] = OverlayEntry(pasture, snapshot, now)
+            overlays[snapshot.entityId] = OverlayEntry(worksite, snapshot, now)
         }
     }
 
@@ -327,7 +323,7 @@ object WorkerOverlayRenderer {
     }
 
     private data class OverlayEntry(
-        val pasturePos: BlockPos,
+        val worksitePos: BlockPos,
         val snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
         val updatedAt: Long
     )
