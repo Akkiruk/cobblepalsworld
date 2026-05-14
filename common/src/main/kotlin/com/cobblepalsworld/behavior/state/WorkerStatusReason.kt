@@ -19,9 +19,12 @@ enum class WorkerStatusReason(val label: String, val kind: WorkerStatusKind) {
     ECO_IDLE("Eco Idle", WorkerStatusKind.WAITING),
     NO_TARGET("No Work", WorkerStatusKind.WAITING),
     TARGET_BUSY("Contested", WorkerStatusKind.WAITING),
+    PATH_BUDGET("Queued", WorkerStatusKind.WAITING),
     REDSTONE_OFF("Redstone", WorkerStatusKind.BLOCKED),
     TAG_DISABLED("Disabled", WorkerStatusKind.BLOCKED),
     PATHING_STALLED("Pathing", WorkerStatusKind.BLOCKED),
     NO_DEPOSIT("No Deposit", WorkerStatusKind.BLOCKED),
-    WORKER_CAP("Standby", WorkerStatusKind.STANDBY)
+    WORKER_CAP("Standby", WorkerStatusKind.STANDBY),
+    ROLE_LOCKED("Held", WorkerStatusKind.STANDBY),
+    RESERVED_DUTY("Reserved", WorkerStatusKind.STANDBY)
 }

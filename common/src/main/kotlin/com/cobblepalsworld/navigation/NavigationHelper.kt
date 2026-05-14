@@ -8,6 +8,7 @@ import net.minecraft.util.math.BlockPos
 enum class NavigationAttempt {
     STARTED,
     THROTTLED,
+    BUDGETED,
     FAILED
 }
 
@@ -16,9 +17,10 @@ object NavigationHelper {
     private const val WALK_SPEED = 0.35
     private const val DEFAULT_ARRIVAL_TOLERANCE = 3.0
 
-    fun navigateTo(entity: PokemonEntity, pos: BlockPos, state: WorkerState): NavigationAttempt {
+    fun navigateTo(entity: PokemonEntity, pos: BlockPos, state: WorkerState, budget: NavigationBudget? = null): NavigationAttempt {
         val now = entity.world.time
         if (now - state.lastPathfindTick < PATHFIND_THROTTLE_TICKS) return NavigationAttempt.THROTTLED
+        if (budget != null && !budget.tryConsumeStart()) return NavigationAttempt.BUDGETED
         state.lastPathfindTick = now
         return if (entity.navigation.startMovingTo(
             pos.x + 0.5,

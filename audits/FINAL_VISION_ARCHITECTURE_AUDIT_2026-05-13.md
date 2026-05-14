@@ -32,11 +32,16 @@ The architecture direction in this document is no longer just aspirational. Seve
 - Phase 5 advanced meaningfully: in-flight workers now keep their slot priority and idle workers rotate fairly through limited worker capacity, which fixes the worst list-order starvation case and makes controlled concurrency more intentional.
 - Phase 5 also improved search calmness: target contention now backs off instead of hot-retrying every pasture tick, which lowers pointless churn while preserving the same worker-truth model.
 
-### Still Missing Relative To Final Vision
+### Shipped Progress Through 0.2.0
 
-- Completion beats and family-specific effect language are still uneven across tags.
-- Assignment identity, preference, and reservation tooling are still future work.
-- Larger-orchard scalability still needs more explicit pathfinding and concurrency policy beyond the new distant slowdown baseline and the new fair worker rotation.
+- Phase 6 is now live in the actual product: the Pokemon tag screen exposes crew identity controls, the shared session model persists them, and the pasture scheduler now respects preferred, restricted, reserved, and fallback behavior instead of treating every tagged worker as the same.
+- Phase 5 advanced again: each pasture now has an explicit navigation-start budget, so large crews calm down by queuing fresh path requests instead of stampeding pathfinding all at once.
+- Phase 3 readability is now materially closer to finished: blocked and standby workers can surface in-world through the same nearby-player overlay path as active workers, and work completion now has stronger family-specific effect accents.
+
+### Core Completion Status
+
+- The core mission described in this audit is now implemented through Phases 1 through 6.
+- Remaining ideas in the old Phase 7 list should be treated as optional post-core expansion work, not blockers for calling the core product complete.
 
 ## Mission Statement
 
@@ -332,7 +337,7 @@ Presentation is a core system, not optional polish.
 
 An active floating icon above a worker while it is performing a job. This should appear during active work states rather than permanently, so it functions as an action marker rather than clutter.
 
-Status: partially implemented. Active workers now broadcast a nearby-player overlay with a floating role icon and colored activity halo tied to the authoritative worker state. The remaining work is to deepen family-specific presentation and make blocked or completed states equally legible.
+Status: implemented for the core target. Nearby-player overlays now cover active work plus blocked or standby outliers, while completion beats have stronger family-specific accents so the world view and manager describe the same worker truth.
 
 #### Signature Role Effects
 
@@ -348,11 +353,13 @@ Status: partially implemented. Nearby clients now receive a cargo icon and item-
 
 Each role should have a visible "job complete" beat. This gives labor emotional weight and makes the world feel responsive.
 
+Status: implemented for the core target. Completion still uses lightweight effects, but every completed job now gets a clearer visual beat and stronger family-specific accent instead of ending silently.
+
 #### Worker State Visibility
 
 Idle, traveling, working, returning, depositing, and blocked should each have a readable presentation strategy.
 
-Status: partially implemented. The manager now distinguishes ready, waiting, blocked, and standby states with explicit reasons, and the world overlay already covers the active slice. What remains is stronger in-world blocked/completion feedback and family-specific spectacle.
+Status: implemented for the core target. The manager now covers ready, waiting, blocked, and standby states from authoritative runtime data, and the world overlay can surface active, blocked, and standby workers instead of leaving those states menu-only.
 
 ## Scalability Policy
 
@@ -527,7 +534,8 @@ Current status:
 - Worker overview and operational visibility are now materially better through the live pasture manager board.
 - Blocked and idle explanations are now live from authoritative runtime state.
 - Order framing is now partially live through manager summaries of active assignments and slot pressure.
-- Preference systems, reservation systems, and deeper work-order authoring are still missing.
+- Preference systems and reservation systems are now live through the worker identity profile and pasture scheduler.
+- Deeper work-order authoring remains optional post-core expansion rather than a blocker for the finished core product.
 
 ### Phase 5. Scalable Orchestration Pass
 
@@ -549,7 +557,8 @@ Current status:
 
 - Nearby-player slowdown is now live and aligned with the one-authority rule.
 - Target-contention backoff and fair idle-worker rotation are now live, which materially improves controlled concurrency.
-- Search churn, pathfinding budgets, and broader large-pasture orchestration still need a wider system pass.
+- Search churn is calmer than the original baseline, and pathfinding budgets are now explicit at the pasture level.
+- Broader large-pasture orchestration can still be expanded later, but the core scalability policy now exists in shipped code.
 
 ### Phase 6. Assignment Identity Pass
 
@@ -567,7 +576,14 @@ Success condition:
 
 The roster both "just works" and supports attachment.
 
-### Phase 7. Expansion And Differentiation
+Current status:
+
+- Preferred workers are now supported through persistent crew identity.
+- Restricted workers now exist through preferred mode with fallback disabled.
+- Reserved workers are now held out of general labor while still finishing any in-flight work.
+- Stable assignment behavior now comes from one shared worker-session profile used by the tag screen, manager, save data, and pasture scheduler.
+
+### Phase 7. Optional Post-Core Expansion And Differentiation
 
 Goal: add distinctive systems that deepen the fantasy rather than broadening the scope aimlessly.
 
@@ -633,8 +649,8 @@ If assignment becomes too rigid or too abstract, the roster may feel like generi
 
 ## Final Strategic Recommendation
 
-The project should spend its next major chapter not on breadth, but on identity completion.
+The project has completed the identity-completion chapter that this audit originally called for.
 
 The final version of CobblePals World should look like a calm, readable, living operation where the player manages a workforce of Pokemon through a strong Command Post, where every tag is obvious in-world, and where performance scaling preserves the fantasy instead of undermining it.
 
-If the project stays disciplined about that mission, it can become something stronger than a themed automation mod. It can become a real workforce fantasy built around Pokemon behavior, player stewardship, and visible world labor.
+If future work continues, it should build outward from this finished core rather than re-opening solved authority or clarity problems. The optional expansion list is now a place for differentiation, not a prerequisite for calling the core mod complete.

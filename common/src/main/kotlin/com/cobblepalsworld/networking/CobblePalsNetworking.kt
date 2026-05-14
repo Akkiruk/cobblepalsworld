@@ -13,6 +13,7 @@ import com.cobblepalsworld.gui.pasture.PastureSnapshot
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import dev.architectury.networking.NetworkManager
 import net.minecraft.network.RegistryByteBuf
@@ -63,6 +64,7 @@ object CobblePalsNetworking {
         val entityId: Int,
         val tagTypeId: String,
         val phaseOrdinal: Int,
+        val statusReasonOrdinal: Int,
         val primaryCarriedItemId: String?,
         val carriedItemCount: Int
     ) {
@@ -70,6 +72,7 @@ object CobblePalsNetworking {
             buf.writeVarInt(entityId)
             buf.writeString(tagTypeId)
             buf.writeVarInt(phaseOrdinal)
+            buf.writeVarInt(statusReasonOrdinal)
             buf.writeBoolean(primaryCarriedItemId != null)
             primaryCarriedItemId?.let(buf::writeString)
             buf.writeVarInt(carriedItemCount)
@@ -80,12 +83,14 @@ object CobblePalsNetworking {
                 val entityId = buf.readVarInt()
                 val tagTypeId = buf.readString()
                 val phaseOrdinal = buf.readVarInt()
+                val statusReasonOrdinal = buf.readVarInt()
                 val primaryCarriedItemId = if (buf.readBoolean()) buf.readString() else null
                 val carriedItemCount = buf.readVarInt()
                 return WorkerVisualSnapshot(
                     entityId = entityId,
                     tagTypeId = tagTypeId,
                     phaseOrdinal = phaseOrdinal,
+                    statusReasonOrdinal = statusReasonOrdinal,
                     primaryCarriedItemId = primaryCarriedItemId,
                     carriedItemCount = carriedItemCount
                 )
@@ -328,6 +333,8 @@ object CobblePalsNetworking {
             primaryCarriedItemId = primaryCarriedItemId,
             isEcoMode = state?.ecoMode == true,
             isManagedByCommandPost = assignmentView?.controllerBinding != null,
+            assignmentModeOrdinal = assignmentView?.assignmentProfile?.mode?.ordinal ?: WorkerAssignmentMode.GENERAL.ordinal,
+            allowFallback = assignmentView?.assignmentProfile?.allowFallback ?: true,
             statusReasonOrdinal = state?.statusReason?.ordinal ?: WorkerStatusReason.READY.ordinal,
             statusDetail = state?.statusDetail ?: ""
         )

@@ -6,6 +6,7 @@ import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerState
+import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
@@ -17,6 +18,7 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
+import com.cobblepalsworld.navigation.NavigationBudget
 import com.cobblepalsworld.navigation.NavigationAttempt
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.pasture.PastureWorkerManager
@@ -68,7 +70,14 @@ object TagExecutionEngine {
         return ConfigManager.config.getTagConfig(type).enabled
     }
 
-    fun tick(world: World, entity: PokemonEntity, pokemon: Pokemon, tag: TagInstance, origin: BlockPos) {
+    fun tick(
+        world: World,
+        entity: PokemonEntity,
+        pokemon: Pokemon,
+        tag: TagInstance,
+        origin: BlockPos,
+        navigationBudget: NavigationBudget
+    ) {
         val state = StateManager.getOrCreate(pokemon.uuid)
         state.lastSeenTick = world.time
 
@@ -130,11 +139,15 @@ object TagExecutionEngine {
         }
 
         when (state.phase) {
-            WorkerPhase.IDLE -> tickIdle(world, entity, pokemon, tag, behavior, state, origin)
-            WorkerPhase.NAVIGATING -> tickNavigating(world, entity, tag, behavior, state)
+            WorkerPhase.IDLE -> tickIdle(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
+            WorkerPhase.NAVIGATING -> tickNavigating(world, entity, tag, behavior, state, navigationBudget)
             WorkerPhase.ARRIVING -> tickArriving(world, entity, tag, behavior, state)
-            WorkerPhase.WORKING -> tickWorking(world, entity, pokemon, tag, behavior, state, origin)
-            WorkerPhase.DEPOSITING -> tickDepositing(world, entity, pokemon, tag, behavior, state, origin)
+            WorkerPhase.WORKING -> tickWorking(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
+            WorkerPhase.DEPOSITING -> tickDepositing(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
+        }
+
+        if (state.statusReason.kind == WorkerStatusKind.BLOCKED && world.time % 60L == 0L) {
+            WorkVisualHandler.onBlocked(world, entity, state.statusReason)
         }
     }
 
@@ -244,13 +257,14 @@ object TagExecutionEngine {
 
     private fun tickIdle(
         world: World, entity: PokemonEntity, pokemon: Pokemon,
-        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
+        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos,
+        navigationBudget: NavigationBudget
     ) {
         if (world.time < state.cooldownUntil) {
             state.setStatus(WorkerStatusReason.COOLDOWN, "Recovering before the next assignment")
             // While on cooldown, drift back toward pasture if far away
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state)
+                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
             }
             return
         }
@@ -265,7 +279,7 @@ object TagExecutionEngine {
                 }
             )
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state)
+                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
             }
             return
         }
@@ -292,7 +306,7 @@ object TagExecutionEngine {
             )
             // No work found — stay idle (eco mode will kick in via tick counter)
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state)
+                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
             }
             return
         }
@@ -309,7 +323,7 @@ object TagExecutionEngine {
         state.targetPos = target
         applyNavigationStatus(
             state = state,
-            attempt = NavigationHelper.navigateTo(entity, target, state),
+            attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget),
             activeReason = WorkerStatusReason.NAVIGATING,
             activeDetail = "Moving to the selected job target",
             failedDetail = "Could not find a path to the selected target"
@@ -319,7 +333,8 @@ object TagExecutionEngine {
 
     private fun tickNavigating(
         world: World, entity: PokemonEntity,
-        tag: TagInstance, behavior: TagBehavior, state: WorkerState
+        tag: TagInstance, behavior: TagBehavior, state: WorkerState,
+        navigationBudget: NavigationBudget
     ) {
         val target = state.targetPos ?: run { resetToIdle(state); return }
 
@@ -340,7 +355,7 @@ object TagExecutionEngine {
         } else {
             applyNavigationStatus(
                 state = state,
-                attempt = NavigationHelper.navigateTo(entity, target, state),
+                attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget),
                 activeReason = WorkerStatusReason.NAVIGATING,
                 activeDetail = "Closing in on the current target",
                 failedDetail = "Pathfinding to the target failed; retrying"
@@ -373,7 +388,8 @@ object TagExecutionEngine {
 
     private fun tickWorking(
         world: World, entity: PokemonEntity, pokemon: Pokemon,
-        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
+        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos,
+        navigationBudget: NavigationBudget
     ) {
         val target = state.targetPos ?: run { resetToIdle(state); return }
         state.setStatus(WorkerStatusReason.WORKING, "Executing the assigned job")
@@ -403,7 +419,7 @@ object TagExecutionEngine {
                 ClaimManager.claim(result.target, pokemon.uuid, world)
                 applyNavigationStatus(
                     state = state,
-                    attempt = NavigationHelper.navigateTo(entity, result.target, state),
+                    attempt = NavigationHelper.navigateTo(entity, result.target, state, navigationBudget),
                     activeReason = WorkerStatusReason.NAVIGATING,
                     activeDetail = "Repositioning to a follow-up target",
                     failedDetail = "Could not path to the follow-up target"
@@ -422,7 +438,8 @@ object TagExecutionEngine {
 
     private fun tickDepositing(
         world: World, entity: PokemonEntity, pokemon: Pokemon,
-        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos
+        tag: TagInstance, behavior: TagBehavior, state: WorkerState, origin: BlockPos,
+        navigationBudget: NavigationBudget
     ) {
         val inventory = InventoryManager.get(pokemon.uuid)
         if (inventory == null || inventory.isEmpty) {
@@ -511,7 +528,7 @@ object TagExecutionEngine {
         } else {
             applyNavigationStatus(
                 state = state,
-                attempt = NavigationHelper.navigateTo(entity, depositPos, state),
+                attempt = NavigationHelper.navigateTo(entity, depositPos, state, navigationBudget),
                 activeReason = WorkerStatusReason.DEPOSITING,
                 activeDetail = "Returning carried cargo to deposit it",
                 failedDetail = "Could not path back to a deposit target"
@@ -557,6 +574,7 @@ object TagExecutionEngine {
     ) {
         when (attempt) {
             NavigationAttempt.STARTED, NavigationAttempt.THROTTLED -> state.setStatus(activeReason, activeDetail)
+            NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "Waiting for an open pasture pathing slot")
             NavigationAttempt.FAILED -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
         }
     }

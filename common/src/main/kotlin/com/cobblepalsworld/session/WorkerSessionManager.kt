@@ -7,6 +7,8 @@ import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.pasture.AssignmentView
 import com.cobblepalsworld.pasture.ControllerBinding
 import com.cobblepalsworld.pasture.PastureBinding
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.pasture.WorkerAssignmentProfile
 import com.cobblepalsworld.tag.TagInstance
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -18,7 +20,8 @@ data class WorkerSession(
     var pastureBinding: PastureBinding? = null,
     var controllerBinding: ControllerBinding? = null,
     var state: WorkerState? = null,
-    var inventory: PokemonInventory? = null
+    var inventory: PokemonInventory? = null,
+    var assignmentProfile: WorkerAssignmentProfile = WorkerAssignmentProfile()
 )
 
 object WorkerSessionManager {
@@ -63,7 +66,24 @@ object WorkerSessionManager {
     fun getAssignmentView(pokemonId: UUID): AssignmentView? {
         val session = sessions[pokemonId] ?: return null
         val tag = session.tag ?: return null
-        return AssignmentView(tag, session.pastureBinding, session.controllerBinding)
+        return AssignmentView(tag, session.pastureBinding, session.controllerBinding, session.assignmentProfile)
+    }
+
+    fun getAssignmentProfile(pokemonId: UUID): WorkerAssignmentProfile {
+        return sessions[pokemonId]?.assignmentProfile ?: WorkerAssignmentProfile()
+    }
+
+    fun updateAssignmentProfile(
+        pokemonId: UUID,
+        mode: WorkerAssignmentMode? = null,
+        allowFallback: Boolean? = null
+    ): WorkerAssignmentProfile {
+        val session = getOrCreateSession(pokemonId)
+        session.assignmentProfile = session.assignmentProfile.copy(
+            mode = mode ?: session.assignmentProfile.mode,
+            allowFallback = allowFallback ?: session.assignmentProfile.allowFallback
+        )
+        return session.assignmentProfile
     }
 
     fun getControllerBinding(pokemonId: UUID): ControllerBinding? = sessions[pokemonId]?.controllerBinding
@@ -111,11 +131,18 @@ object WorkerSessionManager {
         }
     }
 
+    fun forEachAssignmentRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
+        sessions.forEach { (uuid, session) ->
+            session.tag?.let { action(uuid, it, session.pastureBinding, session.controllerBinding, session.assignmentProfile) }
+        }
+    }
+
     fun clearAssignments() {
         sessions.forEach { (uuid, session) ->
             session.tag = null
             session.pastureBinding = null
             session.controllerBinding = null
+            session.assignmentProfile = WorkerAssignmentProfile()
             discardIfEmpty(uuid, session)
         }
     }
@@ -225,6 +252,7 @@ object WorkerSessionManager {
         session.tag = null
         session.pastureBinding = null
         session.controllerBinding = null
+        session.assignmentProfile = WorkerAssignmentProfile()
         discardIfEmpty(pokemonId, session)
         return tag
     }

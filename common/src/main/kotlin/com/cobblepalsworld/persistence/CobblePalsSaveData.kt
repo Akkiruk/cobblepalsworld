@@ -8,6 +8,8 @@ import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.pasture.ControllerBinding
 import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
+import com.cobblepalsworld.pasture.WorkerAssignmentProfile
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagSettings
 import com.cobblepalsworld.tag.TagSettingsSerializer
@@ -25,18 +27,27 @@ import net.minecraft.world.World
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+private data class AssignmentRecord(
+    val tag: TagInstance,
+    val pastureBinding: com.cobblepalsworld.pasture.PastureBinding?,
+    val controllerBinding: ControllerBinding?,
+    val assignmentProfile: WorkerAssignmentProfile
+)
+
 class CobblePalsSaveData : PersistentState() {
 
     override fun writeNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): NbtCompound {
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
         for ((uuid, record) in getAllAssignments()) {
-            val (tag, pastureBinding, controllerBinding) = record
+            val (tag, pastureBinding, controllerBinding, assignmentProfile) = record
             val tagNbt = NbtCompound()
             tagNbt.putString("Type", tag.type.id)
             tagNbt.put("Filter", FilterSerializer.toNbt(tag.filter, registries))
             tagNbt.put("Augments", AugmentSerializer.toNbt(tag.augments))
             tagNbt.put("Settings", TagSettingsSerializer.toNbt(tag.settings))
+            tagNbt.putInt("AssignmentMode", assignmentProfile.mode.ordinal)
+            tagNbt.putBoolean("AllowFallback", assignmentProfile.allowFallback)
             tag.boundPos?.let { pos ->
                 tagNbt.putInt("BoundX", pos.x)
                 tagNbt.putInt("BoundY", pos.y)
@@ -89,10 +100,10 @@ class CobblePalsSaveData : PersistentState() {
         return nbt
     }
 
-    private fun getAllAssignments(): Map<UUID, Triple<TagInstance, com.cobblepalsworld.pasture.PastureBinding?, ControllerBinding?>> {
-        val result = mutableMapOf<UUID, Triple<TagInstance, com.cobblepalsworld.pasture.PastureBinding?, ControllerBinding?>>()
-        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding, controllerBinding ->
-            result[uuid] = Triple(tag, pastureBinding, controllerBinding)
+    private fun getAllAssignments(): Map<UUID, AssignmentRecord> {
+        val result = mutableMapOf<UUID, AssignmentRecord>()
+        TagAssignmentManager.forEachRecord { uuid, tag, pastureBinding, controllerBinding, assignmentProfile ->
+            result[uuid] = AssignmentRecord(tag, pastureBinding, controllerBinding, assignmentProfile)
         }
         return result
     }
@@ -169,6 +180,11 @@ class CobblePalsSaveData : PersistentState() {
                             )
                             TagAssignmentManager.associateWithPasture(uuid, tagNbt.getString("PastureDimension"), pasturePos)
                         }
+                        TagAssignmentManager.updateProfile(
+                            pokemonId = uuid,
+                            mode = WorkerAssignmentMode.fromOrdinal(tagNbt.getInt("AssignmentMode")),
+                            allowFallback = if (tagNbt.contains("AllowFallback")) tagNbt.getBoolean("AllowFallback") else true
+                        )
                     } catch (e: Exception) {
                         CobblePalsWorld.LOGGER.warn("Failed to load assignment for $key", e)
                     }

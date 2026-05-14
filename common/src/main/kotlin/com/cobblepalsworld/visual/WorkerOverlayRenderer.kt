@@ -1,6 +1,8 @@
 package com.cobblepalsworld.visual
 
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.behavior.state.WorkerStatusKind
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.tag.TagRegistry
 import com.cobblepalsworld.tag.TagType
@@ -70,7 +72,7 @@ object WorkerOverlayRenderer {
             }
 
             val bob = sin((world.time + entity.id) * 0.18).toDouble() * 0.045
-            renderHalo(matrices, entity.boundingBox, entry.snapshot.phase(), entry.snapshot.hasCargo(), bob)
+            renderHalo(matrices, entity.boundingBox, entry.snapshot, bob)
             renderIcons(
                 client = client,
                 matrices = matrices,
@@ -93,11 +95,10 @@ object WorkerOverlayRenderer {
     private fun renderHalo(
         matrices: MatrixStack,
         entityBox: Box,
-        phase: WorkerPhase,
-        hasCargo: Boolean,
+        snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
         bob: Double
     ) {
-        val color = phaseColor(phase, hasCargo)
+        val color = haloColor(snapshot)
         val centerX = (entityBox.minX + entityBox.maxX) / 2.0
         val centerZ = (entityBox.minZ + entityBox.maxZ) / 2.0
         val haloY = entityBox.maxY + 0.18 + bob
@@ -114,7 +115,7 @@ object WorkerOverlayRenderer {
         val r = color shr 16 and 0xFF
         val g = color shr 8 and 0xFF
         val b = color and 0xFF
-        TagHighlightRenderer.drawFill(matrix, haloBox, r, g, b, if (hasCargo) 74 else 52)
+        TagHighlightRenderer.drawFill(matrix, haloBox, r, g, b, if (snapshot.hasCargo()) 74 else 52)
         TagHighlightRenderer.drawOutline(matrix, haloBox, r, g, b, 210)
     }
 
@@ -130,6 +131,10 @@ object WorkerOverlayRenderer {
     ) {
         resolveTagStack(snapshot.tagTypeId)?.let { tagStack ->
             renderFloatingStack(client, matrices, vertexConsumers, tagStack, x, y, z, 0.45f, seed)
+        }
+
+        if (snapshot.shouldShowStatusLabel()) {
+            drawLabel(client, matrices, vertexConsumers, snapshot.statusLabel(), x, y + 0.18, z, labelColor(snapshot))
         }
 
         if (!snapshot.hasCargo()) return
@@ -200,6 +205,36 @@ object WorkerOverlayRenderer {
         matrices.pop()
     }
 
+    private fun drawLabel(
+        client: MinecraftClient,
+        matrices: MatrixStack,
+        vertexConsumers: VertexConsumerProvider.Immediate,
+        label: String,
+        x: Double,
+        y: Double,
+        z: Double,
+        color: Int
+    ) {
+        val halfWidth = client.textRenderer.getWidth(label) / 2f
+        matrices.push()
+        matrices.translate(x, y, z)
+        matrices.multiply(client.entityRenderDispatcher.rotation)
+        matrices.scale(0.018f, -0.018f, 0.018f)
+        client.textRenderer.draw(
+            label,
+            -halfWidth,
+            0f,
+            color,
+            false,
+            matrices.peek().positionMatrix,
+            vertexConsumers,
+            TextRenderer.TextLayerType.SEE_THROUGH,
+            0x66000000,
+            LightmapTextureManager.MAX_LIGHT_COORDINATE
+        )
+        matrices.pop()
+    }
+
     private fun resolveTagStack(tagTypeId: String): ItemStack? {
         val type = TagType.fromId(tagTypeId) ?: return null
         val item = TagRegistry.getItem(type) ?: return null
@@ -227,8 +262,42 @@ object WorkerOverlayRenderer {
         return WorkerPhase.entries.getOrElse(phaseOrdinal) { WorkerPhase.IDLE }
     }
 
+    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusReason(): WorkerStatusReason {
+        return WorkerStatusReason.entries.getOrElse(statusReasonOrdinal) { WorkerStatusReason.READY }
+    }
+
+    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusKind(): WorkerStatusKind {
+        return statusReason().kind
+    }
+
     private fun CobblePalsNetworking.WorkerVisualSnapshot.hasCargo(): Boolean {
         return !primaryCarriedItemId.isNullOrBlank() && carriedItemCount > 0
+    }
+
+    private fun CobblePalsNetworking.WorkerVisualSnapshot.shouldShowStatusLabel(): Boolean {
+        return statusKind() == WorkerStatusKind.BLOCKED || statusKind() == WorkerStatusKind.STANDBY || statusReason() == WorkerStatusReason.PATH_BUDGET
+    }
+
+    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusLabel(): String {
+        return statusReason().label
+    }
+
+    private fun haloColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+        return when (snapshot.statusKind()) {
+            WorkerStatusKind.BLOCKED -> 0xE57373.toInt()
+            WorkerStatusKind.STANDBY -> 0xB794F4.toInt()
+            WorkerStatusKind.WAITING -> 0xD9A84F
+            else -> phaseColor(snapshot.phase(), snapshot.hasCargo())
+        }
+    }
+
+    private fun labelColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+        return when (snapshot.statusKind()) {
+            WorkerStatusKind.BLOCKED -> 0xFCA5A5.toInt()
+            WorkerStatusKind.STANDBY -> 0xD6BCFA.toInt()
+            WorkerStatusKind.WAITING -> 0xF6E05E.toInt()
+            else -> 0xF6F3E8.toInt()
+        }
     }
 
     private fun syncWorld(currentWorldKey: String) {

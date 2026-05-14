@@ -6,9 +6,11 @@ import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagRegistry
@@ -36,6 +38,9 @@ class PokemonTagScreenHandler : ScreenHandler {
     val workerPhase: Int get() = invData.get(2)
     val isEcoMode: Boolean get() = invData.get(3) != 0
     val isManagedByCommandPost: Boolean get() = invData.get(4) != 0
+    val statusReasonOrdinal: Int get() = invData.get(5)
+    val assignmentModeOrdinal: Int get() = invData.get(6)
+    val allowFallback: Boolean get() = invData.get(7) != 0
 
     companion object {
         const val AUGMENT_SLOT_COUNT = AugmentSet.MAX_AUGMENT_SLOTS // 3
@@ -45,6 +50,8 @@ class PokemonTagScreenHandler : ScreenHandler {
         const val DISPLAY_SLOT_START = AUGMENT_SLOT_END // 4
         const val DISPLAY_SLOT_END = DISPLAY_SLOT_START + 9 // 13
         const val PLAYER_SLOT_START = DISPLAY_SLOT_END // 13
+        const val ACTION_CYCLE_ASSIGNMENT_MODE = 200
+        const val ACTION_TOGGLE_FALLBACK = 201
     }
 
     // Client constructor
@@ -53,7 +60,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.augmentInventory = SimpleInventory(AUGMENT_SLOT_COUNT)
         this.pokemonDisplayInventory = SimpleInventory(9)
         this.pokemonId = null
-        this.invData = ArrayPropertyDelegate(5)
+        this.invData = ArrayPropertyDelegate(8)
         setupSlots(playerInventory)
     }
 
@@ -69,17 +76,21 @@ class PokemonTagScreenHandler : ScreenHandler {
                 val pokemonInv = InventoryManager.get(pokemonId)
                 val workerState = StateManager.get(pokemonId)
                 val isManagedByCommandPost = TagAssignmentManager.getControllerBinding(pokemonId) != null
+                val assignmentProfile = TagAssignmentManager.getProfile(pokemonId)
                 return when (index) {
                     0 -> pokemonInv?.let { inv -> (0 until inv.size()).count { !inv.getStack(it).isEmpty } } ?: 0
                     1 -> pokemonInv?.size() ?: 0
                     2 -> workerState?.phase?.ordinal ?: 0
                     3 -> if (workerState?.ecoMode == true) 1 else 0
                     4 -> if (isManagedByCommandPost) 1 else 0
+                    5 -> workerState?.statusReason?.ordinal ?: WorkerStatusReason.READY.ordinal
+                    6 -> assignmentProfile.mode.ordinal
+                    7 -> if (assignmentProfile.allowFallback) 1 else 0
                     else -> 0
                 }
             }
             override fun set(index: Int, value: Int) {}
-            override fun size(): Int = 5
+            override fun size(): Int = 8
         }
 
         val pokemonInv = InventoryManager.get(pokemonId)
@@ -180,6 +191,29 @@ class PokemonTagScreenHandler : ScreenHandler {
     }
 
     override fun canUse(player: PlayerEntity): Boolean = true
+
+    override fun onButtonClick(player: PlayerEntity, id: Int): Boolean {
+        val currentPokemonId = pokemonId ?: return false
+        if (player.world.isClient) return true
+        if (tagInventory.getStack(0).isEmpty && TagAssignmentManager.get(currentPokemonId) == null) return false
+
+        when (id) {
+            ACTION_CYCLE_ASSIGNMENT_MODE -> {
+                val current = TagAssignmentManager.getProfile(currentPokemonId)
+                val nextMode = WorkerAssignmentMode.entries[(current.mode.ordinal + 1) % WorkerAssignmentMode.entries.size]
+                TagAssignmentManager.updateProfile(currentPokemonId, mode = nextMode)
+            }
+            ACTION_TOGGLE_FALLBACK -> {
+                val current = TagAssignmentManager.getProfile(currentPokemonId)
+                TagAssignmentManager.updateProfile(currentPokemonId, allowFallback = !current.allowFallback)
+            }
+            else -> return false
+        }
+
+        CobblePalsSaveData.markDirty(player.world as net.minecraft.server.world.ServerWorld)
+        sendContentUpdates()
+        return true
+    }
 
     override fun onClosed(player: PlayerEntity) {
         super.onClosed(player)

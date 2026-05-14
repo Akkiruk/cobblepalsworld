@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Added persistent crew identity controls to the Pokemon tag screen and worker session model, letting each pal be marked as preferred, restricted, reserved, or general with an explicit fallback policy that survives saves and feeds the same authoritative scheduler as the rest of the mod.
+- Reworked pasture orchestration again so reserved pals stay out of general labor, restricted roles hold priority correctly, blocked or standby workers can surface in-world, and each pasture now applies a real navigation-start budget instead of letting large crews stampede pathfinding.
+- Finished the audit's core completion pass by strengthening completion and blocked-state cues, surfacing crew identity in the manager, and updating the final-vision audit to distinguish the now-finished core product from optional post-core expansion ideas.
+
 ## 0.1.33
 
 - Reworked the pasture manager into an operations board that now explains why each pal is ready, waiting, blocked, or on standby, and summarizes the current order mix so the screen behaves more like workforce control than a raw status dump.

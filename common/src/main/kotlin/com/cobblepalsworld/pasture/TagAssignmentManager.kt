@@ -11,7 +11,8 @@ data class ControllerBinding(val dimensionId: String, val pos: BlockPos)
 data class AssignmentView(
     val tag: TagInstance,
     val pastureBinding: PastureBinding?,
-    val controllerBinding: ControllerBinding?
+    val controllerBinding: ControllerBinding?,
+    val assignmentProfile: WorkerAssignmentProfile = WorkerAssignmentProfile()
 )
 
 object TagAssignmentManager {
@@ -37,6 +38,16 @@ object TagAssignmentManager {
         return WorkerSessionManager.getAssignmentView(pokemonId)
     }
 
+    fun getProfile(pokemonId: UUID): WorkerAssignmentProfile = WorkerSessionManager.getAssignmentProfile(pokemonId)
+
+    fun updateProfile(
+        pokemonId: UUID,
+        mode: WorkerAssignmentMode? = null,
+        allowFallback: Boolean? = null
+    ): WorkerAssignmentProfile {
+        return WorkerSessionManager.updateAssignmentProfile(pokemonId, mode, allowFallback)
+    }
+
     fun getControllerBinding(pokemonId: UUID): ControllerBinding? = WorkerSessionManager.getControllerBinding(pokemonId)
 
     fun isControlledBy(pokemonId: UUID, dimensionId: String, pos: BlockPos): Boolean {
@@ -60,6 +71,10 @@ object TagAssignmentManager {
     fun forEach(action: (UUID, TagInstance) -> Unit) = WorkerSessionManager.forEachAssignment(action)
 
     fun forEachRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?) -> Unit) {
+        WorkerSessionManager.forEachAssignmentRecord(action)
+    }
+
+    fun forEachRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?, WorkerAssignmentProfile) -> Unit) {
         WorkerSessionManager.forEachAssignmentRecord(action)
     }
 

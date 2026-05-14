@@ -3,6 +3,7 @@ package com.cobblepalsworld.gui.pasture
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import net.minecraft.network.PacketByteBuf
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -27,12 +28,16 @@ data class PalSnapshot(
     val primaryCarriedItemId: String?,
     val isEcoMode: Boolean,
     val isManagedByCommandPost: Boolean,
+    val assignmentModeOrdinal: Int,
+    val allowFallback: Boolean,
     val statusReasonOrdinal: Int,
     val statusDetail: String
 ) {
     fun workerPhase(): WorkerPhase? = WorkerPhase.entries.getOrNull(phaseOrdinal)
 
     fun statusReason(): WorkerStatusReason? = WorkerStatusReason.entries.getOrNull(statusReasonOrdinal)
+
+    fun assignmentMode(): WorkerAssignmentMode = WorkerAssignmentMode.fromOrdinal(assignmentModeOrdinal)
 
     fun statusKind(): WorkerStatusKind? = statusReason()?.kind
 
@@ -48,6 +53,22 @@ data class PalSnapshot(
 
     fun isStandby(): Boolean = !isFainted && tagTypeId != null && statusKind() == WorkerStatusKind.STANDBY
 
+    fun assignmentLabel(): String = when {
+        assignmentMode() == WorkerAssignmentMode.RESERVED -> "Reserved"
+        assignmentMode() == WorkerAssignmentMode.PREFERRED && !allowFallback -> "Restricted"
+        assignmentMode() == WorkerAssignmentMode.PREFERRED -> "Preferred"
+        !allowFallback -> "Strict"
+        else -> "General"
+    }
+
+    fun assignmentDetail(): String = when {
+        assignmentMode() == WorkerAssignmentMode.RESERVED -> "Held out of general labor until released"
+        assignmentMode() == WorkerAssignmentMode.PREFERRED && !allowFallback -> "Preferred for this role with fallback disabled"
+        assignmentMode() == WorkerAssignmentMode.PREFERRED -> "Preferred for this role with fallback enabled"
+        !allowFallback -> "Fallback disabled for this assignment"
+        else -> "Runs as part of the general crew pool"
+    }
+
     fun statusLabel(): String = when {
         isFainted -> "Fainted"
         tagTypeId == null -> "Unassigned"
@@ -58,6 +79,9 @@ data class PalSnapshot(
     fun statusDetailOrFallback(): String = when {
         isFainted -> "This pal must be healed before it can work again."
         tagTypeId == null -> "Assign a tag to give this pal a job."
+        statusReason() == WorkerStatusReason.RESERVED_DUTY -> "Held in reserve until you release it back into general labor."
+        statusReason() == WorkerStatusReason.ROLE_LOCKED -> "A restricted worker is currently holding this role."
+        statusReason() == WorkerStatusReason.PATH_BUDGET -> "Queued behind the pasture pathing budget before it can move."
         statusDetail.isNotBlank() -> statusDetail
         statusReason() == WorkerStatusReason.READY -> "Ready to look for a new assignment."
         hasCargo() -> "Holding cargo and ready to return it."
@@ -101,6 +125,8 @@ data class PalSnapshot(
         primaryCarriedItemId?.let { buf.writeString(it) }
         buf.writeBoolean(isEcoMode)
         buf.writeBoolean(isManagedByCommandPost)
+        buf.writeVarInt(assignmentModeOrdinal)
+        buf.writeBoolean(allowFallback)
         buf.writeVarInt(statusReasonOrdinal)
         buf.writeString(statusDetail)
     }
@@ -126,6 +152,8 @@ data class PalSnapshot(
             primaryCarriedItemId = if (buf.readBoolean()) buf.readString() else null,
             isEcoMode = buf.readBoolean(),
             isManagedByCommandPost = buf.readBoolean(),
+            assignmentModeOrdinal = buf.readVarInt(),
+            allowFallback = buf.readBoolean(),
             statusReasonOrdinal = buf.readVarInt(),
             statusDetail = buf.readString()
         )

@@ -24,7 +24,9 @@ data class CobblePalsConfig(
         /** Tick interval multiplier when in eco mode (4x = check every 20 ticks instead of 5). */
         val ecoTickMultiplier: Int = 4,
         /** How long (ticks) to cache a found container position before re-searching. */
-        val containerCacheTicks: Int = 100
+        val containerCacheTicks: Int = 100,
+        /** How many new pathing starts one pasture may trigger in a single tick pass. */
+        val maxPathStartsPerPastureTick: Int = 3
     ) {
         fun validated() = GeneralConfig(
             tickInterval = tickInterval.coerceAtLeast(1),
@@ -39,7 +41,8 @@ data class CobblePalsConfig(
             arrivalDelayTicks = arrivalDelayTicks.coerceAtLeast(0),
             ecoTimeoutTicks = ecoTimeoutTicks.coerceAtLeast(1),
             ecoTickMultiplier = ecoTickMultiplier.coerceAtLeast(1),
-            containerCacheTicks = containerCacheTicks.coerceAtLeast(200)
+            containerCacheTicks = containerCacheTicks.coerceAtLeast(200),
+            maxPathStartsPerPastureTick = maxPathStartsPerPastureTick.coerceAtLeast(1)
         )
     }
 

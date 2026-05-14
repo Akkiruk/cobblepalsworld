@@ -8,6 +8,7 @@ import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
 import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.pasture.WorkerAssignmentMode
 import com.cobblepalsworld.tag.TagRegistry
 import com.cobblepalsworld.tag.TagType
 import net.minecraft.client.gui.DrawContext
@@ -526,6 +527,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
                     add(Text.literal(pal.statusDetailOrFallback()))
                     add(Text.literal("Species: ${speciesLabel(pal)} \u2022 Lv.${pal.level}"))
                     add(Text.literal("Tag: ${pal.tagTypeId?.uppercase() ?: "none"}"))
+                    add(Text.literal("Crew: ${pal.assignmentLabel()} \u2022 ${pal.assignmentDetail()}"))
                     pal.boundPos?.let { add(Text.literal("Binding: ${formatPos(it)}")) }
                     pal.activeTargetPos?.let { add(Text.literal("Target: ${formatPos(it)}")) }
                     if (pal.hasCargo()) {
@@ -579,6 +581,7 @@ class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.
 
     private fun compactSummary(pal: PalSnapshot): String {
         val parts = buildList {
+            if (pal.tagTypeId != null && (pal.assignmentMode() != WorkerAssignmentMode.GENERAL || !pal.allowFallback)) add(pal.assignmentLabel())
             if (pal.filterSummary != "No filter") add(pal.filterSummary)
             if (pal.augmentSummary.isNotBlank()) add(pal.augmentSummary)
         }
