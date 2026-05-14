@@ -99,7 +99,7 @@ object TagPolicyAnalyzer {
                     issues += TagPolicyIssue(
                         severity = TagPolicySeverity.WARNING,
                         label = "Same target",
-                        detail = "These role cards point at the same target and may compete for the same work.",
+                        detail = "These tag cards point at the same target and may compete for the same work.",
                         moduleIndexes = modules
                     )
                 } else if (filtersOverlap(first.spec.filter, second.spec.filter)) {

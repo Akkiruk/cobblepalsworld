@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.24
+
+- Reworked the Command Post shell, tabs, panels, slots, chips, and roster/detail surfaces around a warmer Cobblemon pasture/PC-style visual language.
+- Renamed the Crew tab to Pasture and made Party/PC assignment, active pal roster management, tag policy, and item buffer controls feel like one integrated Command Post system.
+- Removed the separate Cobblemon PC bridge button and MPL-derived bridge file from the live Command Post UI path so crew assignment is no longer split across multiple menus.
+
 ## 0.2.23
 
 - Added a Command Post crew assignment path that opens Cobblemon's real PC storage UI instead of relying only on the recreated Crew tab source grid.

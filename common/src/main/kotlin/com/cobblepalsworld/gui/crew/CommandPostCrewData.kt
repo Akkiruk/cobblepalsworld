@@ -62,7 +62,7 @@ data class CommandPostCrewMemberSnapshot(
         isMissing -> "This leased Pokemon was not found in the owner's current Party or PC."
         isFainted -> "This Pokemon must be healed before it can work."
         statusDetail.isNotBlank() -> statusDetail
-        tagTypeId == null -> "Install role cards to give this crew member work."
+        tagTypeId == null -> "Install tag cards to give this pal work."
         !hasEntity -> "The Command Post will send this worker out when it is selected for work."
         else -> "Ready for Command Post work."
     }

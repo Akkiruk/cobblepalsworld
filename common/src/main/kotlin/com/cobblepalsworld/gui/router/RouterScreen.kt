@@ -1,7 +1,5 @@
 package com.cobblepalsworld.gui.router
 
-import com.cobblemon.mod.common.client.CobblemonClient
-import com.cobblemon.mod.common.client.gui.pc.PCGUI
 import com.cobblepalsworld.gui.CobblePalsUiTheme
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
@@ -12,7 +10,6 @@ import com.cobblepalsworld.gui.crew.CrewSourceSlotSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourceType
-import com.cobblepalsworld.integration.cobblemon.CommandPostPCGUIConfiguration
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
@@ -39,10 +36,10 @@ class RouterScreen(
 ) : HandledScreen<RouterScreenHandler>(handler, inventory, title) {
 
     private enum class CommandPostView(val label: String, val glyph: UiGlyph, val accent: Int) {
-        Home("Home", UiGlyph.Home, CobblePalsUiTheme.ACCENT_WORK),
-        Crew("Crew", UiGlyph.Cycle, CobblePalsUiTheme.ACCENT_CREW),
-        Policy("Roles", UiGlyph.Filter, CobblePalsUiTheme.ACCENT_POLICY),
-        Logistics("Buffer", UiGlyph.Data, CobblePalsUiTheme.ACCENT_BUFFER)
+        Home("Post", UiGlyph.Home, CobblePalsUiTheme.ACCENT_WORK),
+        Crew("Pasture", UiGlyph.Cycle, CobblePalsUiTheme.ACCENT_CREW),
+        Policy("Tags", UiGlyph.Filter, CobblePalsUiTheme.ACCENT_POLICY),
+        Logistics("Items", UiGlyph.Data, CobblePalsUiTheme.ACCENT_BUFFER)
     }
 
     private enum class CrewSortMode(val label: String) {
@@ -293,24 +290,6 @@ class RouterScreen(
         CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos)
     }
 
-    private fun openCobblemonCrewPc() {
-        val client = client ?: return
-        val playerId = client.player?.uuid
-        val pc = playerId?.let { CobblemonClient.storage.pcStores[it] } ?: CobblemonClient.storage.pcStores.values.firstOrNull()
-        if (pc == null) {
-            client.player?.sendMessage(Text.literal("Cobblemon PC storage is still syncing. Reopen this screen in a moment."), false)
-            return
-        }
-        client.setScreen(
-            PCGUI(
-                pc = pc,
-                party = CobblemonClient.storage.party,
-                configuration = CommandPostPCGUIConfiguration(handler.routerPos),
-                openOnBox = CobblemonClient.lastPcBoxViewed
-            )
-        )
-    }
-
     private fun currentNativeCrewSnapshot() = CommandPostCrewSnapshotCache.get(handler.routerPos)
 
     private fun currentCrewSources() = CrewSourceSnapshotCache.get(handler.routerPos)
@@ -421,19 +400,19 @@ class RouterScreen(
         val setupIssueCount = roles.count { role -> role.firstIssue?.severity?.let { it != TagPolicySeverity.INFO } == true }
 
         val subtitle = when {
-            !hasCrew -> "Assign Party or PC Pokemon."
-            jobCardCount <= 0 -> "Add role cards to begin."
-            else -> "Native crew command."
+            !hasCrew -> "Choose Party or PC Pokemon."
+            jobCardCount <= 0 -> "Add tag cards to begin."
+            else -> "Pasture command."
         }
         val jobSummary = when {
-            jobCardCount <= 0 -> "No roles installed"
-            setupIssueCount > 0 -> "$setupIssueCount role${pluralize(setupIssueCount)} need setup"
-            else -> "$jobCardCount roles ready"
+            jobCardCount <= 0 -> "No tag cards installed"
+            setupIssueCount > 0 -> "$setupIssueCount tag${pluralize(setupIssueCount)} need setup"
+            else -> "$jobCardCount tags ready"
         }
         val crewSummary = if (jobCardCount <= 0) {
-            "No crew demand yet"
+            "No pal demand yet"
         } else {
-            "$jobCardCount role${pluralize(jobCardCount)} • ${handler.activeCount} active"
+            "$jobCardCount tag${pluralize(jobCardCount)} • ${handler.activeCount} active"
         }
         val augmentSummary = if (augmentCount > 0) "$augmentCount installed" else "None"
 
@@ -456,12 +435,12 @@ class RouterScreen(
 
     private fun buildAlert(jobCardCount: Int, setupIssueCount: Int, queuedCount: Int): CommandAlert {
         return when {
-            jobCardCount <= 0 -> CommandAlert("Empty", "Install role cards", CobblePalsUiTheme.TEXT_FAINT, CobblePalsUiTheme.TEXT_MUTED)
-            setupIssueCount > 0 -> CommandAlert("Setup", "$setupIssueCount roles need targets", CobblePalsUiTheme.ACCENT_POLICY, 0xFFFFE3B2.toInt())
-            handler.rosterCount <= 0 -> CommandAlert("No Crew", "Add Party or PC Pokemon", 0xFFCC8F62.toInt(), 0xFFF8DFC9.toInt())
-            queuedCount > 0 -> CommandAlert("Queue", "$queuedCount roles await pals", CobblePalsUiTheme.ACCENT_BUFFER, 0xFFDCEBFF.toInt())
-            handler.activeCount > 0 -> CommandAlert("Active", "Crew is working", CobblePalsUiTheme.ACCENT_WORK, 0xFFD7F7F0.toInt())
-            else -> CommandAlert("Ready", "Crew is standing by", CobblePalsUiTheme.ACCENT_CREW, 0xFFE1F4D8.toInt())
+            jobCardCount <= 0 -> CommandAlert("Empty", "Install tag cards", CobblePalsUiTheme.TEXT_FAINT, CobblePalsUiTheme.TEXT_MUTED)
+            setupIssueCount > 0 -> CommandAlert("Setup", "$setupIssueCount tags need targets", CobblePalsUiTheme.ACCENT_POLICY, 0xFFFFE3B2.toInt())
+            handler.rosterCount <= 0 -> CommandAlert("Empty Pasture", "Add Party or PC Pokemon", 0xFFCC8F62.toInt(), 0xFFF8DFC9.toInt())
+            queuedCount > 0 -> CommandAlert("Queue", "$queuedCount tags await pals", CobblePalsUiTheme.ACCENT_BUFFER, 0xFFDCEBFF.toInt())
+            handler.activeCount > 0 -> CommandAlert("Active", "Pals are working", CobblePalsUiTheme.ACCENT_WORK, 0xFFD7F7F0.toInt())
+            else -> CommandAlert("Ready", "Pals are standing by", CobblePalsUiTheme.ACCENT_CREW, 0xFFE1F4D8.toInt())
         }
     }
 
@@ -701,10 +680,10 @@ class RouterScreen(
 
     private fun tabButtons(state: HomeState): List<TabButton> {
         return listOf(
-            TabButton(CommandPostView.Home, 10, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Home"), Text.literal(state.jobSummary), Text.literal(state.crewSummary))),
-            TabButton(CommandPostView.Crew, 76, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Crew"), Text.literal("${handler.rosterCount} crew members"))),
-            TabButton(CommandPostView.Policy, 142, TAB_TOP, 70, TAB_HEIGHT, listOf(Text.literal("Roles"), Text.literal("${state.roles.size} installed role lines"))),
-            TabButton(CommandPostView.Logistics, 216, TAB_TOP, 74, TAB_HEIGHT, listOf(Text.literal("Buffer"), Text.literal("Inventory and item flow")))
+            TabButton(CommandPostView.Home, 10, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Command Post"), Text.literal(state.jobSummary), Text.literal(state.crewSummary))),
+            TabButton(CommandPostView.Crew, 76, TAB_TOP, 72, TAB_HEIGHT, listOf(Text.literal("Pasture"), Text.literal("${handler.rosterCount} assigned Pokemon"))),
+            TabButton(CommandPostView.Policy, 152, TAB_TOP, 58, TAB_HEIGHT, listOf(Text.literal("Tags"), Text.literal("${state.roles.size} installed tag cards"))),
+            TabButton(CommandPostView.Logistics, 214, TAB_TOP, 62, TAB_HEIGHT, listOf(Text.literal("Items"), Text.literal("Command Post buffer")))
         )
     }
 
@@ -714,7 +693,7 @@ class RouterScreen(
         val familyValue = crewFamilyFilter?.label ?: "All"
         val pageCount = crewPageCount(filteredNativeRosterRows())
         return listOf(
-            TextChipButton("crew-sort", 16, CREW_CHIP_TOP, chipWidth("Sort", crewSortMode.label), "Sort", crewSortMode.label, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Sort crew"), Text.literal("Current: ${crewSortMode.label}"))),
+            TextChipButton("crew-sort", 16, CREW_CHIP_TOP, chipWidth("Sort", crewSortMode.label), "Sort", crewSortMode.label, CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Sort pasture"), Text.literal("Current: ${crewSortMode.label}"))),
             TextChipButton("crew-family", 86, CREW_CHIP_TOP, chipWidth("Family", familyValue), "Family", familyValue, CobblePalsUiTheme.ACCENT_WORK, crewFamilyFilter != null, listOf(Text.literal("Family filter"), Text.literal("Current: $familyValue"))),
             TextChipButton("crew-focus", 16, CREW_CHIP_TOP + 16, chipWidth("State", crewFocusFilter.label), "State", crewFocusFilter.label, CobblePalsUiTheme.ACCENT_POLICY, crewFocusFilter != CrewFocusFilter.All, listOf(Text.literal("State filter"), Text.literal("Current: ${crewFocusFilter.label}"))),
             TextChipButton("crew-mode", 86, CREW_CHIP_TOP + 16, chipWidth("Mode", crewModeFilter.label), "Mode", crewModeFilter.label, CobblePalsUiTheme.ACCENT_PURPLE, crewModeFilter != CrewModeFilter.All, listOf(Text.literal("Assignment filter"), Text.literal("Current: ${crewModeFilter.label}"))),
@@ -734,9 +713,8 @@ class RouterScreen(
         val sources = currentCrewSources()
         fun count(type: CrewSourceType) = sources.firstOrNull { it.sourceType == type }?.entries?.size ?: 0
         return listOf(
-            TextChipButton("source-party", SOURCE_LEFT, CREW_CHIP_TOP, 42, "Party", count(CrewSourceType.PARTY).toString(), CobblePalsUiTheme.ACCENT_CREW, crewSourceType == CrewSourceType.PARTY, listOf(Text.literal("Party Pokemon"))),
-            TextChipButton("source-pc", SOURCE_LEFT + 46, CREW_CHIP_TOP, 34, "PC", count(CrewSourceType.PC).toString(), CobblePalsUiTheme.ACCENT_BUFFER, crewSourceType == CrewSourceType.PC, listOf(Text.literal("PC Pokemon"))),
-            TextChipButton("source-open-pc", SOURCE_LEFT + 84, CREW_CHIP_TOP, 44, "", "Open", CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Open Cobblemon PC"), Text.literal("Use the real Cobblemon storage UI to assign crew.")))
+            TextChipButton("source-party", SOURCE_LEFT, CREW_CHIP_TOP, 58, "Party", count(CrewSourceType.PARTY).toString(), CobblePalsUiTheme.ACCENT_CREW, crewSourceType == CrewSourceType.PARTY, listOf(Text.literal("Party Pokemon"))),
+            TextChipButton("source-pc", SOURCE_LEFT + 62, CREW_CHIP_TOP, 58, "PC", count(CrewSourceType.PC).toString(), CobblePalsUiTheme.ACCENT_BUFFER, crewSourceType == CrewSourceType.PC, listOf(Text.literal("PC Pokemon")))
         )
     }
 
@@ -763,7 +741,7 @@ class RouterScreen(
                 value,
                 if (source.isCrewMember) CobblePalsUiTheme.ACCENT_DANGER else CobblePalsUiTheme.ACCENT_CREW,
                 active,
-                listOf(Text.literal(if (source.isCrewMember) "Remove from crew" else "Add to crew"), Text.literal(source.statusLabel()))
+                listOf(Text.literal(if (source.isCrewMember) "Remove from pasture" else "Add to pasture"), Text.literal(source.statusLabel()))
             )
         )
     }
@@ -779,7 +757,7 @@ class RouterScreen(
         selected ?: return emptyList()
         val crew = selected.source
         return listOf(
-            TextChipButton("native-mode-action", SOURCE_LEFT + 6, SOURCE_DETAIL_TOP + 8, 56, "Mode", crew.assignmentLabel(), CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Crew mode"), Text.literal("Current: ${crew.assignmentLabel()}"))),
+            TextChipButton("native-mode-action", SOURCE_LEFT + 6, SOURCE_DETAIL_TOP + 8, 56, "Mode", crew.assignmentLabel(), CobblePalsUiTheme.ACCENT_BUFFER, true, listOf(Text.literal("Pasture mode"), Text.literal("Current: ${crew.assignmentLabel()}"))),
             TextChipButton("native-fallback-action", SOURCE_LEFT + 66, SOURCE_DETAIL_TOP + 8, 56, "Fallback", if (crew.allowFallback) "On" else "Off", if (crew.allowFallback) CobblePalsUiTheme.ACCENT_CREW else CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Fallback"), Text.literal(if (crew.allowFallback) "Enabled" else "Locked"))),
             TextChipButton("native-drop-action", SOURCE_LEFT + 82, SOURCE_DETAIL_TOP + 27, 40, "", "Drop", CobblePalsUiTheme.ACCENT_DANGER, true, listOf(Text.literal("Remove from crew"), Text.literal(crew.statusLabel())))
         )
@@ -818,7 +796,7 @@ class RouterScreen(
     }
 
     private fun drawHeader(context: DrawContext, state: HomeState) {
-        val linkText = if (state.hasCrew) Text.literal("CREW") else Text.literal("EMPTY")
+        val linkText = if (state.hasCrew) Text.literal("PASTURE") else Text.literal("EMPTY")
         val chipStyle = if (state.hasCrew) CobblePalsUiTheme.linkedStateChip else CobblePalsUiTheme.unlinkedStateChip
         context.drawText(textRenderer, Text.literal("COMMAND POST"), 12, 8, CobblePalsUiTheme.HEADER_TEXT, false)
         context.drawText(textRenderer, Text.literal(fit(state.subtitle, 194)), 12, 20, CobblePalsUiTheme.SUBTITLE_TEXT, false)
@@ -830,22 +808,24 @@ class RouterScreen(
             val active = activeView == tab.view
             val hovered = contains(localMouseX, localMouseY, tab.left, tab.top, tab.width, tab.height)
             val body = when {
-                active -> 0xFF202B34.toInt()
-                hovered -> 0xFF1A242C.toInt()
-                else -> 0xFF10171D.toInt()
+                active -> 0xFFEBD39A.toInt()
+                hovered -> 0xFFF7EBD1.toInt()
+                else -> 0xFFD9BF89.toInt()
             }
+            context.fill(tab.left - 1, tab.top - 1, tab.left + tab.width + 1, tab.top + tab.height + 1, 0xFF3A2A1B.toInt())
             context.fill(tab.left, tab.top, tab.left + tab.width, tab.top + tab.height, body)
-            context.fill(tab.left, tab.top + tab.height - 2, tab.left + tab.width, tab.top + tab.height, if (active) tab.view.accent else 0xFF26323C.toInt())
+            context.fill(tab.left + 2, tab.top + 1, tab.left + tab.width - 2, tab.top + 2, 0x66FFFFFF)
+            context.fill(tab.left, tab.top + tab.height - 2, tab.left + tab.width, tab.top + tab.height, if (active) tab.view.accent else 0xFF8A6A3A.toInt())
             UiIconButtons.draw(context, tab.left + 4, tab.top + 3, 9, 9, tab.view.glyph, tab.view.accent, hovered, active)
-            context.drawText(textRenderer, Text.literal(tab.view.label), tab.left + 17, tab.top + 4, if (active) CobblePalsUiTheme.TEXT_PRIMARY else CobblePalsUiTheme.TEXT_MUTED, false)
+            context.drawText(textRenderer, Text.literal(tab.view.label), tab.left + 17, tab.top + 4, CobblePalsUiTheme.TEXT_PRIMARY, false)
         }
     }
 
     private fun drawDeck(context: DrawContext, state: HomeState) {
-        context.drawText(textRenderer, Text.literal("Role Cards"), 16, 62, CobblePalsUiTheme.TEXT_PRIMARY, false)
-        context.drawText(textRenderer, Text.literal("Boosts"), 16, 148, CobblePalsUiTheme.TEXT_MUTED, false)
-        CobblePalsUiTheme.drawStatusCard(context, textRenderer, 0, 0, 96, 76, 54, "Crew", handler.rosterCount, CobblePalsUiTheme.ACCENT_CREW, CobblePalsUiTheme.TEXT_PRIMARY)
-        CobblePalsUiTheme.drawStatusCard(context, textRenderer, 0, 0, 154, 76, 54, "Roles", state.jobCardCount, CobblePalsUiTheme.ACCENT_POLICY, CobblePalsUiTheme.TEXT_PRIMARY)
+        context.drawText(textRenderer, Text.literal("Tag Cards"), 16, 62, CobblePalsUiTheme.TEXT_PRIMARY, false)
+        context.drawText(textRenderer, Text.literal("Augments"), 16, 148, CobblePalsUiTheme.TEXT_MUTED, false)
+        CobblePalsUiTheme.drawStatusCard(context, textRenderer, 0, 0, 96, 76, 54, "Pals", handler.rosterCount, CobblePalsUiTheme.ACCENT_CREW, CobblePalsUiTheme.TEXT_PRIMARY)
+        CobblePalsUiTheme.drawStatusCard(context, textRenderer, 0, 0, 154, 76, 54, "Tags", state.jobCardCount, CobblePalsUiTheme.ACCENT_POLICY, CobblePalsUiTheme.TEXT_PRIMARY)
         CobblePalsUiTheme.drawStatusCard(context, textRenderer, 0, 0, 212, 76, 54, "Active", handler.activeCount, CobblePalsUiTheme.ACCENT_WORK, CobblePalsUiTheme.TEXT_PRIMARY)
         drawAlert(context, state.alert, 96, 104, 170)
         context.drawText(textRenderer, Text.literal(fit(state.crewSummary, 160)), 100, 126, CobblePalsUiTheme.TEXT_MUTED, false)
@@ -853,7 +833,7 @@ class RouterScreen(
     }
 
     private fun drawAlert(context: DrawContext, alert: CommandAlert, left: Int, top: Int, width: Int) {
-        context.fill(left, top, left + width, top + 18, 0xFF0D141A.toInt())
+        context.fill(left, top, left + width, top + 18, 0xFFD9BF89.toInt())
         context.fill(left, top, left + 4, top + 18, alert.accentColor)
         context.drawText(textRenderer, Text.literal(alert.label), left + 8, top + 5, alert.accentColor, false)
         context.drawText(textRenderer, Text.literal(fit(alert.detail, width - 64)), left + 58, top + 5, alert.textColor, false)
@@ -861,12 +841,14 @@ class RouterScreen(
 
     private fun drawFixedChip(context: DrawContext, chip: TextChipButton, hovered: Boolean) {
         val body = when {
-            hovered -> 0xFF202B34.toInt()
-            chip.active -> 0xFF1A242C.toInt()
-            else -> 0xFF10171D.toInt()
+            hovered -> 0xFFF7EBD1.toInt()
+            chip.active -> 0xFFEBD39A.toInt()
+            else -> 0xFFD9BF89.toInt()
         }
+        context.fill(chip.left - 1, chip.top - 1, chip.left + chip.width + 1, chip.top + CHIP_HEIGHT + 1, 0xFF3A2A1B.toInt())
         context.fill(chip.left, chip.top, chip.left + chip.width, chip.top + CHIP_HEIGHT, body)
         context.fill(chip.left, chip.top, chip.left + 3, chip.top + CHIP_HEIGHT, chip.accentColor)
+        context.fill(chip.left + 2, chip.top + 1, chip.left + chip.width - 2, chip.top + 2, 0x66FFFFFF)
         context.drawText(textRenderer, Text.literal(chip.label), chip.left + 6, chip.top + 3, CobblePalsUiTheme.TEXT_FAINT, false)
         val labelWidth = textRenderer.getWidth(chip.label)
         val valueText = Text.literal(fit(chip.value, (chip.width - labelWidth - 18).coerceAtLeast(12)))
@@ -933,7 +915,7 @@ class RouterScreen(
             chipLeft += width + 5
         }
         if (state.roles.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("No role cards installed."), 16, 258, CobblePalsUiTheme.TEXT_MUTED, false)
+            context.drawText(textRenderer, Text.literal("No tag cards installed."), 16, 258, CobblePalsUiTheme.TEXT_MUTED, false)
             context.drawText(textRenderer, Text.literal("Inventory"), RouterScreenHandler.PLAYER_INV_X, HOME_INV_LABEL_Y, CobblePalsUiTheme.TEXT_MUTED, false)
             return
         }
@@ -958,7 +940,7 @@ class RouterScreen(
         val sourceLabel = currentBox?.label ?: crewSourceType.label
         val rosterTotal = allNativeRows.size
         val rosterVisible = filteredNativeRows.size
-        context.drawText(textRenderer, Text.literal(fit("Crew Box • $rosterVisible/$rosterTotal", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit("Pastured • $rosterVisible/$rosterTotal", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal(fit("$sourceLabel • $sourceOccupied/${visibleSources.size}", 122)), SOURCE_LEFT, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
 
         crewFilterButtons().forEach { chip ->
@@ -990,7 +972,7 @@ class RouterScreen(
             drawSourceSlot(context, row, sourceGridCell(index), sourceSlotActive(row))
         }
         if (visibleNativeRows.isEmpty()) {
-            context.drawText(textRenderer, Text.literal(if (allNativeRows.isEmpty()) "No crew yet" else "No matches"), LIST_LEFT + 9, CREW_ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
+            context.drawText(textRenderer, Text.literal(if (allNativeRows.isEmpty()) "No pals yet" else "No matches"), LIST_LEFT + 9, CREW_ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
         }
         if (visibleSources.isEmpty()) {
             context.drawText(textRenderer, Text.literal("No Pokemon"), SOURCE_LEFT + 9, SOURCE_ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
@@ -1002,8 +984,8 @@ class RouterScreen(
     private fun drawNativeRosterDetail(context: DrawContext, selected: NativeRosterRow?) {
         CobblePalsUiTheme.drawPlainPanel(context, LIST_LEFT, SOURCE_DETAIL_TOP, LIST_WIDTH, 42, selected?.accentColor ?: CobblePalsUiTheme.TEXT_FAINT)
         if (selected == null) {
-            context.drawText(textRenderer, Text.literal("Select crew"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
-            context.drawText(textRenderer, Text.literal("Native roster"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 21, CobblePalsUiTheme.TEXT_FAINT, false)
+            context.drawText(textRenderer, Text.literal("Select pal"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
+            context.drawText(textRenderer, Text.literal("Command pasture"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 21, CobblePalsUiTheme.TEXT_FAINT, false)
             return
         }
         val source = selected.source
@@ -1017,11 +999,11 @@ class RouterScreen(
 
     private fun drawPolicyView(context: DrawContext, localMouseX: Int, localMouseY: Int, state: HomeState) {
         if (state.roles.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("Install role cards to tune policy."), 16, 206, CobblePalsUiTheme.TEXT_MUTED, false)
+            context.drawText(textRenderer, Text.literal("Install tag cards to tune policy."), 16, 206, CobblePalsUiTheme.TEXT_MUTED, false)
             return
         }
         val selected = selectedPolicyRole(state)
-        context.drawText(textRenderer, Text.literal("Role Cards"), POLICY_LIST_LEFT, 200, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal("Tag Cards"), POLICY_LIST_LEFT, 200, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal("Details"), POLICY_DETAIL_LEFT, 200, CobblePalsUiTheme.TEXT_MUTED, false)
         state.roles.take(MAX_ROLE_ROWS).forEachIndexed { index, role ->
             drawPolicyRoleRow(context, role, POLICY_LIST_LEFT, POLICY_LIST_TOP + index * POLICY_ROW_HEIGHT, POLICY_LIST_WIDTH, index == selectedPolicyRowIndex)
@@ -1030,7 +1012,7 @@ class RouterScreen(
     }
 
     private fun drawLogisticsView(context: DrawContext) {
-        context.drawText(textRenderer, Text.literal("Command buffer"), RouterScreenHandler.STORAGE_START_X, RouterScreenHandler.STORAGE_START_Y - 12, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal("Item buffer"), RouterScreenHandler.STORAGE_START_X, RouterScreenHandler.STORAGE_START_Y - 12, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, playerInventoryTitle, playerInventoryTitleX, playerInventoryTitleY, CobblePalsUiTheme.TEXT_MUTED, false)
     }
 
@@ -1043,7 +1025,7 @@ class RouterScreen(
             return
         }
         if (selected == null) {
-            context.drawText(textRenderer, Text.literal("Select source"), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
+            context.drawText(textRenderer, Text.literal("Select Pokemon"), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
             context.drawText(textRenderer, Text.literal("Party or PC"), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 21, CobblePalsUiTheme.TEXT_FAINT, false)
             return
         }
@@ -1082,9 +1064,11 @@ class RouterScreen(
     }
 
     private fun drawPolicyRoleRow(context: DrawContext, role: RoleSummary, left: Int, top: Int, width: Int, active: Boolean) {
-        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
+        val body = if (active) 0xFFEBD39A.toInt() else 0xFFD9BF89.toInt()
+        context.fill(left - 1, top - 1, left + width + 1, top + POLICY_ROW_HEIGHT - 1, 0xFF3A2A1B.toInt())
         context.fill(left, top, left + width, top + POLICY_ROW_HEIGHT - 2, body)
         context.fill(left, top, left + 3, top + POLICY_ROW_HEIGHT - 2, role.pressureColor)
+        context.fill(left + 2, top + 1, left + width - 2, top + 2, 0x66FFFFFF)
         context.drawText(textRenderer, Text.literal(role.slotLabel), left + 7, top + 3, CobblePalsUiTheme.TEXT_FAINT, false)
         context.drawText(textRenderer, Text.literal(fit(role.label, 72)), left + 25, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
         context.drawText(textRenderer, Text.literal(fit(role.targetLabel, 64)), left + 7, top + 13, CobblePalsUiTheme.TEXT_MUTED, false)
@@ -1092,9 +1076,11 @@ class RouterScreen(
     }
 
     private fun drawRoleRow(context: DrawContext, role: RoleSummary, left: Int, top: Int, width: Int, active: Boolean) {
-        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
+        val body = if (active) 0xFFEBD39A.toInt() else 0xFFD9BF89.toInt()
+        context.fill(left - 1, top - 1, left + width + 1, top + ROLE_ROW_HEIGHT - 1, 0xFF3A2A1B.toInt())
         context.fill(left, top, left + width, top + ROLE_ROW_HEIGHT - 2, body)
         context.fill(left, top, left + 3, top + ROLE_ROW_HEIGHT - 2, role.pressureColor)
+        context.fill(left + 2, top + 1, left + width - 2, top + 2, 0x66FFFFFF)
         val compact = width < 180
         context.drawText(textRenderer, Text.literal(role.slotLabel), left + 7, top + 4, CobblePalsUiTheme.TEXT_FAINT, false)
         context.drawText(textRenderer, Text.literal(fit(role.label, if (compact) 50 else 72)), left + 25, top + 4, CobblePalsUiTheme.TEXT_PRIMARY, false)
@@ -1106,20 +1092,20 @@ class RouterScreen(
     private fun drawPokemonGridFrame(context: DrawContext, left: Int, top: Int, width: Int, columns: Int, cellHeight: Int, count: Int) {
         repeat(count) { index ->
             val cell = gridCell(index, left, top, width, columns, cellHeight)
-            context.fill(cell.left - 1, cell.top - 1, cell.left + cell.width + 1, cell.top + cell.height + 1, 0xFF05080B.toInt())
-            context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF26323C.toInt())
-            context.fill(cell.left + 1, cell.top + 1, cell.left + cell.width - 1, cell.top + cell.height - 1, 0xFF0D141A.toInt())
+            context.fill(cell.left - 1, cell.top - 1, cell.left + cell.width + 1, cell.top + cell.height + 1, 0xFF3A2A1B.toInt())
+            context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF95734A.toInt())
+            context.fill(cell.left + 1, cell.top + 1, cell.left + cell.width - 1, cell.top + cell.height - 1, 0xFFD9BE89.toInt())
         }
     }
 
     private fun drawSourceSlot(context: DrawContext, row: SourceRowSummary, cell: GridCellBounds, active: Boolean) {
         val source = row.snapshot
         val body = when {
-            active -> 0xFF22313B.toInt()
-            source == null -> 0xFF0D141A.toInt()
-            !source.isAvailable || source.isFainted -> 0xFF111417.toInt()
-            source.isCrewMember -> 0xFF122018.toInt()
-            else -> 0xFF101820.toInt()
+            active -> 0xFFF2E5C2.toInt()
+            source == null -> 0xFFCBAE76.toInt()
+            !source.isAvailable || source.isFainted -> 0xFFD2B29B.toInt()
+            source.isCrewMember -> 0xFFDCECCF.toInt()
+            else -> 0xFFE8D4A2.toInt()
         }
         drawPokemonSlotBase(context, cell, body, row.accentColor, active)
         if (source == null) {
@@ -1139,10 +1125,10 @@ class RouterScreen(
     private fun drawNativeRosterSlot(context: DrawContext, row: NativeRosterRow, cell: GridCellBounds, active: Boolean) {
         val source = row.source
         val body = when {
-            active -> 0xFF22313B.toInt()
-            source.isMissing || source.isFainted || source.isBlocked() -> 0xFF1B1212.toInt()
-            source.isActive() -> 0xFF11241F.toInt()
-            else -> 0xFF101820.toInt()
+            active -> 0xFFF2E5C2.toInt()
+            source.isMissing || source.isFainted || source.isBlocked() -> 0xFFE2B39F.toInt()
+            source.isActive() -> 0xFFDCECCF.toInt()
+            else -> 0xFFE8D4A2.toInt()
         }
         drawPokemonSlotBase(context, cell, body, row.accentColor, active)
         drawPokemonAvatar(context, cell.left + 6, cell.top + 4, 16, source.species, row.accentColor, source.isMissing || source.isFainted)
@@ -1156,19 +1142,20 @@ class RouterScreen(
     }
 
     private fun drawPokemonSlotBase(context: DrawContext, cell: GridCellBounds, body: Int, accent: Int, active: Boolean) {
-        val border = if (active) 0xFFF1E7D1.toInt() else 0xFF05080B.toInt()
+        val border = if (active) 0xFFFFF5DA.toInt() else 0xFF3A2A1B.toInt()
         context.fill(cell.left - 1, cell.top - 1, cell.left + cell.width + 1, cell.top + cell.height + 1, border)
-        context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF26323C.toInt())
+        context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF95734A.toInt())
         context.fill(cell.left + 1, cell.top + 1, cell.left + cell.width - 1, cell.top + cell.height - 1, body)
+        context.fill(cell.left + 2, cell.top + 2, cell.left + cell.width - 2, cell.top + 3, 0x66FFFFFF)
         context.fill(cell.left + 1, cell.top + 1, cell.left + 4, cell.top + cell.height - 1, accent)
     }
 
     private fun drawPokemonAvatar(context: DrawContext, left: Int, top: Int, size: Int, species: String, accent: Int, muted: Boolean) {
-        val avatarColor = if (muted) 0xFF323A3F.toInt() else speciesColor(species, accent)
+        val avatarColor = if (muted) 0xFF9A8468.toInt() else speciesColor(species, accent)
         context.fill(left, top + 3, left + size, top + size - 3, avatarColor)
         context.fill(left + 2, top + 1, left + size - 2, top + size - 1, avatarColor)
         context.fill(left + 4, top, left + size - 4, top + size, avatarColor)
-        context.fill(left + 3, top + 4, left + size - 3, top + size - 4, 0x33000000)
+        context.fill(left + 3, top + 4, left + size - 3, top + size - 4, 0x22000000)
         val initial = pokemonInitial(species)
         val initialText = Text.literal(initial)
         context.drawText(textRenderer, initialText, left + (size - textRenderer.getWidth(initialText)) / 2, top + 4, if (muted) CobblePalsUiTheme.TEXT_FAINT else CobblePalsUiTheme.HEADER_TEXT, false)
@@ -1290,10 +1277,6 @@ class RouterScreen(
                 }
 
                 sourceTypeButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
-                    if (chip.id == "source-open-pc") {
-                        openCobblemonCrewPc()
-                        return true
-                    }
                     crewSourceType = if (chip.id == "source-party") CrewSourceType.PARTY else CrewSourceType.PC
                     crewSourcePageIndex = 0
                     selectedSourcePokemonId = null
