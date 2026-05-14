@@ -1,14 +1,20 @@
 package com.cobblepalsworld.gui.router
 
 import com.cobblepalsworld.augment.AugmentItem
-import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
+import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
 import com.cobblepalsworld.gui.MenuTypes
+import com.cobblepalsworld.persistence.CobblePalsSaveData
+import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
+import com.cobblepalsworld.tag.TagSpec
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.TagTypePresentation
+import com.cobblepalsworld.tag.TargetStrategy
+import com.cobblepalsworld.tag.RedstoneControlMode
+import com.cobblepalsworld.tag.filter.FilterMatchMode
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.inventory.Inventory
@@ -49,8 +55,26 @@ class RouterScreenHandler : ScreenHandler {
         const val ACTION_EDIT_MODULE_BASE = 100
         const val ACTION_OPEN_POLICY_ROW_BASE = 200
         const val ACTION_OPEN_CREW_ROW_BASE = 300
+        const val ACTION_CYCLE_CREW_MODE_BASE = 400
+        const val ACTION_TOGGLE_CREW_FALLBACK_BASE = 700
+        private const val DYNAMIC_CREW_ACTION_LIMIT = 256
+        private const val ACTION_POLICY_QUICK_BASE = 1000
+        private const val POLICY_ACTION_STRIDE = 16
+        const val POLICY_ACTION_TOGGLE_WHITELIST = 0
+        const val POLICY_ACTION_TOGGLE_NBT = 1
+        const val POLICY_ACTION_CYCLE_MATCH = 2
+        const val POLICY_ACTION_CYCLE_SIGNAL = 3
+        const val POLICY_ACTION_CYCLE_TARGET = 4
+        const val POLICY_ACTION_TOGGLE_RUN = 5
+        const val POLICY_ACTION_CYCLE_REGULATOR = 6
+
+        private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
 
         fun isCommandCard(stack: ItemStack): Boolean = stack.item is TagItem
+
+        fun policyQuickActionId(rowIndex: Int, action: Int): Int {
+            return ACTION_POLICY_QUICK_BASE + action * POLICY_ACTION_STRIDE + rowIndex
+        }
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
@@ -150,6 +174,8 @@ class RouterScreenHandler : ScreenHandler {
     }
 
     override fun onButtonClick(player: PlayerEntity, id: Int): Boolean {
+        if (player.world.isClient) return true
+
         return when {
             id in ACTION_EDIT_MODULE_BASE until ACTION_EDIT_MODULE_BASE + RouterBlockEntity.MODULE_SLOT_COUNT -> {
                 val moduleIndex = id - ACTION_EDIT_MODULE_BASE
@@ -164,8 +190,103 @@ class RouterScreenHandler : ScreenHandler {
                 openCrewRow(player, id - ACTION_OPEN_CREW_ROW_BASE)
             }
 
+            id in ACTION_CYCLE_CREW_MODE_BASE until ACTION_CYCLE_CREW_MODE_BASE + DYNAMIC_CREW_ACTION_LIMIT -> {
+                cycleCrewMode(player, id - ACTION_CYCLE_CREW_MODE_BASE)
+            }
+
+            id in ACTION_TOGGLE_CREW_FALLBACK_BASE until ACTION_TOGGLE_CREW_FALLBACK_BASE + DYNAMIC_CREW_ACTION_LIMIT -> {
+                toggleCrewFallback(player, id - ACTION_TOGGLE_CREW_FALLBACK_BASE)
+            }
+
+            id in ACTION_POLICY_QUICK_BASE until ACTION_POLICY_QUICK_BASE + POLICY_ACTION_STRIDE * 7 -> {
+                handlePolicyQuickAction(player, id)
+            }
+
             else -> false
         }
+    }
+
+    private fun cycleCrewMode(player: PlayerEntity, snapshotIndex: Int): Boolean {
+        val pokemonId = resolveCrewPokemonId(player, snapshotIndex) ?: return false
+        val current = TagAssignmentManager.getProfile(pokemonId)
+        val nextMode = com.cobblepalsworld.pasture.WorkerAssignmentMode.entries[
+            (current.mode.ordinal + 1) % com.cobblepalsworld.pasture.WorkerAssignmentMode.entries.size
+        ]
+        TagAssignmentManager.updateProfile(pokemonId, mode = nextMode)
+        markAssignmentChange(player)
+        return true
+    }
+
+    private fun toggleCrewFallback(player: PlayerEntity, snapshotIndex: Int): Boolean {
+        val pokemonId = resolveCrewPokemonId(player, snapshotIndex) ?: return false
+        val current = TagAssignmentManager.getProfile(pokemonId)
+        TagAssignmentManager.updateProfile(pokemonId, allowFallback = !current.allowFallback)
+        markAssignmentChange(player)
+        return true
+    }
+
+    private fun resolveCrewPokemonId(player: PlayerEntity, snapshotIndex: Int): java.util.UUID? {
+        val serverWorld = player.world as? ServerWorld ?: return null
+        val router = routerInventory as? RouterBlockEntity ?: return null
+        val pasture = router.linkedPasture(serverWorld) ?: return null
+        val snapshot = PastureSnapshotFactory.create(serverWorld, pasture)
+        return snapshot.pals.getOrNull(snapshotIndex)?.pokemonId
+    }
+
+    private fun handlePolicyQuickAction(player: PlayerEntity, id: Int): Boolean {
+        val payload = id - ACTION_POLICY_QUICK_BASE
+        val rowIndex = payload % POLICY_ACTION_STRIDE
+        val action = payload / POLICY_ACTION_STRIDE
+
+        return mutatePolicyRow(player, rowIndex) { spec ->
+            when (action) {
+                POLICY_ACTION_TOGGLE_WHITELIST -> spec.copy(filter = spec.filter.copy(whitelist = !spec.filter.whitelist))
+                POLICY_ACTION_TOGGLE_NBT -> spec.copy(filter = spec.filter.copy(matchNbt = !spec.filter.matchNbt))
+                POLICY_ACTION_CYCLE_MATCH -> spec.copy(filter = spec.filter.copy(matchMode = nextMatchMode(spec.filter.matchMode)))
+                POLICY_ACTION_CYCLE_SIGNAL -> spec.copy(settings = spec.settings.copy(redstoneMode = nextRedstoneMode(spec.settings.redstoneMode)))
+                POLICY_ACTION_CYCLE_TARGET -> spec.copy(settings = spec.settings.copy(targetStrategy = nextTargetStrategy(spec.settings.targetStrategy)))
+                POLICY_ACTION_TOGGLE_RUN -> spec.copy(settings = spec.settings.copy(terminateAfterSuccess = !spec.settings.terminateAfterSuccess))
+                POLICY_ACTION_CYCLE_REGULATOR -> spec.copy(settings = spec.settings.copy(regulatorAmount = nextRegulator(spec.settings.regulatorAmount)))
+                else -> spec
+            }
+        }
+    }
+
+    private fun mutatePolicyRow(player: PlayerEntity, rowIndex: Int, transform: (TagSpec) -> TagSpec): Boolean {
+        val moduleIndex = groupedPolicyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
+        val inventorySlot = RouterBlockEntity.MODULE_SLOT_START + moduleIndex
+        val stack = routerInventory.getStack(inventorySlot)
+        val tagItem = stack.item as? TagItem ?: return false
+        val registries = player.world.registryManager
+        val original = TagItem.getSpec(stack, registries) ?: TagSpec(type = tagItem.tagType)
+        val updated = transform(original)
+        TagItem.setSpec(stack, updated, registries)
+        routerInventory.markDirty()
+        markAssignmentChange(player)
+        return true
+    }
+
+    private fun nextMatchMode(mode: FilterMatchMode): FilterMatchMode {
+        return FilterMatchMode.entries[(mode.ordinal + 1) % FilterMatchMode.entries.size]
+    }
+
+    private fun nextRedstoneMode(mode: RedstoneControlMode): RedstoneControlMode {
+        return RedstoneControlMode.entries[(mode.ordinal + 1) % RedstoneControlMode.entries.size]
+    }
+
+    private fun nextTargetStrategy(strategy: TargetStrategy): TargetStrategy {
+        return TargetStrategy.entries[(strategy.ordinal + 1) % TargetStrategy.entries.size]
+    }
+
+    private fun nextRegulator(current: Int): Int {
+        val index = REGULATOR_PRESETS.indexOfFirst { it >= current }.let { if (it >= 0) it else REGULATOR_PRESETS.lastIndex }
+        return REGULATOR_PRESETS[(index + 1) % REGULATOR_PRESETS.size]
+    }
+
+    private fun markAssignmentChange(player: PlayerEntity) {
+        val serverWorld = player.world as? ServerWorld ?: return
+        CobblePalsSaveData.markDirty(serverWorld)
+        sendContentUpdates()
     }
 
     private fun openRoleEditor(player: PlayerEntity, inventorySlot: Int): Boolean {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Split the Command Post into a real five-surface shell with a dedicated Jobs board, a filterable and paged Crew roster, and in-shell drawers for pal detail and quick role-policy tuning instead of forcing every drill-in into detached screens.
+- Added direct Command Post retuning for worker assignment mode and fallback behavior, plus inline role-policy quick controls for common filter, signal, target, run, and regulator changes while keeping the full ghost-slot editor available for deeper item-rule work.
+- Shrunk the pasture surface into a compact local overview that focuses on presence, blocked and fainted alerts, and Command Post coverage so it no longer behaves like a second full admin console.
+
 ## 0.2.1
 
 - Finished the Command Post UI rework into a calmer jobs-first hub with dedicated Home, Crew, Policy, and Buffer views, authoritative linked-pasture roster data, and direct row-based drill-in for both pals and role policies.
