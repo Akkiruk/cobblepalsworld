@@ -58,6 +58,65 @@ object CobblePalsNetworking {
         }
     }
 
+    data class WorkerVisualSnapshot(
+        val entityId: Int,
+        val tagTypeId: String,
+        val phaseOrdinal: Int,
+        val primaryCarriedItemId: String?,
+        val carriedItemCount: Int
+    ) {
+        fun writeToBuf(buf: RegistryByteBuf) {
+            buf.writeVarInt(entityId)
+            buf.writeString(tagTypeId)
+            buf.writeVarInt(phaseOrdinal)
+            buf.writeBoolean(primaryCarriedItemId != null)
+            primaryCarriedItemId?.let(buf::writeString)
+            buf.writeVarInt(carriedItemCount)
+        }
+
+        companion object {
+            fun readFromBuf(buf: RegistryByteBuf): WorkerVisualSnapshot {
+                val entityId = buf.readVarInt()
+                val tagTypeId = buf.readString()
+                val phaseOrdinal = buf.readVarInt()
+                val primaryCarriedItemId = if (buf.readBoolean()) buf.readString() else null
+                val carriedItemCount = buf.readVarInt()
+                return WorkerVisualSnapshot(
+                    entityId = entityId,
+                    tagTypeId = tagTypeId,
+                    phaseOrdinal = phaseOrdinal,
+                    primaryCarriedItemId = primaryCarriedItemId,
+                    carriedItemCount = carriedItemCount
+                )
+            }
+        }
+    }
+
+    class WorkerVisualsS2C(val pasturePos: BlockPos, val visuals: List<WorkerVisualSnapshot>) : CustomPayload {
+        override fun getId() = TYPE
+
+        companion object {
+            val TYPE = CustomPayload.Id<WorkerVisualsS2C>(Identifier.of(CobblePalsWorld.MODID, "worker_visuals"))
+            val CODEC = object : PacketCodec<RegistryByteBuf, WorkerVisualsS2C> {
+                override fun encode(buf: RegistryByteBuf, value: WorkerVisualsS2C) {
+                    buf.writeBlockPos(value.pasturePos)
+                    buf.writeVarInt(value.visuals.size)
+                    value.visuals.forEach { it.writeToBuf(buf) }
+                }
+
+                override fun decode(buf: RegistryByteBuf): WorkerVisualsS2C {
+                    val pasturePos = buf.readBlockPos()
+                    val size = buf.readVarInt()
+                    val visuals = ArrayList<WorkerVisualSnapshot>(size)
+                    repeat(size) {
+                        visuals += WorkerVisualSnapshot.readFromBuf(buf)
+                    }
+                    return WorkerVisualsS2C(pasturePos, visuals)
+                }
+            }
+        }
+    }
+
     class TeleportHomeC2S(val pasturePos: BlockPos, val pokemonId: UUID) : CustomPayload {
         override fun getId() = TYPE
         companion object {
@@ -74,6 +133,7 @@ object CobblePalsNetworking {
 
     fun registerS2CType() {
         NetworkManager.registerS2CPayloadType(ManagerDataS2C.TYPE, ManagerDataS2C.CODEC)
+        NetworkManager.registerS2CPayloadType(WorkerVisualsS2C.TYPE, WorkerVisualsS2C.CODEC)
     }
 
     fun registerServer() {
@@ -101,7 +161,10 @@ object CobblePalsNetworking {
         }
     }
 
-    fun registerClient(onReceive: (PastureSnapshot) -> Unit) {
+    fun registerClient(
+        onReceive: (PastureSnapshot) -> Unit,
+        onWorkerVisuals: (BlockPos, List<WorkerVisualSnapshot>) -> Unit
+    ) {
         NetworkManager.registerReceiver(
             NetworkManager.Side.S2C,
             ManagerDataS2C.TYPE,
@@ -109,6 +172,20 @@ object CobblePalsNetworking {
         ) { payload, context ->
             context.queue { onReceive(payload.snapshot) }
         }
+
+        NetworkManager.registerReceiver(
+            NetworkManager.Side.S2C,
+            WorkerVisualsS2C.TYPE,
+            WorkerVisualsS2C.CODEC
+        ) { payload, context ->
+            context.queue { onWorkerVisuals(payload.pasturePos, payload.visuals) }
+        }
+    }
+
+    fun sendWorkerVisuals(players: Collection<ServerPlayerEntity>, pasturePos: BlockPos, visuals: List<WorkerVisualSnapshot>) {
+        if (players.isEmpty()) return
+        val payload = WorkerVisualsS2C(pasturePos.toImmutable(), visuals)
+        players.forEach { player -> NetworkManager.sendToPlayer(player, payload) }
     }
 
     private fun handleManagerRequest(player: ServerPlayerEntity, requestedPos: BlockPos? = null) {

@@ -16,6 +16,11 @@ import org.joml.Matrix4f
 object TagHighlightRenderer {
 
     fun render(matrices: MatrixStack) {
+        renderHeldTagHighlights(matrices)
+        WorkerOverlayRenderer.render(matrices)
+    }
+
+    private fun renderHeldTagHighlights(matrices: MatrixStack) {
         val client = MinecraftClient.getInstance()
         val player = client.player ?: return
         val camera = client.gameRenderer.camera
@@ -58,7 +63,7 @@ object TagHighlightRenderer {
         matrices.pop()
     }
 
-    private fun drawFill(matrix: Matrix4f, box: Box, r: Int, g: Int, b: Int, a: Int) {
+    internal fun drawFill(matrix: Matrix4f, box: Box, r: Int, g: Int, b: Int, a: Int) {
         val buf = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR)
         val x0 = box.minX.toFloat(); val y0 = box.minY.toFloat(); val z0 = box.minZ.toFloat()
         val x1 = box.maxX.toFloat(); val y1 = box.maxY.toFloat(); val z1 = box.maxZ.toFloat()
@@ -98,7 +103,7 @@ object TagHighlightRenderer {
         BufferRenderer.drawWithGlobalProgram(buf.end())
     }
 
-    private fun drawOutline(matrix: Matrix4f, box: Box, r: Int, g: Int, b: Int, a: Int) {
+    internal fun drawOutline(matrix: Matrix4f, box: Box, r: Int, g: Int, b: Int, a: Int) {
         val buf = Tessellator.getInstance().begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR)
         val x0 = box.minX.toFloat(); val y0 = box.minY.toFloat(); val z0 = box.minZ.toFloat()
         val x1 = box.maxX.toFloat(); val y1 = box.maxY.toFloat(); val z1 = box.maxZ.toFloat()

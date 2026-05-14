@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.32
+
+- Added active in-world worker overlays that now come from the same authoritative pasture tick state as the manager, giving busy pals a duty halo plus live tag and cargo icons instead of leaving activity readable only in menus.
+- Added a nearby-player visual sync path for active workers so the world view and Command Post status board now reinforce the same phase and cargo truth without inventing a second execution model.
+- Updated the final-vision architecture audit to record the shipped manager/status work, nearby-player slowdown policy, and this new Phase 3 readability slice.
+
 ## 0.1.31
 
 - Reworked the pasture manager into a live status board: rows now refresh in place, sort active workers to the top, and expose real worker phase, cooldown, cargo, and Command Post linkage instead of a stale one-shot snapshot.

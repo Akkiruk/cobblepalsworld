@@ -9,6 +9,7 @@ import com.cobblepalsworld.gui.pasture.PastureManagerScreen
 import com.cobblepalsworld.gui.router.RouterScreen
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.visual.WorkerOverlayRenderer
 import dev.architectury.registry.menu.MenuRegistry
 import net.minecraft.client.MinecraftClient
 
@@ -24,14 +25,19 @@ object CobblePalsWorldClient {
             RouterScreen(handler, inv, title)
         }
 
-        CobblePalsNetworking.registerClient { snapshot ->
-            val client = MinecraftClient.getInstance()
-            val currentScreen = client.currentScreen
-            if (currentScreen is PastureManagerScreen && currentScreen.appliesTo(snapshot.pasturePos)) {
-                currentScreen.updateSnapshot(snapshot)
-            } else {
-                client.setScreen(PastureManagerScreen(snapshot))
+        CobblePalsNetworking.registerClient(
+            onReceive = { snapshot ->
+                val client = MinecraftClient.getInstance()
+                val currentScreen = client.currentScreen
+                if (currentScreen is PastureManagerScreen && currentScreen.appliesTo(snapshot.pasturePos)) {
+                    currentScreen.updateSnapshot(snapshot)
+                } else {
+                    client.setScreen(PastureManagerScreen(snapshot))
+                }
+            },
+            onWorkerVisuals = { pasturePos, visuals ->
+                WorkerOverlayRenderer.replacePastureVisuals(pasturePos, visuals)
             }
-        }
+        )
     }
 }

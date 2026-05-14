@@ -5,12 +5,16 @@ import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.persistence.CobblePalsSaveData
+import net.minecraft.registry.Registries
 import net.minecraft.registry.RegistryKey
+import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
@@ -43,11 +47,14 @@ object PastureWorkerManager {
             InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
         }
 
+        val nearbyPlayers = nearbyPlayers(serverWorld, pos)
+
         // Stagger pasture ticks — offset by position hash, with slower cadence for distant pastures.
-        val pastureTickInterval = effectiveTickInterval(serverWorld, pos)
+        val pastureTickInterval = effectiveTickInterval(nearbyPlayers.isNotEmpty())
         if ((world.time + (pos.hashCode().toLong() and 0x7FFFFFFF)) % pastureTickInterval != 0L) return
 
         val tethered = pasture.tetheredPokemon
+        val activeVisuals = mutableListOf<CobblePalsNetworking.WorkerVisualSnapshot>()
 
         // Detect recalled Pokémon and clean up their state
         val currentIds = mutableSetOf<UUID>()
@@ -105,6 +112,7 @@ object PastureWorkerManager {
                 try {
                     TagExecutionEngine.tick(world, entity, pokemon, tag, pos)
                     workerCount++
+                    buildWorkerVisual(entity, pokemon.uuid)?.let(activeVisuals::add)
                 } catch (e: Exception) {
                     com.cobblepalsworld.CobblePalsWorld.LOGGER.error("Error ticking Pokémon worker", e)
                 }
@@ -113,27 +121,68 @@ object PastureWorkerManager {
                 tickIdleWander(world, entity, pos)
             }
         }
+
+        if (nearbyPlayers.isNotEmpty()) {
+            CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
+        }
     }
 
     private const val WANDER_RADIUS = 4
     private const val WANDER_INTERVAL = 80L // attempt wander every ~4 seconds
 
-    private fun effectiveTickInterval(world: ServerWorld, pos: BlockPos): Long {
+    private fun effectiveTickInterval(hasNearbyPlayer: Boolean): Long {
         val general = ConfigManager.config.general
         if (general.distantTickMultiplier <= 1) {
             return baseTickInterval.toLong()
         }
 
-        val rangeSq = general.nearbyPlayerRange.toDouble() * general.nearbyPlayerRange.toDouble()
+        val multiplier = if (hasNearbyPlayer) 1 else general.distantTickMultiplier
+        return (baseTickInterval * multiplier).toLong().coerceAtLeast(1L)
+    }
+
+    private fun nearbyPlayers(world: ServerWorld, pos: BlockPos): List<ServerPlayerEntity> {
+        val rangeSq = ConfigManager.config.general.nearbyPlayerRange.toDouble() * ConfigManager.config.general.nearbyPlayerRange.toDouble()
         val centerX = pos.x + 0.5
         val centerY = pos.y + 0.5
         val centerZ = pos.z + 0.5
-        val hasNearbyPlayer = world.players.any { player ->
+        return world.players.filter { player ->
             !player.isSpectator && player.squaredDistanceTo(centerX, centerY, centerZ) <= rangeSq
         }
+    }
 
-        val multiplier = if (hasNearbyPlayer) 1 else general.distantTickMultiplier
-        return (baseTickInterval * multiplier).toLong().coerceAtLeast(1L)
+    private fun buildWorkerVisual(
+        entity: PokemonEntity,
+        pokemonId: UUID
+    ): CobblePalsNetworking.WorkerVisualSnapshot? {
+        val assignmentView = TagAssignmentManager.getView(pokemonId) ?: return null
+        val state = StateManager.get(pokemonId)
+
+        var primaryCarriedItemId: String? = null
+        var carriedItemCount = 0
+        InventoryManager.get(pokemonId)?.let { inventory ->
+            for (slot in 0 until inventory.size()) {
+                val stack = inventory.getStack(slot)
+                if (stack.isEmpty) continue
+
+                carriedItemCount += stack.count
+                if (primaryCarriedItemId == null) {
+                    primaryCarriedItemId = Registries.ITEM.getId(stack.item).toString()
+                }
+            }
+        }
+
+        val phase = state?.phase ?: WorkerPhase.IDLE
+        if (phase == WorkerPhase.IDLE && primaryCarriedItemId == null) {
+            return null
+        }
+
+        return CobblePalsNetworking.WorkerVisualSnapshot(
+            entityId = entity.id,
+            tagTypeId = assignmentView.tag.type.id,
+            phaseOrdinal = phase.ordinal,
+            primaryCarriedItemId = primaryCarriedItemId,
+            carriedItemCount = carriedItemCount
+        )
     }
 
     private fun tickIdleWander(world: World, entity: PokemonEntity, pasturePos: BlockPos) {
