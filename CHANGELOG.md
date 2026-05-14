@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.20
+
+- Reworked the Command Post Crew tab into visual Crew and Party/PC box grids instead of dense text lists.
+- Kept Party/PC source Pokemon in storage order and made selected Pokemon details/actions work from the new slot-style picker.
+- Added compact visual slot states for assigned, active, fainted, blocked, unavailable, and cargo-carrying Pokemon.
+
 ## 0.2.19
 
 - Removed the detached Cobblemon Pasture Manager UI, packets, client widget button, pasture block tick mixin, and legacy pasture worker runtime.

@@ -97,6 +97,13 @@ class RouterScreen(
         val tooltip: List<Text>
     )
 
+    private data class GridCellBounds(
+        val left: Int,
+        val top: Int,
+        val width: Int,
+        val height: Int
+    )
+
     private data class InstalledCommandCard(
         val moduleIndex: Int,
         val tagType: TagType,
@@ -201,12 +208,17 @@ class RouterScreen(
         private const val SOURCE_WIDTH = 128
         private const val SOURCE_ROW_TOP = 254
         private const val SOURCE_DETAIL_TOP = 356
-        private const val MAX_SOURCE_ROWS = 5
+        private const val GRID_CELL_GAP = 2
+        private const val CREW_GRID_COLUMNS = 4
+        private const val SOURCE_GRID_COLUMNS = 4
+        private const val CREW_CELL_HEIGHT = 31
+        private const val SOURCE_CELL_HEIGHT = 31
+        private const val MAX_SOURCE_ROWS = 12
         private const val HOME_INV_LABEL_Y = 300
         private const val ROLE_ROW_HEIGHT = 17
         private const val CREW_ROW_HEIGHT = 20
         private const val MAX_ROLE_ROWS = 8
-        private const val MAX_CREW_ROWS = 5
+        private const val MAX_CREW_ROWS = 12
         private const val CHIP_HEIGHT = 13
         private const val HIDDEN_SLOT_X = -1000
         private const val HIDDEN_SLOT_Y = -1000
@@ -466,7 +478,7 @@ class RouterScreen(
     private fun sourceRows(): List<SourceRowSummary> {
         val source = currentCrewSources().firstOrNull { it.sourceType == crewSourceType } ?: return emptyList()
         return source.entries
-            .sortedWith(compareBy<CrewSourcePokemonSnapshot> { if (it.isAvailable && !it.isFainted) 0 else 1 }.thenBy { it.displayName.lowercase(Locale.ROOT) })
+            .sortedWith(compareBy<CrewSourcePokemonSnapshot> { it.boxIndex }.thenBy { it.slotIndex })
             .map { snapshot ->
                 SourceRowSummary(
                     snapshot = snapshot,
@@ -488,6 +500,22 @@ class RouterScreen(
     }
 
     private fun sourcePageCount(rows: List<SourceRowSummary>): Int = maxOf(1, (rows.size + MAX_SOURCE_ROWS - 1) / MAX_SOURCE_ROWS)
+
+    private fun crewGridCell(index: Int): GridCellBounds = gridCell(index, LIST_LEFT, CREW_ROW_TOP, LIST_WIDTH, CREW_GRID_COLUMNS, CREW_CELL_HEIGHT)
+
+    private fun sourceGridCell(index: Int): GridCellBounds = gridCell(index, SOURCE_LEFT, SOURCE_ROW_TOP, SOURCE_WIDTH, SOURCE_GRID_COLUMNS, SOURCE_CELL_HEIGHT)
+
+    private fun gridCell(index: Int, left: Int, top: Int, width: Int, columns: Int, height: Int): GridCellBounds {
+        val cellWidth = (width - GRID_CELL_GAP * (columns - 1)) / columns
+        val col = index % columns
+        val row = index / columns
+        return GridCellBounds(
+            left = left + col * (cellWidth + GRID_CELL_GAP),
+            top = top + row * (height + GRID_CELL_GAP),
+            width = cellWidth,
+            height = height
+        )
+    }
 
     private fun selectedSourceRow(): SourceRowSummary? {
         val selectedId = selectedSourcePokemonId ?: return null
@@ -872,8 +900,8 @@ class RouterScreen(
         val selectedSource = if (selectedNative == null) selectedSourceRow() else null
         val rosterTotal = allNativeRows.size
         val rosterVisible = filteredNativeRows.size
-        context.drawText(textRenderer, Text.literal(fit("Roster • $rosterVisible/$rosterTotal visible", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit("Sources • ${allSources.size} ${crewSourceType.label}", 122)), SOURCE_LEFT, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit("Crew Box • $rosterVisible/$rosterTotal", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit("${crewSourceType.label} Box • ${allSources.size}", 122)), SOURCE_LEFT, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
 
         crewFilterButtons().forEach { chip ->
             if (chip.id == "crew-page") return@forEach
@@ -895,19 +923,19 @@ class RouterScreen(
         val pageText = Text.literal("${crewSourcePageIndex + 1}/${sourcePageCount(allSources)}")
         context.drawText(textRenderer, pageText, SOURCE_LEFT, CREW_CHIP_TOP + 18, CobblePalsUiTheme.TEXT_FAINT, false)
 
-        if (visibleNativeRows.isNotEmpty()) {
-            visibleNativeRows.forEachIndexed { index, row ->
-                drawNativeRosterRow(context, row, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, row.source.pokemonId == selectedSourcePokemonId)
-            }
-        } else {
-            context.drawText(textRenderer, Text.literal(if (allNativeRows.isEmpty()) "No crew assigned yet." else "No pals match filters."), LIST_LEFT, ROW_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        drawPokemonGridFrame(context, LIST_LEFT, CREW_ROW_TOP, LIST_WIDTH, CREW_GRID_COLUMNS, CREW_CELL_HEIGHT, MAX_CREW_ROWS)
+        drawPokemonGridFrame(context, SOURCE_LEFT, SOURCE_ROW_TOP, SOURCE_WIDTH, SOURCE_GRID_COLUMNS, SOURCE_CELL_HEIGHT, MAX_SOURCE_ROWS)
+        visibleNativeRows.forEachIndexed { index, row ->
+            drawNativeRosterSlot(context, row, crewGridCell(index), row.source.pokemonId == selectedSourcePokemonId)
+        }
+        visibleSources.forEachIndexed { index, row ->
+            drawSourceSlot(context, row, sourceGridCell(index), row.snapshot.pokemonId == selectedSourcePokemonId)
+        }
+        if (visibleNativeRows.isEmpty()) {
+            context.drawText(textRenderer, Text.literal(if (allNativeRows.isEmpty()) "No crew yet" else "No matches"), LIST_LEFT + 9, CREW_ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
         }
         if (visibleSources.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("No Pokemon found."), SOURCE_LEFT, SOURCE_ROW_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
-        } else {
-            visibleSources.forEachIndexed { index, row ->
-                drawSourceRow(context, row, SOURCE_LEFT, SOURCE_ROW_TOP + index * CREW_ROW_HEIGHT, SOURCE_WIDTH, row.snapshot.pokemonId == selectedSourcePokemonId)
-            }
+            context.drawText(textRenderer, Text.literal("No Pokemon"), SOURCE_LEFT + 9, SOURCE_ROW_TOP + 42, CobblePalsUiTheme.TEXT_MUTED, false)
         }
         drawNativeRosterDetail(context, selectedNative)
         drawSourceDetail(context, selectedSource, selectedNative)
@@ -1012,26 +1040,71 @@ class RouterScreen(
         context.drawText(textRenderer, countText, left + width - textRenderer.getWidth(countText) - 5, top + 4, CobblePalsUiTheme.TEXT_MUTED, false)
     }
 
-    private fun drawSourceRow(context: DrawContext, row: SourceRowSummary, left: Int, top: Int, width: Int, active: Boolean) {
-        val source = row.snapshot
-        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
-        context.fill(left, top, left + width, top + CREW_ROW_HEIGHT - 2, body)
-        context.fill(left, top, left + 3, top + CREW_ROW_HEIGHT - 2, row.accentColor)
-        context.drawText(textRenderer, Text.literal(fit(source.displayName, 68)), left + 7, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
-        context.drawText(textRenderer, Text.literal("Lv.${source.level}"), left + width - 28, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit(source.sourceLabel(), 62)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
-        context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 48)), left + width - 52, top + 12, row.accentColor, false)
+    private fun drawPokemonGridFrame(context: DrawContext, left: Int, top: Int, width: Int, columns: Int, cellHeight: Int, count: Int) {
+        repeat(count) { index ->
+            val cell = gridCell(index, left, top, width, columns, cellHeight)
+            context.fill(cell.left - 1, cell.top - 1, cell.left + cell.width + 1, cell.top + cell.height + 1, 0xFF05080B.toInt())
+            context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF26323C.toInt())
+            context.fill(cell.left + 1, cell.top + 1, cell.left + cell.width - 1, cell.top + cell.height - 1, 0xFF0D141A.toInt())
+        }
     }
 
-    private fun drawNativeRosterRow(context: DrawContext, row: NativeRosterRow, left: Int, top: Int, width: Int, active: Boolean) {
+    private fun drawSourceSlot(context: DrawContext, row: SourceRowSummary, cell: GridCellBounds, active: Boolean) {
+        val source = row.snapshot
+        val body = when {
+            active -> 0xFF22313B.toInt()
+            !source.isAvailable || source.isFainted -> 0xFF111417.toInt()
+            source.isCrewMember -> 0xFF122018.toInt()
+            else -> 0xFF101820.toInt()
+        }
+        drawPokemonSlotBase(context, cell, body, row.accentColor, active)
+        drawPokemonAvatar(context, cell.left + 6, cell.top + 4, 16, source.species, row.accentColor, !source.isAvailable || source.isFainted)
+        val levelText = Text.literal(source.level.coerceAtMost(999).toString())
+        context.drawText(textRenderer, levelText, cell.left + cell.width - textRenderer.getWidth(levelText) - 3, cell.top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
+        if (source.isCrewMember) {
+            context.fill(cell.left + cell.width - 7, cell.top + cell.height - 7, cell.left + cell.width - 2, cell.top + cell.height - 2, CobblePalsUiTheme.ACCENT_WORK)
+        }
+        if (source.isFainted || !source.isAvailable) {
+            context.fill(cell.left + 3, cell.top + cell.height - 5, cell.left + cell.width - 3, cell.top + cell.height - 3, row.accentColor)
+        }
+    }
+
+    private fun drawNativeRosterSlot(context: DrawContext, row: NativeRosterRow, cell: GridCellBounds, active: Boolean) {
         val source = row.source
-        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
-        context.fill(left, top, left + width, top + CREW_ROW_HEIGHT - 2, body)
-        context.fill(left, top, left + 3, top + CREW_ROW_HEIGHT - 2, row.accentColor)
-        context.drawText(textRenderer, Text.literal(fit(source.displayName, 70)), left + 7, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
-        context.drawText(textRenderer, Text.literal(fit(source.sourceType, 42)), left + width - 46, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", 76)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
-        context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 38)), left + width - 42, top + 12, row.accentColor, false)
+        val body = when {
+            active -> 0xFF22313B.toInt()
+            source.isMissing || source.isFainted || source.isBlocked() -> 0xFF1B1212.toInt()
+            source.isActive() -> 0xFF11241F.toInt()
+            else -> 0xFF101820.toInt()
+        }
+        drawPokemonSlotBase(context, cell, body, row.accentColor, active)
+        drawPokemonAvatar(context, cell.left + 6, cell.top + 4, 16, source.species, row.accentColor, source.isMissing || source.isFainted)
+        val roleGlyph = source.tagTypeId?.let(TagType::fromId)?.let(TagTypePresentation::roleLabel)?.firstOrNull()?.uppercaseChar()?.toString() ?: "-"
+        context.drawText(textRenderer, Text.literal(roleGlyph), cell.left + cell.width - 9, cell.top + 3, row.accentColor, false)
+        val levelText = Text.literal(source.level.coerceAtMost(999).toString())
+        context.drawText(textRenderer, levelText, cell.left + 3, cell.top + cell.height - 10, CobblePalsUiTheme.TEXT_MUTED, false)
+        if (source.carriedItemCount > 0) {
+            context.fill(cell.left + cell.width - 7, cell.top + cell.height - 7, cell.left + cell.width - 2, cell.top + cell.height - 2, CobblePalsUiTheme.ACCENT_BUFFER)
+        }
+    }
+
+    private fun drawPokemonSlotBase(context: DrawContext, cell: GridCellBounds, body: Int, accent: Int, active: Boolean) {
+        val border = if (active) 0xFFF1E7D1.toInt() else 0xFF05080B.toInt()
+        context.fill(cell.left - 1, cell.top - 1, cell.left + cell.width + 1, cell.top + cell.height + 1, border)
+        context.fill(cell.left, cell.top, cell.left + cell.width, cell.top + cell.height, 0xFF26323C.toInt())
+        context.fill(cell.left + 1, cell.top + 1, cell.left + cell.width - 1, cell.top + cell.height - 1, body)
+        context.fill(cell.left + 1, cell.top + 1, cell.left + 4, cell.top + cell.height - 1, accent)
+    }
+
+    private fun drawPokemonAvatar(context: DrawContext, left: Int, top: Int, size: Int, species: String, accent: Int, muted: Boolean) {
+        val avatarColor = if (muted) 0xFF323A3F.toInt() else speciesColor(species, accent)
+        context.fill(left, top + 3, left + size, top + size - 3, avatarColor)
+        context.fill(left + 2, top + 1, left + size - 2, top + size - 1, avatarColor)
+        context.fill(left + 4, top, left + size - 4, top + size, avatarColor)
+        context.fill(left + 3, top + 4, left + size - 3, top + size - 4, 0x33000000)
+        val initial = pokemonInitial(species)
+        val initialText = Text.literal(initial)
+        context.drawText(textRenderer, initialText, left + (size - textRenderer.getWidth(initialText)) / 2, top + 4, if (muted) CobblePalsUiTheme.TEXT_FAINT else CobblePalsUiTheme.HEADER_TEXT, false)
     }
 
     override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
@@ -1176,13 +1249,19 @@ class RouterScreen(
                 }
 
                 val nativeRows = visibleNativeRosterRows()
-                nativeRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { rowIndex ->
+                nativeRows.indices.firstOrNull { index ->
+                    val cell = crewGridCell(index)
+                    contains(localMouseX, localMouseY, cell.left, cell.top, cell.width, cell.height)
+                }?.let { rowIndex ->
                     selectedSourcePokemonId = nativeRows[rowIndex].source.pokemonId
                     return true
                 }
 
                 val sourceRows = visibleSourceRows()
-                sourceRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, SOURCE_LEFT, SOURCE_ROW_TOP + index * CREW_ROW_HEIGHT, SOURCE_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { rowIndex ->
+                sourceRows.indices.firstOrNull { index ->
+                    val cell = sourceGridCell(index)
+                    contains(localMouseX, localMouseY, cell.left, cell.top, cell.width, cell.height)
+                }?.let { rowIndex ->
                     selectedSourcePokemonId = sourceRows[rowIndex].snapshot.pokemonId
                     return true
                 }
@@ -1238,12 +1317,18 @@ class RouterScreen(
                 sourceTypeButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 sourcePageButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, it.height) }?.let { button -> return HoverTooltip(button.id, button.tooltip) }
                 val nativeRows = visibleNativeRosterRows()
-                nativeRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->
+                nativeRows.indices.firstOrNull { index ->
+                    val cell = crewGridCell(index)
+                    contains(localMouseX, localMouseY, cell.left, cell.top, cell.width, cell.height)
+                }?.let { index ->
                     val row = nativeRows[index]
                     return HoverTooltip("native-crew-${row.source.pokemonId}", row.tooltipLines)
                 }
                 val visibleSources = visibleSourceRows()
-                visibleSources.indices.firstOrNull { index -> contains(localMouseX, localMouseY, SOURCE_LEFT, SOURCE_ROW_TOP + index * CREW_ROW_HEIGHT, SOURCE_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->
+                visibleSources.indices.firstOrNull { index ->
+                    val cell = sourceGridCell(index)
+                    contains(localMouseX, localMouseY, cell.left, cell.top, cell.width, cell.height)
+                }?.let { index ->
                     val source = visibleSources[index]
                     return HoverTooltip("source-${source.snapshot.pokemonId}", source.tooltipLines)
                 }
@@ -1325,9 +1410,25 @@ class RouterScreen(
     }
 
     private fun friendlyId(value: String): String {
-        return value.split('_').joinToString(" ") { part ->
+        return value.substringAfter(':').split('_').joinToString(" ") { part ->
             part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
         }
+    }
+
+    private fun pokemonInitial(species: String): String {
+        return friendlyId(species).firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
+    }
+
+    private fun speciesColor(species: String, fallback: Int): Int {
+        var hash = species.hashCode()
+        hash = hash xor (hash ushr 16)
+        val red = 72 + (hash and 0x3F)
+        val green = 96 + ((hash ushr 6) and 0x4F)
+        val blue = 104 + ((hash ushr 13) and 0x4F)
+        val mixedRed = (red + ((fallback ushr 16) and 0xFF)) / 2
+        val mixedGreen = (green + ((fallback ushr 8) and 0xFF)) / 2
+        val mixedBlue = (blue + (fallback and 0xFF)) / 2
+        return 0xFF000000.toInt() or (mixedRed shl 16) or (mixedGreen shl 8) or mixedBlue
     }
 
     private fun pluralize(count: Int): String = if (count == 1) "" else "s"
