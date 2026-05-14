@@ -3,6 +3,8 @@ package com.cobblepalsworld.persistence
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentSerializer
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.crew.CommandPostCrewBinding
+import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
@@ -97,6 +99,25 @@ class CobblePalsSaveData : PersistentState() {
         }
         nbt.put("Inventories", inventoriesNbt)
 
+        val commandPostCrewsNbt = NbtList()
+        CommandPostCrewManager.forEachPost { binding, pokemonIds ->
+            if (pokemonIds.isEmpty()) return@forEachPost
+            val postNbt = NbtCompound()
+            postNbt.putString("Dimension", binding.dimensionId)
+            postNbt.putInt("X", binding.pos.x)
+            postNbt.putInt("Y", binding.pos.y)
+            postNbt.putInt("Z", binding.pos.z)
+            val idsNbt = NbtList()
+            pokemonIds.forEach { pokemonId ->
+                val idNbt = NbtCompound()
+                idNbt.putUuid("PokemonId", pokemonId)
+                idsNbt.add(idNbt)
+            }
+            postNbt.put("Pokemon", idsNbt)
+            commandPostCrewsNbt.add(postNbt)
+        }
+        nbt.put("CommandPostCrews", commandPostCrewsNbt)
+
         return nbt
     }
 
@@ -122,6 +143,7 @@ class CobblePalsSaveData : PersistentState() {
             val data = CobblePalsSaveData()
 
             TagAssignmentManager.clear()
+            CommandPostCrewManager.clear()
             InventoryManager.clear()
             StateManager.clear()
             ClaimManager.clear()
@@ -187,6 +209,31 @@ class CobblePalsSaveData : PersistentState() {
                         )
                     } catch (e: Exception) {
                         CobblePalsWorld.LOGGER.warn("Failed to load assignment for $key", e)
+                    }
+                }
+            }
+
+            if (nbt.contains("CommandPostCrews")) {
+                val crewsNbt = nbt.getList("CommandPostCrews", 10)
+                for (index in 0 until crewsNbt.size) {
+                    try {
+                        val postNbt = crewsNbt.getCompound(index)
+                        val binding = CommandPostCrewBinding(
+                            dimensionId = postNbt.getString("Dimension"),
+                            pos = BlockPos(postNbt.getInt("X"), postNbt.getInt("Y"), postNbt.getInt("Z"))
+                        )
+                        val idsNbt = postNbt.getList("Pokemon", 10)
+                        val pokemonIds = buildList {
+                            for (idIndex in 0 until idsNbt.size) {
+                                val idNbt = idsNbt.getCompound(idIndex)
+                                if (idNbt.containsUuid("PokemonId")) {
+                                    add(idNbt.getUuid("PokemonId"))
+                                }
+                            }
+                        }
+                        CommandPostCrewManager.load(binding, pokemonIds)
+                    } catch (e: Exception) {
+                        CobblePalsWorld.LOGGER.warn("Failed to load Command Post crew entry", e)
                     }
                 }
             }

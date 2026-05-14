@@ -6,6 +6,7 @@ import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
@@ -66,7 +67,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         override fun get(index: Int): Int {
             return when (index) {
                 0 -> if (hasLinkedPasture()) 1 else 0
-                1 -> linkedWorkerCount
+                1 -> nativeCrewCount().takeIf { it > 0 } ?: linkedWorkerCount
                 2 -> assignedWorkerCount
                 3 -> activeWorkerCount
                 4 -> linkedPasturePos?.x ?: 0
@@ -290,6 +291,20 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         markDirty()
     }
 
+    fun removeAssignedWorker(pokemonId: UUID) {
+        var changed = false
+        for (index in assignedWorkers.indices) {
+            if (assignedWorkers[index] == pokemonId) {
+                assignedWorkers[index] = null
+                clearModuleRuntime(index)
+                changed = true
+            }
+        }
+        if (changed) {
+            markDirty()
+        }
+    }
+
     fun clearAssignedWorkers() {
         var changed = false
         for (index in assignedWorkers.indices) {
@@ -309,7 +324,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     }
 
     fun updateStatus(linked: Boolean, roster: Int, assigned: Int, active: Int) {
-        val nextLinked = if (linked) roster else 0
+        val nextLinked = roster.coerceAtLeast(0)
         val nextAssigned = assigned.coerceAtLeast(0)
         val nextActive = active.coerceAtLeast(0)
         if (linkedWorkerCount == nextLinked && assignedWorkerCount == nextAssigned && activeWorkerCount == nextActive) {
@@ -363,6 +378,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         linkedPastureDimension = null
         linkedPasturePos = null
         markDirty()
+    }
+
+    private fun nativeCrewCount(): Int {
+        val serverWorld = world as? ServerWorld ?: return 0
+        return CommandPostCrewManager.countAt(serverWorld.registryKey.value.toString(), pos)
     }
 
     override fun writeNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup) {

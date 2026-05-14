@@ -21,6 +21,7 @@ data class CrewSourcePokemonSnapshot(
     val species: String,
     val level: Int,
     val isFainted: Boolean,
+    val isCrewMember: Boolean,
     val isAvailable: Boolean,
     val unavailableReason: String
 ) {
@@ -44,6 +45,7 @@ data class CrewSourcePokemonSnapshot(
         buf.writeString(species)
         buf.writeVarInt(level)
         buf.writeBoolean(isFainted)
+        buf.writeBoolean(isCrewMember)
         buf.writeBoolean(isAvailable)
         buf.writeString(unavailableReason)
     }
@@ -58,6 +60,7 @@ data class CrewSourcePokemonSnapshot(
             species = buf.readString(),
             level = buf.readVarInt(),
             isFainted = buf.readBoolean(),
+            isCrewMember = buf.readBoolean(),
             isAvailable = buf.readBoolean(),
             unavailableReason = buf.readString()
         )

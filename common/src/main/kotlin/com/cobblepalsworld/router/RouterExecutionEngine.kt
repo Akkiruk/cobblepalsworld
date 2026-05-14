@@ -1,12 +1,15 @@
 package com.cobblepalsworld.router
 
+import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
@@ -23,7 +26,9 @@ object RouterExecutionEngine {
         var changed = false
 
         val linkedPasture = router.linkedPasture(world)
-        if (linkedPasture == null) {
+        val nativeCrewIds = CommandPostCrewManager.findCrew(dimensionId, pos)
+        val hasNativeCrew = nativeCrewIds.isNotEmpty()
+        if (linkedPasture == null && !hasNativeCrew) {
             if (releaseControlledWorkers(world, router, router.linkedPastureAnchor(), controlledWorkerIds(dimensionId, pos))) {
                 changed = true
             }
@@ -38,6 +43,10 @@ object RouterExecutionEngine {
             return
         }
 
+        val originPos = linkedPasture?.pos?.toImmutable() ?: pos.toImmutable()
+        val roster = if (hasNativeCrew) collectNativeRoster(world, router, nativeCrewIds) else collectRoster(linkedPasture ?: return)
+        val visibleRosterCount = if (hasNativeCrew) nativeCrewIds.size else roster.size
+
         if (router.cooldownTicks > 0) {
             router.cooldownTicks -= 1
             val assignedWorkerCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { router.assignedWorker(it) != null }
@@ -45,15 +54,13 @@ object RouterExecutionEngine {
                 val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
                 StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
             }
-            router.updateStatus(true, linkedPasture.tetheredPokemon.size, assignedWorkerCount, activeWorkerCount)
+            router.updateStatus(linkedPasture != null, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
             router.updatePowered(activeWorkerCount > 0)
             return
         }
 
-        val pasturePos = linkedPasture.pos.toImmutable()
         val augments = router.installedAugments()
         val tasksBySlot = buildTasksBySlot(world, router, augments)
-        val roster = collectRoster(linkedPasture)
 
         val manualAssignments = roster.count { candidate ->
             TagAssignmentManager.has(candidate.pokemonId) && TagAssignmentManager.getControllerBinding(candidate.pokemonId) == null
@@ -108,7 +115,7 @@ object RouterExecutionEngine {
                 changed = true
             }
 
-            if (ensureAssignment(world, pos, pasturePos, chosen.pokemonId, tag)) {
+            if (ensureAssignment(world, pos, originPos, chosen.pokemonId, tag)) {
                 changed = true
             }
 
@@ -118,11 +125,11 @@ object RouterExecutionEngine {
             }
         }
 
-        if (releaseControlledWorkers(world, router, pasturePos, controlledBefore - controlledThisTick)) {
+        if (releaseControlledWorkers(world, router, originPos, controlledBefore - controlledThisTick)) {
             changed = true
         }
 
-        router.updateStatus(true, roster.size, assignedWorkerCount, activeWorkerCount)
+        router.updateStatus(linkedPasture != null, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
         router.updatePowered(activeWorkerCount > 0)
         router.cooldownTicks = BASE_COOLDOWN
 
@@ -161,6 +168,25 @@ object RouterExecutionEngine {
 
             WorkerCandidate(pokemon.uuid)
         }
+    }
+
+    private fun collectNativeRoster(world: ServerWorld, router: RouterBlockEntity, crewIds: Set<UUID>): List<WorkerCandidate> {
+        val ownerUuid = router.ownerUuid() ?: return emptyList()
+        return crewIds.mapNotNull { pokemonId ->
+            val pokemon = findOwnedPokemon(world, ownerUuid, pokemonId) ?: return@mapNotNull null
+            if (pokemon.isFainted()) return@mapNotNull null
+            val entity = pokemon.entity ?: return@mapNotNull null
+            if (entity.world !== world) return@mapNotNull null
+            if (entity.dataTracker.get(PokemonEntity.POSE_TYPE) == PoseType.SLEEP) return@mapNotNull null
+            WorkerCandidate(pokemonId)
+        }
+    }
+
+    private fun findOwnedPokemon(world: ServerWorld, ownerUuid: UUID, pokemonId: UUID): Pokemon? {
+        val storage = Cobblemon.storage
+        storage.getParty(ownerUuid, world.registryManager).firstOrNull { it.uuid == pokemonId }?.let { return it }
+        storage.getPC(ownerUuid, world.registryManager).firstOrNull { it.uuid == pokemonId }?.let { return it }
+        return null
     }
 
     private fun selectCandidate(

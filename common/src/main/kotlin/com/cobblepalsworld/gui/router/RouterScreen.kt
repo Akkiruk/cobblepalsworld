@@ -165,6 +165,12 @@ class RouterScreen(
         val tooltipLines: List<Text>
     )
 
+    private data class NativeRosterRow(
+        val source: CrewSourcePokemonSnapshot,
+        val accentColor: Int,
+        val tooltipLines: List<Text>
+    )
+
     private data class HomeState(
         val jobCardCount: Int,
         val idleCount: Int,
@@ -536,7 +542,31 @@ class RouterScreen(
 
     private fun selectedSourceRow(): SourceRowSummary? {
         val selectedId = selectedSourcePokemonId ?: return null
-        return sourceRows().firstOrNull { it.snapshot.pokemonId == selectedId }
+        return allSourceRows().firstOrNull { it.snapshot.pokemonId == selectedId }
+    }
+
+    private fun allSourceRows(): List<SourceRowSummary> {
+        return currentCrewSources().flatMap { source ->
+            source.entries.map { snapshot ->
+                SourceRowSummary(
+                    snapshot = snapshot,
+                    accentColor = sourceStatusColor(snapshot),
+                    tooltipLines = listOf(
+                        Text.literal(snapshot.displayName),
+                        Text.literal("Lv.${snapshot.level} ${friendlyId(snapshot.species)}"),
+                        Text.literal(snapshot.sourceLabel()),
+                        Text.literal(snapshot.statusLabel())
+                    )
+                )
+            }
+        }
+    }
+
+    private fun nativeRosterRows(): List<NativeRosterRow> {
+        return allSourceRows()
+            .filter { it.snapshot.isCrewMember }
+            .sortedWith(compareBy<SourceRowSummary> { it.snapshot.displayName.lowercase(Locale.ROOT) }.thenBy { it.snapshot.sourceLabel() })
+            .map { row -> NativeRosterRow(row.snapshot, row.accentColor, row.tooltipLines) }
     }
 
     private fun selectedPolicyRole(state: HomeState): RoleSummary? {
@@ -672,6 +702,26 @@ class RouterScreen(
         return listOf(
             IconButton("source-prev", SOURCE_LEFT + SOURCE_WIDTH - 22, CREW_CHIP_TOP + 16, 10, 10, UiGlyph.Prev, CobblePalsUiTheme.ACCENT_BUFFER, crewSourcePageIndex > 0, listOf(Text.literal("Previous source page"))),
             IconButton("source-next", SOURCE_LEFT + SOURCE_WIDTH - 10, CREW_CHIP_TOP + 16, 10, 10, UiGlyph.Next, CobblePalsUiTheme.ACCENT_BUFFER, crewSourcePageIndex < pageCount - 1, listOf(Text.literal("Next source page")))
+        )
+    }
+
+    private fun sourceDetailButtons(selected: SourceRowSummary?): List<TextChipButton> {
+        selected ?: return emptyList()
+        val source = selected.snapshot
+        val active = source.isCrewMember || source.isAvailable
+        val value = if (source.isCrewMember) "Drop" else "Add"
+        return listOf(
+            TextChipButton(
+                "source-crew-action",
+            SOURCE_LEFT + 86,
+                SOURCE_DETAIL_TOP + 27,
+            36,
+            "",
+                value,
+                if (source.isCrewMember) CobblePalsUiTheme.ACCENT_DANGER else CobblePalsUiTheme.ACCENT_CREW,
+                active,
+                listOf(Text.literal(if (source.isCrewMember) "Remove from crew" else "Add to crew"), Text.literal(source.statusLabel()))
+            )
         )
     }
 
@@ -850,10 +900,14 @@ class RouterScreen(
         val filtered = filteredCrewRows(snapshot)
         val visibleRows = visibleCrewRows(snapshot)
         val selectedCrew = selectedCrewRow(snapshot)
+        val nativeRosterRows = nativeRosterRows()
+        val selectedNative = nativeRosterRows.firstOrNull { it.source.pokemonId == selectedSourcePokemonId }
         val visibleSources = visibleSourceRows()
         val allSources = sourceRows()
         val selectedSource = selectedSourceRow()
-        context.drawText(textRenderer, Text.literal(fit("Roster • ${filtered.size}/${snapshot?.pals?.size ?: 0} visible", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        val rosterTotal = if (nativeRosterRows.isNotEmpty()) nativeRosterRows.size else snapshot?.pals?.size ?: 0
+        val rosterVisible = if (nativeRosterRows.isNotEmpty()) nativeRosterRows.size else filtered.size
+        context.drawText(textRenderer, Text.literal(fit("Roster • $rosterVisible/$rosterTotal visible", 122)), 16, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal(fit("Sources • ${allSources.size} ${crewSourceType.label}", 122)), SOURCE_LEFT, CREW_INFO_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
 
         crewFilterButtons(snapshot).forEach { chip ->
@@ -876,8 +930,12 @@ class RouterScreen(
         val pageText = Text.literal("${crewSourcePageIndex + 1}/${sourcePageCount(allSources)}")
         context.drawText(textRenderer, pageText, SOURCE_LEFT, CREW_CHIP_TOP + 18, CobblePalsUiTheme.TEXT_FAINT, false)
 
-        if (filtered.isEmpty()) {
-            context.drawText(textRenderer, Text.literal(if (snapshot == null) "No live roster yet." else "No pals match filters."), LIST_LEFT, ROW_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
+        if (nativeRosterRows.isNotEmpty()) {
+            nativeRosterRows.take(MAX_CREW_ROWS).forEachIndexed { index, row ->
+                drawNativeRosterRow(context, row, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, row.source.pokemonId == selectedSourcePokemonId)
+            }
+        } else if (filtered.isEmpty()) {
+            context.drawText(textRenderer, Text.literal(if (snapshot == null) "No crew assigned yet." else "No pals match filters."), LIST_LEFT, ROW_TOP, CobblePalsUiTheme.TEXT_MUTED, false)
         } else {
             visibleRows.take(5).forEachIndexed { index, row ->
                 drawCrewRow(context, row, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, row.snapshotIndex == selectedCrewSnapshotIndex)
@@ -890,8 +948,25 @@ class RouterScreen(
                 drawSourceRow(context, row, SOURCE_LEFT, SOURCE_ROW_TOP + index * CREW_ROW_HEIGHT, SOURCE_WIDTH, row.snapshot.pokemonId == selectedSourcePokemonId)
             }
         }
-        drawRosterDetail(context, selectedCrew)
+        if (nativeRosterRows.isNotEmpty()) {
+            drawNativeRosterDetail(context, selectedNative)
+        } else {
+            drawRosterDetail(context, selectedCrew)
+        }
         drawSourceDetail(context, selectedSource)
+    }
+
+    private fun drawNativeRosterDetail(context: DrawContext, selected: NativeRosterRow?) {
+        CobblePalsUiTheme.drawPlainPanel(context, LIST_LEFT, SOURCE_DETAIL_TOP, LIST_WIDTH, 42, selected?.accentColor ?: CobblePalsUiTheme.TEXT_FAINT)
+        if (selected == null) {
+            context.drawText(textRenderer, Text.literal("Select crew"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 8, CobblePalsUiTheme.TEXT_PRIMARY, false)
+            context.drawText(textRenderer, Text.literal("Native roster"), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 21, CobblePalsUiTheme.TEXT_FAINT, false)
+            return
+        }
+        val source = selected.source
+        context.drawText(textRenderer, Text.literal(fit(source.displayName, LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 7, CobblePalsUiTheme.TEXT_PRIMARY, false)
+        context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 19, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit("Crew • ${source.sourceLabel()}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
     }
 
     private fun drawRosterDetail(context: DrawContext, selected: CrewRowSummary?) {
@@ -955,7 +1030,10 @@ class RouterScreen(
         val source = selected.snapshot
         context.drawText(textRenderer, Text.literal(fit(source.displayName, SOURCE_WIDTH - 14)), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 7, CobblePalsUiTheme.TEXT_PRIMARY, false)
         context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", SOURCE_WIDTH - 14)), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 19, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), SOURCE_WIDTH - 14)), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
+        context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 56)), SOURCE_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
+        sourceDetailButtons(selected).forEach { chip ->
+            drawFixedChip(context, chip, false)
+        }
     }
 
     private fun drawPolicyDetail(context: DrawContext, localMouseX: Int, localMouseY: Int, selected: RoleSummary?) {
@@ -1019,6 +1097,17 @@ class RouterScreen(
         context.drawText(textRenderer, Text.literal("Lv.${source.level}"), left + width - 28, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal(fit(source.sourceLabel(), 62)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
         context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 48)), left + width - 52, top + 12, row.accentColor, false)
+    }
+
+    private fun drawNativeRosterRow(context: DrawContext, row: NativeRosterRow, left: Int, top: Int, width: Int, active: Boolean) {
+        val source = row.source
+        val body = if (active) 0xFF202B34.toInt() else 0xFF10171D.toInt()
+        context.fill(left, top, left + width, top + CREW_ROW_HEIGHT - 2, body)
+        context.fill(left, top, left + 3, top + CREW_ROW_HEIGHT - 2, row.accentColor)
+        context.drawText(textRenderer, Text.literal(fit(source.displayName, 70)), left + 7, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
+        context.drawText(textRenderer, Text.literal(fit(source.sourceType.label, 42)), left + width - 46, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
+        context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", 76)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
+        context.drawText(textRenderer, Text.literal("Crew"), left + width - 34, top + 12, row.accentColor, false)
     }
 
     override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
@@ -1085,6 +1174,20 @@ class RouterScreen(
             }
 
             CommandPostView.Crew -> {
+                val selectedSource = selectedSourceRow()
+                sourceDetailButtons(selectedSource).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
+                    if (chip.id == "source-crew-action" && selectedSource != null && chip.active) {
+                        val pokemonId = selectedSource.snapshot.pokemonId
+                        if (selectedSource.snapshot.isCrewMember) {
+                            CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, pokemonId)
+                        } else {
+                            CobblePalsNetworking.sendAssignCrewPokemon(handler.routerPos, pokemonId)
+                        }
+                        requestCrewSourceRefresh()
+                    }
+                    return true
+                }
+
                 crewFilterButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
                     when (chip.id) {
                         "crew-sort" -> crewSortMode = CrewSortMode.entries[(crewSortMode.ordinal + 1) % CrewSortMode.entries.size]
@@ -1129,11 +1232,20 @@ class RouterScreen(
                     return true
                 }
 
-                val visibleRows = visibleCrewRows(snapshot)
-                visibleRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { rowIndex ->
-                    selectedCrewSnapshotIndex = visibleRows[rowIndex].snapshotIndex
-                    selectedSourcePokemonId = null
+                val nativeRows = nativeRosterRows()
+                nativeRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { rowIndex ->
+                    selectedSourcePokemonId = nativeRows[rowIndex].source.pokemonId
+                    selectedCrewSnapshotIndex = null
                     return true
+                }
+
+                if (nativeRows.isEmpty()) {
+                    val visibleRows = visibleCrewRows(snapshot)
+                    visibleRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { rowIndex ->
+                        selectedCrewSnapshotIndex = visibleRows[rowIndex].snapshotIndex
+                        selectedSourcePokemonId = null
+                        return true
+                    }
                 }
 
                 val sourceRows = visibleSourceRows()
@@ -1185,13 +1297,22 @@ class RouterScreen(
                 }
             }
             CommandPostView.Crew -> {
+                val selectedSource = selectedSourceRow()
+                sourceDetailButtons(selectedSource).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 crewFilterButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 crewPageButtons(snapshot).firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, it.height) }?.let { button -> return HoverTooltip(button.id, button.tooltip) }
                 sourceTypeButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip -> return HoverTooltip(chip.id, chip.tooltip) }
                 sourcePageButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, it.height) }?.let { button -> return HoverTooltip(button.id, button.tooltip) }
-                val visibleRows = visibleCrewRows(snapshot)
-                visibleRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->
-                    return HoverTooltip("crew-${visibleRows[index].id}", visibleRows[index].tooltipLines)
+                val nativeRows = nativeRosterRows()
+                nativeRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->
+                    val row = nativeRows[index]
+                    return HoverTooltip("native-crew-${row.source.pokemonId}", row.tooltipLines)
+                }
+                if (nativeRows.isEmpty()) {
+                    val visibleRows = visibleCrewRows(snapshot)
+                    visibleRows.indices.firstOrNull { index -> contains(localMouseX, localMouseY, LIST_LEFT, CREW_ROW_TOP + index * CREW_ROW_HEIGHT, LIST_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->
+                        return HoverTooltip("crew-${visibleRows[index].id}", visibleRows[index].tooltipLines)
+                    }
                 }
                 val visibleSources = visibleSourceRows()
                 visibleSources.indices.firstOrNull { index -> contains(localMouseX, localMouseY, SOURCE_LEFT, SOURCE_ROW_TOP + index * CREW_ROW_HEIGHT, SOURCE_WIDTH, CREW_ROW_HEIGHT - 2) }?.let { index ->

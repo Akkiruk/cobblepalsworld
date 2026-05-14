@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.13
+
+- Added persistent native Command Post crew membership so Party and PC Pokemon can be added to or removed from a post without touching Cobblemon storage.
+- Added Crew tab Add/Drop actions and a native roster view that shows assigned Command Post crew even before the spawn/recall lifecycle is finished.
+- Let the router runtime see native crew membership and use crew Pokemon that are already present in-world, while leaving automatic PC/party summoning for the next lifecycle slice.
+
 ## 0.2.12
 
 - Added a native Command Post crew-source foundation that reads the player's party and PC directly from Cobblemon storage.
