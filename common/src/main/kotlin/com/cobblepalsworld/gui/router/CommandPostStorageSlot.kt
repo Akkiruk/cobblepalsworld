@@ -37,13 +37,13 @@ internal object CommandPostStorageSlot {
         selectedPokemonId: UUID?,
         pointerOffsetY: Int,
         heldStack: (String) -> ItemStack?,
-        renderPokemon: (CommandPostPokemonRenderView, Int, Int, Float, Float, Float) -> Unit
+        renderPokemon: (CommandPostPokemonRenderView, Int, Int, Float, Float, Float, Boolean) -> Unit
     ): Hover? {
         val pokemon = slot.pokemon ?: return null
         val hovered = CommandPostIconButton.contains(localMouseX, localMouseY, left, top, size, size)
         val selected = selectedPokemonId == pokemon.pokemonId || hovered
 
-        renderPokemon(SourcePokemonRenderView(pokemon), originX + left + size / 2, originY + top + 1, delta, 4.5F, 2.5F)
+        renderPokemon(SourcePokemonRenderView(pokemon), originX + left + size / 2, originY + top + 1, delta, 4.5F, 2.5F, selected)
 
         context.matrices.push()
         context.matrices.translate(0.0, 0.0, 140.0)

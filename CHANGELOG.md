@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.34
+
+- Replaced the non-Pokemon Command Post page backgrounds with flat grey CobblePals textures and shifted the slot/chip chrome to neutral greys so item icons read more clearly.
+- Changed Command Post Pokemon rendering to cache snapshot renderables, keep model state per screen context, and stop animating every source-slot model every frame.
+- Tightened source and pasture slot render passes to behave closer to Cobblemon's storage widgets, targeting both the flickering slot-model artifacts and the severe Command Post FPS drop.
+
 ## 0.2.33
 
 - Added editable Command Post page background PNGs for Jobs, Policy, and Logistics so non-Pokemon screens no longer have to share the plain PC grid asset.

@@ -56,6 +56,7 @@ class CommandPostPcScreen(
     private data class TextureButton(val id: String, val left: Int, val top: Int, val width: Int, val height: Int, val texture: Identifier)
     private data class PanelHit(val left: Int, val top: Int, val width: Int, val height: Int, val action: () -> Boolean)
     private data class ModuleView(val rowIndex: Int, val moduleIndex: Int, val stack: ItemStack, val tagType: TagType, val spec: TagSpec)
+    private data class RenderableCacheEntry(val signature: String, val renderable: RenderablePokemon)
 
     private var sourceType = CrewSourceType.PC
     private var sourceBoxIndex = 0
@@ -86,7 +87,9 @@ class CommandPostPcScreen(
     private var drawerHits: List<CommandPostFilterDrawer.Hit> = emptyList()
     private var panelHits: List<PanelHit> = emptyList()
 
-    private val renderStates = mutableMapOf<UUID, FloatingState>()
+    private val renderStates = mutableMapOf<String, FloatingState>()
+    private val renderableCache = mutableMapOf<UUID, RenderableCacheEntry>()
+    private val heldItemCache = mutableMapOf<String, ItemStack?>()
 
     init {
         backgroundWidth = CommandPostPcShell.BASE_WIDTH
@@ -349,7 +352,7 @@ class CommandPostPcScreen(
     private fun drawPortrait(context: DrawContext, preview: CommandPostPokemonRenderView?, delta: Float) {
         CommandPostPcShell.drawPortraitPanel(context, x, y)
         if (preview != null) {
-            renderPokemon(context, preview, x + 39, y + 26, delta, 7.0F, 3.2F)
+            renderPokemon(context, preview, x + 39, y + 26, delta, 7.0F, 3.2F, stateKey = "portrait-${preview.pokemonId}", animate = true, clipHalfWidth = 36, clipHeight = 68)
         }
     }
 
@@ -388,8 +391,20 @@ class CommandPostPcScreen(
                 size = CommandPostStorageWidget.SLOT_SIZE
             }
             hits += CommandPostStorageSlot.Hit(slot, left, top, size)
-            CommandPostStorageSlot.draw(context, textRenderer, x, y, slot, left, top, size, localMouseX, localMouseY, delta, selectedPokemonId, pointerOffsetY, ::heldStack) { view, centerX, topY, renderDelta, modelScale, matrixScale ->
-                renderPokemon(context, view, centerX, topY, renderDelta, modelScale, matrixScale)
+            CommandPostStorageSlot.draw(context, textRenderer, x, y, slot, left, top, size, localMouseX, localMouseY, delta, selectedPokemonId, pointerOffsetY, ::heldStack) { view, centerX, topY, renderDelta, modelScale, matrixScale, animate ->
+                renderPokemon(
+                    context = context,
+                    view = view,
+                    centerX = centerX,
+                    topY = topY,
+                    delta = renderDelta,
+                    modelScale = modelScale,
+                    matrixScale = matrixScale,
+                    stateKey = "source-slot-${sourceType.name.lowercase(Locale.ROOT)}-${slot.slotIndex}",
+                    animate = animate,
+                    clipHalfWidth = 16,
+                    clipHeight = 29
+                )
             }?.let { hover ->
                 hoveredSource = hover.pokemon
                 hoveredTooltip = HoverTooltip("source-${hover.pokemon.pokemonId}", sourceTooltip(hover.pokemon))
@@ -404,8 +419,20 @@ class CommandPostPcScreen(
         val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
 
         CommandPostPastureWidget.drawPanel(context, textRenderer, x, y)
-        val (hits, hover) = CommandPostPastureScrollList.draw(context, textRenderer, x, y, members, pastureScrollIndex, selectedPokemonId, localMouseX, localMouseY, delta, ::heldStack, ::fit) { view, centerX, topY, renderDelta, modelScale, matrixScale ->
-            renderPokemon(context, view, centerX, topY, renderDelta, modelScale, matrixScale)
+        val (hits, hover) = CommandPostPastureScrollList.draw(context, textRenderer, x, y, members, pastureScrollIndex, selectedPokemonId, localMouseX, localMouseY, delta, ::heldStack, ::fit) { view, centerX, topY, renderDelta, modelScale, matrixScale, animate ->
+            renderPokemon(
+                context = context,
+                view = view,
+                centerX = centerX,
+                topY = topY,
+                delta = renderDelta,
+                modelScale = modelScale,
+                matrixScale = matrixScale,
+                stateKey = "pasture-row-${view.pokemonId}",
+                animate = animate,
+                clipHalfWidth = 16,
+                clipHeight = 32
+            )
         }
         crewHits = hits
         hover?.let {
@@ -440,8 +467,8 @@ class CommandPostPcScreen(
                     alpha = 0.55F
                 )
                 SlotFrameStyle.COMPACT -> {
-                    context.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0x6618242A)
-                    context.fill(x + slot.x, y + slot.y, x + slot.x + 16, y + slot.y + 16, 0x5522343A)
+                    context.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xAA8E8E8E.toInt())
+                    context.fill(x + slot.x, y + slot.y, x + slot.x + 16, y + slot.y + 16, 0xCC4A4A4A.toInt())
                 }
             }
         }
@@ -652,7 +679,7 @@ class CommandPostPcScreen(
 
     private fun drawMiniChip(context: DrawContext, left: Int, top: Int, value: String, localMouseX: Int, localMouseY: Int) {
         val hovered = contains(localMouseX, localMouseY, left, top, 20, 10)
-        context.fill(x + left, y + top, x + left + 20, y + top + 10, if (hovered) 0xAA31444C.toInt() else 0x88233238.toInt())
+        context.fill(x + left, y + top, x + left + 20, y + top + 10, if (hovered) 0xCC8E8E8E.toInt() else 0xCC575757.toInt())
         drawSmallText(context, fit(value, 18), left + 2, top + 2, 0xFFEAF4F5.toInt(), false)
     }
 
@@ -725,11 +752,21 @@ class CommandPostPcScreen(
         CommandPostIconButton.draw(context, button.texture, x, y, button.left, button.top, button.width, button.height, localMouseX, localMouseY, scaled)
     }
 
-    private fun renderPokemon(context: DrawContext, view: CommandPostPokemonRenderView, centerX: Int, topY: Int, delta: Float, modelScale: Float, matrixScale: Float) {
+    private fun renderPokemon(
+        context: DrawContext,
+        view: CommandPostPokemonRenderView,
+        centerX: Int,
+        topY: Int,
+        delta: Float,
+        modelScale: Float,
+        matrixScale: Float,
+        stateKey: String,
+        animate: Boolean,
+        clipHalfWidth: Int,
+        clipHeight: Int
+    ) {
         val renderable = renderablePokemon(view) ?: return
-        val state = renderStates.getOrPut(view.pokemonId) { FloatingState() }
-        val clipHalfWidth = if (matrixScale > 3.0F) 36 else 18
-        val clipHeight = if (matrixScale > 3.0F) 68 else 32
+        val state = renderStates.getOrPut(stateKey) { FloatingState() }
         context.enableScissor(centerX - clipHalfWidth, topY, centerX + clipHalfWidth, topY + clipHeight)
         context.matrices.push()
         context.matrices.translate(centerX.toDouble(), topY.toDouble(), 0.0)
@@ -739,7 +776,7 @@ class CommandPostPcScreen(
             matrixStack = context.matrices,
             rotation = Quaternionf().rotateXYZ(Math.toRadians(13.0).toFloat(), Math.toRadians(35.0).toFloat(), 0F),
             state = state,
-            partialTicks = if (view.isFainted) 0F else delta,
+            partialTicks = if (animate && !view.isFainted) delta else 0F,
             scale = modelScale
         )
         context.matrices.pop()
@@ -747,19 +784,30 @@ class CommandPostPcScreen(
     }
 
     private fun renderablePokemon(view: CommandPostPokemonRenderView): RenderablePokemon? {
+        val signature = buildString {
+            append(view.speciesIdentifier)
+            append('|')
+            append(view.aspects.sorted().joinToString(","))
+            append('|')
+            append(view.heldItemId)
+        }
+        renderableCache[view.pokemonId]?.takeIf { it.signature == signature }?.let { return it.renderable }
         val identifier = runCatching { Identifier.of(view.speciesIdentifier) }.getOrNull()
         val species = identifier?.let(PokemonSpecies::getByIdentifier)
             ?: PokemonSpecies.getByName(view.species.substringAfter(':'))
             ?: return null
-        return RenderablePokemon(species, view.aspects, heldStack(view.heldItemId) ?: ItemStack.EMPTY)
+        return RenderablePokemon(species, view.aspects, heldStack(view.heldItemId) ?: ItemStack.EMPTY).also {
+            renderableCache[view.pokemonId] = RenderableCacheEntry(signature, it)
+        }
     }
 
     private fun heldStack(itemId: String): ItemStack? {
         if (itemId.isBlank()) return null
+        heldItemCache[itemId]?.let { return it?.copy() }
         val identifier = runCatching { Identifier.of(itemId) }.getOrNull() ?: return null
         val item = Registries.ITEM.get(identifier)
         if (item == Items.AIR) return null
-        return ItemStack(item)
+        return ItemStack(item).also { heldItemCache[itemId] = it.copy() }
     }
 
     private fun currentSourceBox(sources: List<CrewSourceSnapshot>): CrewSourceBoxSnapshot? {

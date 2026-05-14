@@ -31,7 +31,7 @@ internal object CommandPostPastureScrollList {
         delta: Float,
         heldStack: (String) -> ItemStack?,
         fit: (String, Int) -> String,
-        renderPokemon: (CommandPostPokemonRenderView, Int, Int, Float, Float, Float) -> Unit
+        renderPokemon: (CommandPostPokemonRenderView, Int, Int, Float, Float, Float, Boolean) -> Unit
     ): Pair<List<CrewHit>, Hover?> {
         var hover: Hover? = null
         val hits = mutableListOf<CrewHit>()
