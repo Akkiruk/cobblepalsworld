@@ -4,6 +4,7 @@ import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentSerializer
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.crew.CommandPostCrewBinding
+import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
@@ -100,17 +101,21 @@ class CobblePalsSaveData : PersistentState() {
         nbt.put("Inventories", inventoriesNbt)
 
         val commandPostCrewsNbt = NbtList()
-        CommandPostCrewManager.forEachPost { binding, pokemonIds ->
-            if (pokemonIds.isEmpty()) return@forEachPost
+        CommandPostCrewManager.forEachPost { binding, members ->
+            if (members.isEmpty()) return@forEachPost
             val postNbt = NbtCompound()
             postNbt.putString("Dimension", binding.dimensionId)
             postNbt.putInt("X", binding.pos.x)
             postNbt.putInt("Y", binding.pos.y)
             postNbt.putInt("Z", binding.pos.z)
             val idsNbt = NbtList()
-            pokemonIds.forEach { pokemonId ->
+            members.forEach { member ->
                 val idNbt = NbtCompound()
-                idNbt.putUuid("PokemonId", pokemonId)
+                idNbt.putUuid("PokemonId", member.pokemonId)
+                idNbt.putUuid("OwnerUuid", member.ownerUuid)
+                idNbt.putString("SourceType", member.sourceType)
+                idNbt.putInt("BoxIndex", member.boxIndex)
+                idNbt.putInt("SlotIndex", member.slotIndex)
                 idsNbt.add(idNbt)
             }
             postNbt.put("Pokemon", idsNbt)
@@ -223,15 +228,24 @@ class CobblePalsSaveData : PersistentState() {
                             pos = BlockPos(postNbt.getInt("X"), postNbt.getInt("Y"), postNbt.getInt("Z"))
                         )
                         val idsNbt = postNbt.getList("Pokemon", 10)
-                        val pokemonIds = buildList {
+                        val members = buildList {
                             for (idIndex in 0 until idsNbt.size) {
                                 val idNbt = idsNbt.getCompound(idIndex)
                                 if (idNbt.containsUuid("PokemonId")) {
-                                    add(idNbt.getUuid("PokemonId"))
+                                    add(
+                                        CommandPostCrewMember(
+                                            pokemonId = idNbt.getUuid("PokemonId"),
+                                            ownerUuid = if (idNbt.containsUuid("OwnerUuid")) idNbt.getUuid("OwnerUuid") else UUID(0L, 0L),
+                                            binding = binding,
+                                            sourceType = idNbt.getString("SourceType").ifBlank { "UNKNOWN" },
+                                            boxIndex = idNbt.getInt("BoxIndex"),
+                                            slotIndex = idNbt.getInt("SlotIndex")
+                                        )
+                                    )
                                 }
                             }
                         }
-                        CommandPostCrewManager.load(binding, pokemonIds)
+                        CommandPostCrewManager.load(members)
                     } catch (e: Exception) {
                         CobblePalsWorld.LOGGER.warn("Failed to load Command Post crew entry", e)
                     }

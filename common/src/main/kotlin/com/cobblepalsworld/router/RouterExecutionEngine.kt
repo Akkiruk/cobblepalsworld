@@ -9,6 +9,7 @@ import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
@@ -26,8 +27,8 @@ object RouterExecutionEngine {
         var changed = false
 
         val linkedPasture = router.linkedPasture(world)
-        val nativeCrewIds = CommandPostCrewManager.findCrew(dimensionId, pos)
-        val hasNativeCrew = nativeCrewIds.isNotEmpty()
+        val nativeCrewMembers = CommandPostCrewManager.findMembers(dimensionId, pos)
+        val hasNativeCrew = nativeCrewMembers.isNotEmpty()
         if (linkedPasture == null && !hasNativeCrew) {
             if (releaseControlledWorkers(world, router, router.linkedPastureAnchor(), controlledWorkerIds(dimensionId, pos))) {
                 changed = true
@@ -44,8 +45,8 @@ object RouterExecutionEngine {
         }
 
         val originPos = linkedPasture?.pos?.toImmutable() ?: pos.toImmutable()
-        val roster = if (hasNativeCrew) collectNativeRoster(world, router, nativeCrewIds) else collectRoster(linkedPasture ?: return)
-        val visibleRosterCount = if (hasNativeCrew) nativeCrewIds.size else roster.size
+        val roster = if (hasNativeCrew) collectNativeRoster(world, router, nativeCrewMembers) else collectRoster(linkedPasture ?: return)
+        val visibleRosterCount = if (hasNativeCrew) nativeCrewMembers.size else roster.size
 
         if (router.cooldownTicks > 0) {
             router.cooldownTicks -= 1
@@ -170,15 +171,14 @@ object RouterExecutionEngine {
         }
     }
 
-    private fun collectNativeRoster(world: ServerWorld, router: RouterBlockEntity, crewIds: Set<UUID>): List<WorkerCandidate> {
-        val ownerUuid = router.ownerUuid() ?: return emptyList()
-        return crewIds.mapNotNull { pokemonId ->
-            val pokemon = findOwnedPokemon(world, ownerUuid, pokemonId) ?: return@mapNotNull null
+    private fun collectNativeRoster(world: ServerWorld, router: RouterBlockEntity, crewMembers: List<com.cobblepalsworld.crew.CommandPostCrewMember>): List<WorkerCandidate> {
+        val fallbackOwnerUuid = router.ownerUuid()
+        return crewMembers.mapNotNull { member ->
+            val pokemon = CommandPostCrewLifecycle.resolvePokemon(world, member, fallbackOwnerUuid) ?: return@mapNotNull null
             if (pokemon.isFainted()) return@mapNotNull null
-            val entity = pokemon.entity ?: return@mapNotNull null
-            if (entity.world !== world) return@mapNotNull null
+            val entity = CommandPostCrewLifecycle.ensureEntity(world, router.pos, pokemon) ?: return@mapNotNull null
             if (entity.dataTracker.get(PokemonEntity.POSE_TYPE) == PoseType.SLEEP) return@mapNotNull null
-            WorkerCandidate(pokemonId)
+            WorkerCandidate(member.pokemonId)
         }
     }
 

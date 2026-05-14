@@ -594,6 +594,8 @@ class RouterScreen(
         return when {
             snapshot.isFainted -> CobblePalsUiTheme.ACCENT_DANGER
             !snapshot.isAvailable -> CobblePalsUiTheme.TEXT_FAINT
+            snapshot.isCrewMember && snapshot.tagTypeId != null -> CobblePalsUiTheme.ACCENT_WORK
+            snapshot.isCrewMember -> CobblePalsUiTheme.ACCENT_CREW
             snapshot.sourceType == CrewSourceType.PARTY -> CobblePalsUiTheme.ACCENT_CREW
             else -> CobblePalsUiTheme.ACCENT_BUFFER
         }
@@ -966,7 +968,7 @@ class RouterScreen(
         val source = selected.source
         context.drawText(textRenderer, Text.literal(fit(source.displayName, LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 7, CobblePalsUiTheme.TEXT_PRIMARY, false)
         context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 19, CobblePalsUiTheme.TEXT_MUTED, false)
-        context.drawText(textRenderer, Text.literal(fit("Crew • ${source.sourceLabel()}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
+        context.drawText(textRenderer, Text.literal(fit("${source.statusLabel()} • ${source.sourceLabel()}", LIST_WIDTH - 14)), LIST_LEFT + 8, SOURCE_DETAIL_TOP + 31, selected.accentColor, false)
     }
 
     private fun drawRosterDetail(context: DrawContext, selected: CrewRowSummary?) {
@@ -1107,7 +1109,7 @@ class RouterScreen(
         context.drawText(textRenderer, Text.literal(fit(source.displayName, 70)), left + 7, top + 3, CobblePalsUiTheme.TEXT_PRIMARY, false)
         context.drawText(textRenderer, Text.literal(fit(source.sourceType.label, 42)), left + width - 46, top + 3, CobblePalsUiTheme.TEXT_MUTED, false)
         context.drawText(textRenderer, Text.literal(fit("Lv.${source.level} ${friendlyId(source.species)}", 76)), left + 7, top + 12, CobblePalsUiTheme.TEXT_FAINT, false)
-        context.drawText(textRenderer, Text.literal("Crew"), left + width - 34, top + 12, row.accentColor, false)
+        context.drawText(textRenderer, Text.literal(fit(source.statusLabel(), 38)), left + width - 42, top + 12, row.accentColor, false)
     }
 
     override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {

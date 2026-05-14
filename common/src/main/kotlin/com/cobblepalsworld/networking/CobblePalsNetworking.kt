@@ -6,9 +6,11 @@ import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.crew.CommandPostCrewManager
+import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceType
+import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.gui.pasture.PastureSnapshotFactory
 import com.cobblepalsworld.gui.pasture.PastureSnapshotCache
 import com.cobblepalsworld.gui.pasture.PastureSnapshot
@@ -398,7 +400,20 @@ object CobblePalsNetworking {
     ): CrewSourcePokemonSnapshot {
         val crewBinding = CommandPostCrewManager.bindingFor(uuid)
         val controllerBinding = TagAssignmentManager.getControllerBinding(uuid)
+        val assignmentView = TagAssignmentManager.getView(uuid)
+        val state = StateManager.get(uuid)
+        val inventory = InventoryManager.get(uuid)
         val alreadyHere = crewBinding?.dimensionId == dimensionId && crewBinding.pos == controllerPos
+        val cargoSummary = inventory?.let { inv ->
+            val carried = (0 until inv.size()).sumOf { slot -> inv.getStack(slot).count }
+            if (carried > 0) "Cargo $carried" else ""
+        } ?: ""
+        val workStatus = when {
+            !alreadyHere -> ""
+            state?.statusReason != null -> state.statusReason.label
+            assignmentView?.tag != null -> "Assigned"
+            else -> "Crew"
+        }
         val unavailableReason = when {
             isFainted() -> "Needs healing"
             alreadyHere -> "In crew"
@@ -416,6 +431,9 @@ object CobblePalsNetworking {
             level = level,
             isFainted = isFainted(),
             isCrewMember = alreadyHere,
+            tagTypeId = assignmentView?.tag?.type?.id,
+            workStatus = workStatus,
+            cargoSummary = cargoSummary,
             isAvailable = unavailableReason.isBlank(),
             unavailableReason = unavailableReason
         )
@@ -426,23 +444,32 @@ object CobblePalsNetworking {
         CobblePalsSaveData.ensureLoaded(world)
         val router = world.getBlockEntity(routerPos) as? RouterBlockEntity ?: return
         if (!router.canAccess(player)) return
-        if (!playerOwnsPokemon(player, pokemonId)) return
+        val locatedPokemon = locateOwnedPokemon(player, pokemonId) ?: return
         router.setOwner(player)
 
         val dimensionId = world.registryKey.value.toString()
         val controllerPos = router.pos.toImmutable()
         val changed = if (addToCrew) {
-            val pokemon = findOwnedPokemon(player, pokemonId) ?: return
+            val pokemon = locatedPokemon.pokemon
             if (pokemon.isFainted()) return
-            CommandPostCrewManager.assign(pokemonId, dimensionId, controllerPos)
+            CommandPostCrewManager.assign(
+                pokemonId = pokemonId,
+                ownerUuid = player.uuid,
+                dimensionId = dimensionId,
+                pos = controllerPos,
+                sourceType = locatedPokemon.sourceType.name,
+                boxIndex = locatedPokemon.boxIndex,
+                slotIndex = locatedPokemon.slotIndex
+            )
         } else {
             val removed = CommandPostCrewManager.remove(pokemonId, dimensionId, controllerPos)
-            if (removed) {
+            if (removed != null) {
                 TagExecutionEngine.cleanup(pokemonId, world, controllerPos)
                 TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, controllerPos)
                 router.removeAssignedWorker(pokemonId)
+                com.cobblepalsworld.crew.CommandPostCrewLifecycle.recall(world, removed, player.uuid)
             }
-            removed
+            removed != null
         }
 
         if (changed) {
@@ -452,13 +479,35 @@ object CobblePalsNetworking {
         handleCrewSourceRequest(player, controllerPos)
     }
 
-    private fun playerOwnsPokemon(player: ServerPlayerEntity, pokemonId: UUID): Boolean = findOwnedPokemon(player, pokemonId) != null
-
     private fun findOwnedPokemon(player: ServerPlayerEntity, pokemonId: UUID): Pokemon? {
+        return locateOwnedPokemon(player, pokemonId)?.pokemon
+    }
+
+    private fun locateOwnedPokemon(player: ServerPlayerEntity, pokemonId: UUID): LocatedPokemon? {
         val registries = player.server.registryManager
         val storage = Cobblemon.storage
-        storage.getParty(player.uuid, registries).firstOrNull { it.uuid == pokemonId }?.let { return it }
-        storage.getPC(player.uuid, registries).firstOrNull { it.uuid == pokemonId }?.let { return it }
+        val party = storage.getParty(player.uuid, registries)
+        for (slot in 0 until party.size()) {
+            val pokemon = party.get(slot) ?: continue
+            if (pokemon.uuid == pokemonId) {
+                return LocatedPokemon(pokemon, CrewSourceType.PARTY, -1, slot)
+            }
+        }
+        val pc = storage.getPC(player.uuid, registries)
+        pc.boxes.forEachIndexed { boxIndex, box ->
+            box.getNonEmptySlots().entries.forEach { entry ->
+                if (entry.value.uuid == pokemonId) {
+                    return LocatedPokemon(entry.value, CrewSourceType.PC, boxIndex, entry.key)
+                }
+            }
+        }
         return null
     }
+
+    private data class LocatedPokemon(
+        val pokemon: Pokemon,
+        val sourceType: CrewSourceType,
+        val boxIndex: Int,
+        val slotIndex: Int
+    )
 }

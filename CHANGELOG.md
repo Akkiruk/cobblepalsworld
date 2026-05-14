@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.14
+
+- Added native Command Post crew leases that remember each Pokemon's owner and Party/PC source slot, giving the rewrite stable metadata for routing and UI refreshes.
+- Added Command Post crew send-out and recall lifecycle support so native crew can be materialized near the post for work and recalled when dropped or when the post is broken.
+- Enriched Party/PC crew snapshots with live crew status, role assignment context, and cargo summaries so the native roster behaves like an active work roster instead of a static membership list.
+
 ## 0.2.13
 
 - Added persistent native Command Post crew membership so Party and PC Pokemon can be added to or removed from a post without touching Cobblemon storage.

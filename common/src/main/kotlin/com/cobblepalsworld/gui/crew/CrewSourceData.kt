@@ -22,6 +22,9 @@ data class CrewSourcePokemonSnapshot(
     val level: Int,
     val isFainted: Boolean,
     val isCrewMember: Boolean,
+    val tagTypeId: String?,
+    val workStatus: String,
+    val cargoSummary: String,
     val isAvailable: Boolean,
     val unavailableReason: String
 ) {
@@ -32,6 +35,7 @@ data class CrewSourcePokemonSnapshot(
 
     fun statusLabel(): String = when {
         isFainted -> "Fainted"
+        isCrewMember && workStatus.isNotBlank() -> workStatus
         !isAvailable -> unavailableReason.ifBlank { "Unavailable" }
         else -> "Ready"
     }
@@ -46,6 +50,10 @@ data class CrewSourcePokemonSnapshot(
         buf.writeVarInt(level)
         buf.writeBoolean(isFainted)
         buf.writeBoolean(isCrewMember)
+        buf.writeBoolean(tagTypeId != null)
+        tagTypeId?.let(buf::writeString)
+        buf.writeString(workStatus)
+        buf.writeString(cargoSummary)
         buf.writeBoolean(isAvailable)
         buf.writeString(unavailableReason)
     }
@@ -61,6 +69,9 @@ data class CrewSourcePokemonSnapshot(
             level = buf.readVarInt(),
             isFainted = buf.readBoolean(),
             isCrewMember = buf.readBoolean(),
+            tagTypeId = if (buf.readBoolean()) buf.readString() else null,
+            workStatus = buf.readString(),
+            cargoSummary = buf.readString(),
             isAvailable = buf.readBoolean(),
             unavailableReason = buf.readString()
         )

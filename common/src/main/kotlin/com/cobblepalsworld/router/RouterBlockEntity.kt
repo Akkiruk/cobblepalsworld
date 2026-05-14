@@ -6,6 +6,7 @@ import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.behavior.state.StateManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
+import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.persistence.CobblePalsSaveData
@@ -345,10 +346,19 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         val dimensionId = world.registryKey.value.toString()
         val cleanupPos = linkedPastureAnchor()
         val controlled = TagAssignmentManager.findControlledBy(dimensionId, pos)
+        val nativeCrew = CommandPostCrewManager.findMembers(dimensionId, pos)
         var changed = false
         controlled.forEach { pokemonId ->
             com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(pokemonId, world, cleanupPos)
             if (TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, pos) != null) {
+                changed = true
+            }
+        }
+        nativeCrew.forEach { member ->
+            CommandPostCrewLifecycle.recall(world, member, ownerUuid)
+            com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(member.pokemonId, world, cleanupPos)
+            TagAssignmentManager.removeIfControlledBy(member.pokemonId, dimensionId, pos)
+            if (CommandPostCrewManager.remove(member.pokemonId, dimensionId, pos) != null) {
                 changed = true
             }
         }
