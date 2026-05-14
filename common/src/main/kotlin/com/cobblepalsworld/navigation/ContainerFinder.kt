@@ -13,6 +13,7 @@ import net.minecraft.item.ItemStack
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Box
 import net.minecraft.world.World
+import kotlin.math.abs
 
 object ContainerFinder {
     private fun searchPositions(origin: BlockPos, range: Int): Iterable<BlockPos> =
@@ -114,7 +115,7 @@ object ContainerFinder {
         predicate: (Inventory, BlockPos) -> Boolean = { _, _ -> true }
     ): BlockPos? {
         val controllerPos = controllerBufferPos(world, tag)
-        if (controllerPos != null && controllerPos !in exclude) {
+        if (controllerPos != null && controllerPos !in exclude && isWithinSearchRange(origin, controllerPos, range)) {
             val inventory = getInventoryAt(world, controllerPos)
             if (inventory != null && predicate(inventory, controllerPos)) {
                 return controllerPos
@@ -135,10 +136,11 @@ object ContainerFinder {
     ): BlockPos? {
         val cacheTtl = ConfigManager.config.general.containerCacheTicks.toLong()
         val cachedPos = state.cachedSourceContainerPos
-        if (cachedPos != null
-            && cachedPos !in exclude
-            && world.time - state.sourceContainerCacheTime < cacheTtl
-        ) {
+        val cachedInRange = cachedPos != null && isWithinSearchRange(origin, cachedPos, range)
+        if (cachedPos != null && !cachedInRange) {
+            state.cachedSourceContainerPos = null
+        }
+        if (cachedPos != null && cachedInRange && cachedPos !in exclude && world.time - state.sourceContainerCacheTime < cacheTtl) {
             val cachedInventory = getInventoryAt(world, cachedPos)
             if (cachedInventory != null && predicate(cachedInventory, cachedPos)) {
                 return cachedPos
@@ -153,6 +155,13 @@ object ContainerFinder {
             state.cachedSourceContainerPos = null
         }
         return foundPos
+    }
+
+    private fun isWithinSearchRange(origin: BlockPos, pos: BlockPos, range: Int): Boolean {
+        val verticalRange = maxOf(range, 16)
+        return abs(pos.x - origin.x) <= range &&
+            abs(pos.y - origin.y) <= verticalRange &&
+            abs(pos.z - origin.z) <= range
     }
 
     /**

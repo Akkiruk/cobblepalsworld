@@ -22,6 +22,7 @@ import com.cobblepalsworld.navigation.NavigationBudget
 import com.cobblepalsworld.navigation.NavigationAttempt
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.navigation.MovementPurpose
+import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.navigation.WorkerNavigationManager
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
@@ -34,9 +35,13 @@ import net.minecraft.item.ItemStack
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
+import kotlin.math.abs
 
 object TagExecutionEngine {
     private val config get() = ConfigManager.config.general
+    private const val WORKSPACE_PADDING_BLOCKS = 2
+    private const val ENTITY_LEASH_PADDING_BLOCKS = 10
+    private const val MIN_ENTITY_LEASH_BLOCKS = 28
 
     // --- Compiled cache helpers (avoid recomputing every tick) ---
 
@@ -93,6 +98,10 @@ object TagExecutionEngine {
 
         val behavior = TagBehaviorRegistry.get(tag.type) ?: return
 
+        if (enforcePastureLeash(world, entity, tag, behavior, state, origin, navigationBudget)) {
+            return
+        }
+
         if (!passesRedstoneGate(world, origin, tag, state)) {
             val inventory = InventoryManager.get(pokemon.uuid)
             if (inventory != null && !inventory.isEmpty && !behavior.handlesOwnInventory) {
@@ -142,7 +151,7 @@ object TagExecutionEngine {
 
         when (state.phase) {
             WorkerPhase.IDLE -> tickIdle(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
-            WorkerPhase.NAVIGATING -> tickNavigating(world, entity, tag, behavior, state, navigationBudget)
+            WorkerPhase.NAVIGATING -> tickNavigating(world, entity, tag, behavior, state, origin, navigationBudget)
             WorkerPhase.ARRIVING -> tickArriving(world, entity, tag, behavior, state)
             WorkerPhase.WORKING -> tickWorking(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
             WorkerPhase.DEPOSITING -> tickDepositing(world, entity, pokemon, tag, behavior, state, origin, navigationBudget)
@@ -331,6 +340,11 @@ object TagExecutionEngine {
             }
             return
         }
+        if (!isWithinWorkRange(origin, target, effectiveRange(tag, state))) {
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Ignored a job target outside this pasture's work range")
+            return
+        }
         // Found work — check claim first, then exit eco mode
         if (ClaimManager.isClaimedByOther(target, pokemon.uuid, world)) {
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
@@ -363,9 +377,18 @@ object TagExecutionEngine {
     private fun tickNavigating(
         world: World, entity: PokemonEntity,
         tag: TagInstance, behavior: TagBehavior, state: WorkerState,
+        origin: BlockPos,
         navigationBudget: NavigationBudget
     ) {
         val target = state.targetPos ?: run { resetToIdle(state); return }
+
+        if (!isWithinWorkRange(origin, target, effectiveRange(tag, state))) {
+            ClaimManager.release(target, world)
+            resetToIdle(state)
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target drifted outside this pasture's work range")
+            return
+        }
 
         if (!behavior.isTargetValid(world, target, tag)) {
             ClaimManager.release(target, world)
@@ -450,6 +473,13 @@ object TagExecutionEngine {
                 }
             }
             is WorkResult.MoveTo -> {
+                if (!isWithinWorkRange(origin, result.target, effectiveRange(tag, state))) {
+                    ClaimManager.release(target, world)
+                    resetToIdle(state)
+                    state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was outside this pasture's work range")
+                    return
+                }
                 ClaimManager.release(target, world)
                 state.targetPos = result.target
                 ClaimManager.claim(result.target, pokemon.uuid, world)
@@ -496,6 +526,7 @@ object TagExecutionEngine {
         if (state.depositPos == null) {
             val searchRange = effectiveRange(tag, state)
             val controllerPos = ContainerFinder.controllerBufferPos(world, tag)
+                ?.takeIf { isWithinWorkRange(origin, it, searchRange) }
 
             // Build exclusion set: never deposit back to source or the pasture block itself
             val excludePositions = mutableSetOf(origin)
@@ -557,6 +588,14 @@ object TagExecutionEngine {
         }
 
         val depositPos = state.depositPos!!
+        if (!isWithinWorkRange(origin, depositPos, effectiveRange(tag, state))) {
+            state.depositPos = null
+            if (state.cachedContainerPos == depositPos) {
+                state.cachedContainerPos = null
+            }
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was outside this pasture's work range")
+            return
+        }
         if (NavigationHelper.isAtPosition(entity, depositPos)) {
             NavigationHelper.stopNavigation(entity, state)
             if (tag.augments.isRegulator()) {
@@ -636,5 +675,85 @@ object TagExecutionEngine {
 
     private fun resetToIdle(state: WorkerState) {
         state.reset()
+    }
+
+    private fun enforcePastureLeash(
+        world: World,
+        entity: PokemonEntity,
+        tag: TagInstance,
+        behavior: TagBehavior,
+        state: WorkerState,
+        origin: BlockPos,
+        navigationBudget: NavigationBudget
+    ): Boolean {
+        val range = effectiveRange(tag, state)
+        val activeTarget = when (state.phase) {
+            WorkerPhase.DEPOSITING -> state.depositPos ?: state.targetPos
+            else -> state.targetPos ?: state.depositPos
+        }
+
+        if (activeTarget != null && !isWithinWorkRange(origin, activeTarget, range)) {
+            state.targetPos?.let { ClaimManager.release(it, world) }
+            state.cachedContainerPos = null
+            resetToIdle(state)
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Cleared a target outside this pasture's work range")
+            return guideBackToPasture(entity, state, origin, navigationBudget, range)
+        }
+
+        if (!isEntityWithinLeash(entity, origin, range)) {
+            state.targetPos?.let { ClaimManager.release(it, world) }
+            resetToIdle(state)
+            recallToPasture(entity, state, origin)
+            state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returned to pasture after leaving the safe work area")
+            return true
+        }
+
+        return false
+    }
+
+    private fun guideBackToPasture(
+        entity: PokemonEntity,
+        state: WorkerState,
+        origin: BlockPos,
+        navigationBudget: NavigationBudget,
+        range: Int
+    ): Boolean {
+        if (!isEntityWithinLeash(entity, origin, range)) {
+            recallToPasture(entity, state, origin)
+            return true
+        }
+
+        val attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME)
+        if (attempt == NavigationAttempt.UNREACHABLE) {
+            recallToPasture(entity, state, origin)
+        } else {
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returning to pasture after rejecting a distant target")
+        }
+        return true
+    }
+
+    private fun recallToPasture(entity: PokemonEntity, state: WorkerState, origin: BlockPos) {
+        val home = SafePositionResolver.standNear(entity.world, origin, entity.blockPos) ?: origin.up()
+        NavigationHelper.stopNavigation(entity, state)
+        entity.teleport(home.x + 0.5, home.y.toDouble(), home.z + 0.5, false)
+        entity.setVelocity(0.0, 0.0, 0.0)
+    }
+
+    private fun isWithinWorkRange(origin: BlockPos, target: BlockPos, range: Int): Boolean {
+        val horizontalRange = range + WORKSPACE_PADDING_BLOCKS
+        val verticalRange = maxOf(horizontalRange, 16)
+        return abs(target.x - origin.x) <= horizontalRange &&
+            abs(target.z - origin.z) <= horizontalRange &&
+            abs(target.y - origin.y) <= verticalRange
+    }
+
+    private fun isEntityWithinLeash(entity: PokemonEntity, origin: BlockPos, range: Int): Boolean {
+        val leash = maxOf(range + ENTITY_LEASH_PADDING_BLOCKS, MIN_ENTITY_LEASH_BLOCKS).toDouble()
+        val dx = entity.x - (origin.x + 0.5)
+        val dz = entity.z - (origin.z + 0.5)
+        val dy = entity.y - origin.y
+        return dx * dx + dz * dz <= leash * leash && abs(dy) <= maxOf(leash, 24.0)
     }
 }

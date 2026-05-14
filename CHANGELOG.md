@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10
+
+- Added a shared pasture work-range leash so bound job targets, controller buffers, cached containers, and follow-up targets outside the active pasture range are rejected instead of sending pals across the world.
+- Added emergency worker recall when a tagged pal has already wandered beyond its safe work area, preventing stuck pathing from continuing until the pal despawns.
+
 ## 0.2.9
 
 - Replaced the in-world worker status cube with a compact status-colored backing behind the role icon, keeping worker state readable without hiding cargo or work items.
