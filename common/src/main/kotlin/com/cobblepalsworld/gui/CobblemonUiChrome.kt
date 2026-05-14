@@ -10,6 +10,8 @@ package com.cobblepalsworld.gui
 
 import com.cobblemon.mod.common.CobblemonSounds
 import com.cobblemon.mod.common.api.gui.blitk
+import com.cobblemon.mod.common.client.CobblemonResources
+import com.cobblemon.mod.common.client.render.drawScaledText
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.font.TextRenderer
 import net.minecraft.client.gui.DrawContext
@@ -142,11 +144,16 @@ object CobblemonUiChrome {
     }
 
     fun drawSmallText(context: DrawContext, textRenderer: TextRenderer, value: String, x: Int, y: Int, color: Int = TEXT_DARK, shadow: Boolean = false, scale: Float = TEXTURE_SCALE) {
-        context.matrices.push()
-        context.matrices.translate(x.toDouble(), y.toDouble(), 650.0)
-        context.matrices.scale(scale, scale, 1F)
-        context.drawText(textRenderer, Text.literal(value), 0, 0, color, shadow)
-        context.matrices.pop()
+        drawScaledText(
+            context = context,
+            font = if (scale >= 0.65F) CobblemonResources.DEFAULT_LARGE else null,
+            text = Text.literal(value),
+            x = x,
+            y = y,
+            scale = scale,
+            colour = color,
+            shadow = shadow
+        )
     }
 
     fun playClick() = play(CobblemonSounds.PC_CLICK)

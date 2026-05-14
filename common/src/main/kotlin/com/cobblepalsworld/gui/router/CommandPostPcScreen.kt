@@ -15,6 +15,7 @@ import com.cobblemon.mod.common.client.gui.drawProfilePokemon
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState
 import com.cobblemon.mod.common.client.render.renderScaledGuiItemIcon
 import com.cobblemon.mod.common.pokemon.RenderablePokemon
+import com.cobblepalsworld.gui.CobblemonUiChrome
 import com.cobblepalsworld.gui.crew.CommandPostCrewMemberSnapshot
 import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourceBoxSnapshot
@@ -40,9 +41,7 @@ import net.minecraft.sound.SoundEvent
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import org.joml.Quaternionf
-import java.util.Locale
 import java.util.UUID
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -107,15 +106,15 @@ class CommandPostPcScreen(
     private val renderStates = mutableMapOf<UUID, FloatingState>()
 
     init {
-        backgroundWidth = BASE_WIDTH
-        backgroundHeight = BASE_HEIGHT
+        backgroundWidth = CommandPostPcShell.BASE_WIDTH
+        backgroundHeight = CommandPostPcShell.BASE_HEIGHT
         playerInventoryTitleY = 10_000
         titleY = 10_000
     }
 
     override fun init() {
-        backgroundWidth = BASE_WIDTH
-        backgroundHeight = BASE_HEIGHT
+        backgroundWidth = CommandPostPcShell.BASE_WIDTH
+        backgroundHeight = CommandPostPcShell.BASE_HEIGHT
         super.init()
         applySlotLayout()
         requestCrewRefresh()
@@ -173,17 +172,17 @@ class CommandPostPcScreen(
         val localMouseX = (mouseX - x).toInt()
         val localMouseY = (mouseY - y).toInt()
 
-        if (contains(localMouseX, localMouseY, EXIT_LEFT, EXIT_TOP, EXIT_WIDTH, EXIT_HEIGHT)) {
+        if (contains(localMouseX, localMouseY, CommandPostPcShell.EXIT_LEFT, CommandPostPcShell.EXIT_TOP, CommandPostPcShell.EXIT_WIDTH, CommandPostPcShell.EXIT_HEIGHT)) {
             play(CobblemonSounds.PC_CLICK)
             close()
             return true
         }
 
-        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, PREV_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE)) {
+        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.PREV_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
             changeBox(-1)
             return true
         }
-        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, NEXT_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE)) {
+        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, CommandPostStorageWidget.NEXT_LEFT, CommandPostStorageWidget.NAV_TOP, CommandPostStorageWidget.NAV_SIZE, CommandPostStorageWidget.NAV_SIZE)) {
             changeBox(1)
             return true
         }
@@ -195,7 +194,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        if (contains(localMouseX, localMouseY, PASTURE_RECALL_LEFT, PASTURE_RECALL_TOP, PASTURE_RECALL_WIDTH, PASTURE_RECALL_HEIGHT)) {
+        if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
             val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
             members.forEach { CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, it.pokemonId) }
             play(CobblemonSounds.PC_RELEASE)
@@ -204,7 +203,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 2, hit.top + 11, SLOT_ICON_SIZE, SLOT_ICON_SIZE) }?.let { hit ->
+        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 2, hit.top + 11, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, hit.member.pokemonId)
             play(CobblemonSounds.PC_DROP)
@@ -213,7 +212,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 44, hit.top + 3, SLOT_ICON_SIZE, SLOT_ICON_SIZE) }?.let { hit ->
+        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 44, hit.top + 3, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             CobblePalsNetworking.sendCycleCrewMode(handler.routerPos, hit.member.pokemonId)
             play(CobblemonSounds.PC_CLICK)
@@ -221,13 +220,13 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, PASTURE_SLOT_WIDTH, PASTURE_SLOT_HEIGHT) }?.let { hit ->
+        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             play(CobblemonSounds.PC_CLICK)
             return true
         }
 
-        slotHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, STORAGE_SLOT_SIZE, STORAGE_SLOT_SIZE) }?.slot?.pokemon?.let { pokemon ->
+        slotHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostStorageWidget.SLOT_SIZE, CommandPostStorageWidget.SLOT_SIZE) }?.slot?.pokemon?.let { pokemon ->
             selectedPokemonId = pokemon.pokemonId
             if (pokemon.isCrewMember) {
                 CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, pokemon.pokemonId)
@@ -264,13 +263,13 @@ class CommandPostPcScreen(
     override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
         val localMouseX = (mouseX - x).toInt()
         val localMouseY = (mouseY - y).toInt()
-        if (contains(localMouseX, localMouseY, PASTURE_LIST_LEFT, PASTURE_LIST_TOP - 4, PASTURE_LIST_WIDTH, PASTURE_LIST_HEIGHT)) {
+        if (CommandPostPastureWidget.listContains(localMouseX, localMouseY)) {
             val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
-            val maxScroll = max(0, members.size - VISIBLE_PASTURE_ROWS)
+            val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
             pastureScrollIndex = (pastureScrollIndex - verticalAmount.toInt()).coerceIn(0, maxScroll)
             return true
         }
-        if (sourceType == CrewSourceType.PC && contains(localMouseX, localMouseY, STORAGE_X, STORAGE_Y, SCREEN_WIDTH, SCREEN_HEIGHT)) {
+        if (sourceType == CrewSourceType.PC && CommandPostStorageWidget.contains(localMouseX, localMouseY)) {
             changeBox(if (verticalAmount > 0) -1 else 1)
             return true
         }
@@ -278,18 +277,18 @@ class CommandPostPcScreen(
     }
 
     private fun drawBase(context: DrawContext) {
-        blitk(matrixStack = context.matrices, texture = PC_BASE, x = x, y = y, width = BASE_WIDTH, height = BASE_HEIGHT)
+        CommandPostPcShell.drawBase(context, x, y)
     }
 
     private fun drawPortrait(context: DrawContext, preview: RenderPokemonView?, delta: Float) {
-        blitk(matrixStack = context.matrices, texture = PORTRAIT_BACKGROUND, x = x + 6, y = y + 27, width = PORTRAIT_SIZE, height = PORTRAIT_SIZE)
+        CommandPostPcShell.drawPortraitPanel(context, x, y)
         if (preview != null) {
             renderPokemon(context, preview, x + 39, y + 26, delta, 7.0F, 3.2F)
         }
     }
 
     private fun drawInfoBox(context: DrawContext, preview: RenderPokemonView?) {
-        blitk(matrixStack = context.matrices, texture = INFO_BOX, x = x + 9, y = y + 128, width = INFO_BOX_WIDTH, height = INFO_BOX_HEIGHT)
+        CommandPostPcShell.drawInfoBox(context, x, y)
         drawSmallText(context, "COMMAND POST", 17, 131, 0xFFEFE7D7.toInt(), true)
 
         if (preview == null) {
@@ -321,26 +320,21 @@ class CommandPostPcScreen(
 
     private fun drawStorageScreen(context: DrawContext, box: CrewSourceBoxSnapshot?, localMouseX: Int, localMouseY: Int, delta: Float) {
         val title = if (sourceType == CrewSourceType.PARTY) "Party" else box?.label ?: "Box ${sourceBoxIndex + 1}"
-        drawSmallText(context, title.uppercase(Locale.ROOT), 151 - textRenderer.getWidth(title) / 4, 14, 0xFFFFFFFF.toInt(), true)
+        CommandPostStorageWidget.drawTitle(context, textRenderer, x, y, title)
 
         if (sourceType == CrewSourceType.PC) {
-            drawTextureButton(context, TextureButton("previous", PREV_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, NAV_PREVIOUS), localMouseX, localMouseY, scaled = true)
-            drawTextureButton(context, TextureButton("next", NEXT_LEFT, NAV_TOP, NAV_SIZE, NAV_SIZE, NAV_NEXT), localMouseX, localMouseY, scaled = true)
+            CommandPostStorageWidget.drawNavigation(context, x, y, localMouseX, localMouseY)
         }
 
-        blitk(matrixStack = context.matrices, texture = SCREEN_GLOW, x = x + STORAGE_X - 17, y = y + STORAGE_Y - 17, width = 208, height = 189, alpha = 0.82F)
-        blitk(matrixStack = context.matrices, texture = SCREEN_GRID, x = x + STORAGE_X + 7, y = y + STORAGE_Y + 11, width = 160, height = 133)
-        blitk(matrixStack = context.matrices, texture = SCREEN_OVERLAY, x = x + STORAGE_X, y = y + STORAGE_Y, width = SCREEN_WIDTH, height = SCREEN_HEIGHT)
+        CommandPostStorageWidget.drawFrame(context, x, y)
 
         val hits = mutableListOf<SlotHit>()
         val slots = box?.slots.orEmpty()
         slots.forEachIndexed { index, slot ->
             val gridIndex = if (sourceType == CrewSourceType.PARTY) index else slot.slotIndex
-            if (gridIndex !in 0 until BOX_SLOT_COUNT) return@forEachIndexed
-            val col = gridIndex % BOX_COLUMNS
-            val row = gridIndex / BOX_COLUMNS
-            val left = STORAGE_X + BOX_SLOT_START_X + col * (STORAGE_SLOT_SIZE + BOX_SLOT_PADDING)
-            val top = STORAGE_Y + BOX_SLOT_START_Y + row * (STORAGE_SLOT_SIZE + BOX_SLOT_PADDING)
+            if (gridIndex !in 0 until CommandPostStorageWidget.BOX_SLOT_COUNT) return@forEachIndexed
+            val left = CommandPostStorageWidget.slotLeft(gridIndex)
+            val top = CommandPostStorageWidget.slotTop(gridIndex)
             hits += SlotHit(slot, left, top)
             drawSourceSlot(context, slot, left, top, localMouseX, localMouseY, delta)
         }
@@ -349,14 +343,14 @@ class CommandPostPcScreen(
 
     private fun drawSourceSlot(context: DrawContext, slot: CrewSourceSlotSnapshot, left: Int, top: Int, localMouseX: Int, localMouseY: Int, delta: Float) {
         val pokemon = slot.pokemon ?: return
-        val hovered = contains(localMouseX, localMouseY, left, top, STORAGE_SLOT_SIZE, STORAGE_SLOT_SIZE)
+        val hovered = contains(localMouseX, localMouseY, left, top, CommandPostStorageWidget.SLOT_SIZE, CommandPostStorageWidget.SLOT_SIZE)
         if (hovered) {
             hoveredSource = pokemon
             hoveredTooltip = HoverTooltip("source-${pokemon.pokemonId}", sourceTooltip(pokemon))
         }
 
         val selected = selectedPokemonId == pokemon.pokemonId || hovered
-        renderPokemon(context, SourcePokemonView(pokemon), x + left + STORAGE_SLOT_SIZE / 2, y + top + 1, delta, 4.5F, 2.5F)
+        renderPokemon(context, SourcePokemonView(pokemon), x + left + CommandPostStorageWidget.SLOT_SIZE / 2, y + top + 1, delta, 4.5F, 2.5F)
 
         context.matrices.push()
         context.matrices.translate(0.0, 0.0, 140.0)
@@ -364,12 +358,12 @@ class CommandPostPcScreen(
         if ("male" in pokemon.aspects || "female" in pokemon.aspects) {
             blitk(
                 matrixStack = context.matrices,
-                texture = if ("male" in pokemon.aspects) GENDER_MALE else GENDER_FEMALE,
-                x = (x + left + 21) / TEXTURE_SCALE,
-                y = (y + top + 1) / TEXTURE_SCALE,
+                texture = if ("male" in pokemon.aspects) CommandPostPcShell.GENDER_MALE else CommandPostPcShell.GENDER_FEMALE,
+                x = (x + left + 21) / CommandPostPcShell.TEXTURE_SCALE,
+                y = (y + top + 1) / CommandPostPcShell.TEXTURE_SCALE,
                 width = 6,
                 height = 8,
-                scale = TEXTURE_SCALE
+                scale = CommandPostPcShell.TEXTURE_SCALE
             )
         }
         heldStack(pokemon.heldItemId)?.let { stack ->
@@ -380,66 +374,52 @@ class CommandPostPcScreen(
         context.matrices.push()
         context.matrices.translate(0.0, 0.0, 500.0)
         if (pokemon.isCrewMember || !pokemon.isAvailable) {
-            blitk(matrixStack = context.matrices, texture = SLOT_OVERLAY, x = x + left, y = y + top, width = STORAGE_SLOT_SIZE, height = STORAGE_SLOT_SIZE, alpha = if (pokemon.isCrewMember) 1.0F else 0.72F)
+            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left, y = y + top, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = if (pokemon.isCrewMember) 1.0F else 0.72F)
         }
         if (pokemon.isCrewMember) {
-            blitk(matrixStack = context.matrices, texture = SLOT_PASTURE_ICON, x = (x + left + 7.5) / TEXTURE_SCALE, y = (y + top + 7.5) / TEXTURE_SCALE, width = 20, height = 20, scale = TEXTURE_SCALE)
+            blitk(matrixStack = context.matrices, texture = CommandPostPastureWidget.SLOT_PASTURE_ICON, x = (x + left + 7.5) / CommandPostPcShell.TEXTURE_SCALE, y = (y + top + 7.5) / CommandPostPcShell.TEXTURE_SCALE, width = 20, height = 20, scale = CommandPostPcShell.TEXTURE_SCALE)
         } else if (hovered && pokemon.isAvailable) {
-            blitk(matrixStack = context.matrices, texture = SLOT_OVERLAY, x = x + left, y = y + top, width = STORAGE_SLOT_SIZE, height = STORAGE_SLOT_SIZE)
-            blitk(matrixStack = context.matrices, texture = SLOT_MOVE_ICON, x = (x + left + 7.5) / TEXTURE_SCALE, y = (y + top + 7.5) / TEXTURE_SCALE, width = 20, height = 20, scale = TEXTURE_SCALE)
+            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left, y = y + top, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE)
+            blitk(matrixStack = context.matrices, texture = CommandPostPastureWidget.SLOT_MOVE_ICON, x = (x + left + 7.5) / CommandPostPcShell.TEXTURE_SCALE, y = (y + top + 7.5) / CommandPostPcShell.TEXTURE_SCALE, width = 20, height = 20, scale = CommandPostPcShell.TEXTURE_SCALE)
         }
         if (selected) {
-            blitk(matrixStack = context.matrices, texture = POINTER, x = (x + left + 10) / TEXTURE_SCALE, y = ((y + top - 3) / TEXTURE_SCALE) - pointerOffsetY, width = 11, height = 8, scale = TEXTURE_SCALE)
+            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.POINTER, x = (x + left + 10) / CommandPostPcShell.TEXTURE_SCALE, y = ((y + top - 3) / CommandPostPcShell.TEXTURE_SCALE) - pointerOffsetY, width = 11, height = 8, scale = CommandPostPcShell.TEXTURE_SCALE)
         }
         context.matrices.pop()
     }
 
     private fun drawPasturePanel(context: DrawContext, members: List<CommandPostCrewMemberSnapshot>, localMouseX: Int, localMouseY: Int, delta: Float) {
-        blitk(matrixStack = context.matrices, texture = PASTURE_PANEL, x = x + PASTURE_X, y = y + PASTURE_Y, width = RIGHT_PANEL_WIDTH, height = RIGHT_PANEL_HEIGHT)
-        drawSmallText(context, "PASTURE", PASTURE_X + 25, PASTURE_Y + 4, 0xFFEFE7D7.toInt(), true)
-
-        val maxScroll = max(0, members.size - VISIBLE_PASTURE_ROWS)
+        val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
         pastureScrollIndex = pastureScrollIndex.coerceIn(0, maxScroll)
-        val visibleMembers = members.drop(pastureScrollIndex).take(VISIBLE_PASTURE_ROWS)
+        val visibleMembers = members.drop(pastureScrollIndex).take(CommandPostPastureWidget.VISIBLE_ROWS)
         val hits = mutableListOf<CrewHit>()
+        val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
 
-        context.enableScissor(x + PASTURE_LIST_LEFT, y + PASTURE_LIST_TOP - 1, x + PASTURE_LIST_LEFT + PASTURE_LIST_WIDTH, y + PASTURE_LIST_TOP + PASTURE_LIST_HEIGHT)
+        CommandPostPastureWidget.drawPanel(context, textRenderer, x, y)
+        context.enableScissor(x + CommandPostPastureWidget.LIST_LEFT, y + CommandPostPastureWidget.LIST_TOP - 1, x + CommandPostPastureWidget.LIST_LEFT + CommandPostPastureWidget.LIST_WIDTH, y + CommandPostPastureWidget.LIST_TOP + CommandPostPastureWidget.LIST_HEIGHT)
         visibleMembers.forEachIndexed { index, member ->
-            val rowLeft = PASTURE_LIST_LEFT - 4
-            val rowTop = PASTURE_LIST_TOP + index * (PASTURE_SLOT_HEIGHT + PASTURE_SLOT_SPACING)
-            hits += CrewHit(member, rowLeft, rowTop)
-            drawPastureRow(context, member, rowLeft, rowTop, localMouseX, localMouseY, delta)
+            val row = CommandPostPastureWidget.rowBounds(index)
+            hits += CrewHit(member, row.left, row.top)
+            drawPastureRow(context, member, row.left, row.top, localMouseX, localMouseY, delta)
         }
         context.disableScissor()
         crewHits = hits
 
-        blitk(matrixStack = context.matrices, texture = PASTURE_SCROLL_OVERLAY, x = x + PASTURE_LIST_LEFT, y = y + PASTURE_LIST_TOP - 13, width = PASTURE_LIST_WIDTH, height = 131)
-        val maxWorkers = CommandPostCrewSnapshotCache.get(handler.routerPos)?.maxWorkers ?: 0
-        drawSmallText(context, "${members.size}/$maxWorkers", PASTURE_X + 36, PASTURE_Y + 24, 0xFFFFFFFF.toInt(), true)
-        drawTextureButton(context, TextureButton("recall", PASTURE_RECALL_LEFT, PASTURE_RECALL_TOP, PASTURE_RECALL_WIDTH, PASTURE_RECALL_HEIGHT, PASTURE_BUTTON), localMouseX, localMouseY, scaled = false)
-        drawSmallText(context, "Recall", PASTURE_RECALL_LEFT + 22, PASTURE_RECALL_TOP + 5, 0xFFFFFFFF.toInt(), true)
-        if (contains(localMouseX, localMouseY, PASTURE_RECALL_LEFT, PASTURE_RECALL_TOP, PASTURE_RECALL_WIDTH, PASTURE_RECALL_HEIGHT)) {
+        CommandPostPastureWidget.drawScrollOverlay(context, x, y)
+    CommandPostPastureWidget.drawControls(context, textRenderer, x, y, members.size, maxWorkers, localMouseX, localMouseY)
+        if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
             hoveredTooltip = HoverTooltip("recall", listOf(Text.literal("Recall all Command Post Pokemon")))
         }
     }
 
     private fun drawPastureRow(context: DrawContext, member: CommandPostCrewMemberSnapshot, left: Int, top: Int, localMouseX: Int, localMouseY: Int, delta: Float) {
-        val hovered = contains(localMouseX, localMouseY, left, top, PASTURE_SLOT_WIDTH, PASTURE_SLOT_HEIGHT)
+        val hovered = contains(localMouseX, localMouseY, left, top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT)
         if (hovered) {
             hoveredCrew = member
             hoveredTooltip = HoverTooltip("crew-${member.pokemonId}", crewTooltip(member))
         }
 
-        blitk(
-            matrixStack = context.matrices,
-            texture = if (member.isActive()) PASTURE_SLOT_OWNER else PASTURE_SLOT,
-            x = x + left,
-            y = y + top,
-            width = PASTURE_SLOT_WIDTH,
-            height = PASTURE_SLOT_HEIGHT,
-            vOffset = if (hovered) PASTURE_SLOT_HEIGHT else 0,
-            textureHeight = PASTURE_SLOT_HEIGHT * 2
-        )
+        CommandPostPastureWidget.drawRowFrame(context, x, y, left, top, member.isActive(), hovered)
 
         renderPokemon(context, CrewPokemonView(member), x + left + 23, y + top - 1, delta, 4.5F, 2.5F)
         heldStack(member.heldItemId)?.let { stack ->
@@ -448,8 +428,8 @@ class CommandPostPcScreen(
         drawSmallTextAbsolute(context, "Lv.${member.level}", x + left + 44, y + top + 17, 0xFFFFFFFF.toInt(), true)
         drawSmallTextAbsolute(context, fit(member.displayName, 50), x + left + 11, y + top + 24, 0xFFEAF4F5.toInt(), false)
 
-        drawScaledSlotIcon(context, SLOT_MOVE_ICON, left + 2, top + 11, hovered = contains(localMouseX, localMouseY, left + 2, top + 11, SLOT_ICON_SIZE, SLOT_ICON_SIZE))
-        drawScaledSlotIcon(context, SLOT_DEFEND_ICON, left + 44, top + 3, hovered = contains(localMouseX, localMouseY, left + 44, top + 3, SLOT_ICON_SIZE, SLOT_ICON_SIZE))
+        CommandPostPastureWidget.drawSlotIcon(context, x, y, CommandPostPastureWidget.SLOT_MOVE_ICON, left + 2, top + 11, hovered = contains(localMouseX, localMouseY, left + 2, top + 11, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE))
+        CommandPostPastureWidget.drawSlotIcon(context, x, y, CommandPostPastureWidget.SLOT_DEFEND_ICON, left + 44, top + 3, hovered = contains(localMouseX, localMouseY, left + 44, top + 3, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE))
 
         if (member.isBlocked()) {
             context.fill(x + left + 1, y + top + 1, x + left + 4, y + top + 4, 0xFFFF5555.toInt())
@@ -463,13 +443,13 @@ class CommandPostPcScreen(
             for (col in 0 until RouterScreenHandler.MODULE_COLUMNS) {
                 val left = MODULE_SLOT_LEFT + col * 18
                 val top = MODULE_SLOT_TOP + row * 18
-                blitk(matrixStack = context.matrices, texture = SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = STORAGE_SLOT_SIZE, height = STORAGE_SLOT_SIZE, alpha = 0.55F)
+                blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = 0.55F)
             }
         }
         for (index in 0 until RouterBlockEntity.UPGRADE_SLOT_COUNT) {
             val left = UPGRADE_SLOT_LEFT + (index % 3) * 18
             val top = UPGRADE_SLOT_TOP + (index / 3) * 18
-            blitk(matrixStack = context.matrices, texture = SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = STORAGE_SLOT_SIZE, height = STORAGE_SLOT_SIZE, alpha = 0.38F)
+            blitk(matrixStack = context.matrices, texture = CommandPostPcShell.SLOT_OVERLAY, x = x + left - 4, y = y + top - 4, width = CommandPostStorageWidget.SLOT_SIZE, height = CommandPostStorageWidget.SLOT_SIZE, alpha = 0.38F)
         }
     }
 
@@ -481,42 +461,11 @@ class CommandPostPcScreen(
     }
 
     private fun drawExitButton(context: DrawContext, localMouseX: Int, localMouseY: Int) {
-        val hovered = contains(localMouseX, localMouseY, EXIT_LEFT, EXIT_TOP, EXIT_WIDTH, EXIT_HEIGHT)
-        blitk(matrixStack = context.matrices, texture = BACK_BUTTON, x = x + EXIT_LEFT, y = y + EXIT_TOP, width = EXIT_WIDTH, height = EXIT_HEIGHT, vOffset = if (hovered) EXIT_HEIGHT else 0, textureHeight = EXIT_HEIGHT * 2)
-        blitk(matrixStack = context.matrices, texture = BACK_BUTTON_ICON, x = (x + EXIT_LEFT + 7) / TEXTURE_SCALE, y = (y + EXIT_TOP + 4) / TEXTURE_SCALE, width = 21, height = 11, scale = TEXTURE_SCALE)
+        CommandPostPcShell.drawExitButton(context, x, y, localMouseX, localMouseY)
     }
 
     private fun drawTextureButton(context: DrawContext, button: TextureButton, localMouseX: Int, localMouseY: Int, scaled: Boolean) {
-        val hovered = contains(localMouseX, localMouseY, button.left, button.top, button.width, button.height)
-        if (scaled) {
-            blitk(
-                matrixStack = context.matrices,
-                texture = button.texture,
-                x = (x + button.left) / TEXTURE_SCALE,
-                y = (y + button.top) / TEXTURE_SCALE,
-                width = floor(button.width / TEXTURE_SCALE).toInt(),
-                height = floor(button.height / TEXTURE_SCALE).toInt(),
-                vOffset = if (hovered) floor(button.height / TEXTURE_SCALE).toInt() else 0,
-                textureHeight = floor(button.height / TEXTURE_SCALE).toInt() * 2,
-                scale = TEXTURE_SCALE
-            )
-        } else {
-            blitk(matrixStack = context.matrices, texture = button.texture, x = x + button.left, y = y + button.top, width = button.width, height = button.height, vOffset = if (hovered) button.height else 0, textureHeight = button.height * 2)
-        }
-    }
-
-    private fun drawScaledSlotIcon(context: DrawContext, texture: Identifier, localX: Int, localY: Int, hovered: Boolean) {
-        blitk(
-            matrixStack = context.matrices,
-            texture = texture,
-            x = (x + localX) / TEXTURE_SCALE,
-            y = (y + localY) / TEXTURE_SCALE,
-            width = 14,
-            height = 14,
-            vOffset = if (hovered) 14 else 0,
-            textureHeight = 28,
-            scale = TEXTURE_SCALE
-        )
+        CommandPostIconButton.draw(context, button.texture, x, y, button.left, button.top, button.width, button.height, localMouseX, localMouseY, scaled)
     }
 
     private fun renderPokemon(context: DrawContext, view: RenderPokemonView, centerX: Int, topY: Int, delta: Float, modelScale: Float, matrixScale: Float) {
@@ -654,19 +603,15 @@ class CommandPostPcScreen(
     }
 
     private fun drawSmallTextAbsolute(context: DrawContext, value: String, absoluteX: Int, absoluteY: Int, color: Int, shadow: Boolean) {
-        context.matrices.push()
-        context.matrices.translate(absoluteX.toDouble(), absoluteY.toDouble(), 650.0)
-        context.matrices.scale(TEXTURE_SCALE, TEXTURE_SCALE, 1F)
-        context.drawText(textRenderer, Text.literal(value), 0, 0, color, shadow)
-        context.matrices.pop()
+        CobblemonUiChrome.drawSmallText(context, textRenderer, value, absoluteX, absoluteY, color, shadow)
     }
 
     private fun friendlySpecies(species: String): String = species.substringAfter(':').replace('_', ' ').replaceFirstChar { it.uppercaseChar() }
 
     private fun fit(value: String, maxWidth: Int): String {
-        if (textRenderer.getWidth(value) * TEXTURE_SCALE <= maxWidth) return value
+        if (textRenderer.getWidth(value) * CommandPostPcShell.TEXTURE_SCALE <= maxWidth) return value
         var result = value
-        while (result.length > 3 && textRenderer.getWidth("$result...") * TEXTURE_SCALE > maxWidth) {
+        while (result.length > 3 && textRenderer.getWidth("$result...") * CommandPostPcShell.TEXTURE_SCALE > maxWidth) {
             result = result.dropLast(1)
         }
         return "$result..."
@@ -677,53 +622,9 @@ class CommandPostPcScreen(
     }
 
     companion object {
-        private const val BASE_WIDTH = 349
-        private const val BASE_HEIGHT = 205
-        private const val RIGHT_PANEL_WIDTH = 82
-        private const val RIGHT_PANEL_HEIGHT = 169
-        private const val PORTRAIT_SIZE = 66
-        private const val INFO_BOX_WIDTH = 63
-        private const val INFO_BOX_HEIGHT = 69
-        private const val TEXTURE_SCALE = 0.5F
-
-        private const val STORAGE_X = 85
-        private const val STORAGE_Y = 27
-        private const val SCREEN_WIDTH = 174
-        private const val SCREEN_HEIGHT = 155
-        private const val BOX_COLUMNS = 6
-        private const val BOX_SLOT_COUNT = 30
-        private const val BOX_SLOT_START_X = 7
-        private const val BOX_SLOT_START_Y = 11
-        private const val BOX_SLOT_PADDING = 2
-        private const val STORAGE_SLOT_SIZE = 25
-
-        private const val PASTURE_X = 267
-        private const val PASTURE_Y = 8
-        private const val PASTURE_LIST_LEFT = PASTURE_X + 6
-        private const val PASTURE_LIST_TOP = PASTURE_Y + 31
-        private const val PASTURE_LIST_WIDTH = 70
-        private const val PASTURE_LIST_HEIGHT = 120
-        private const val PASTURE_SLOT_WIDTH = 62
-        private const val PASTURE_SLOT_HEIGHT = 29
-        private const val PASTURE_SLOT_SPACING = 3
-        private const val VISIBLE_PASTURE_ROWS = 4
-        private const val PASTURE_RECALL_LEFT = PASTURE_X + 6
-        private const val PASTURE_RECALL_TOP = PASTURE_Y + 153
-        private const val PASTURE_RECALL_WIDTH = 70
-        private const val PASTURE_RECALL_HEIGHT = 17
-
-        private const val PREV_LEFT = 117
-        private const val NEXT_LEFT = 220
-        private const val NAV_TOP = 16
-        private const val NAV_SIZE = 7
         private const val SOURCE_BUTTON_LEFT = 242
         private const val SOURCE_BUTTON_TOP = 186
         private const val SOURCE_BUTTON_SIZE = 8
-        private const val EXIT_LEFT = 320
-        private const val EXIT_TOP = 186
-        private const val EXIT_WIDTH = 26
-        private const val EXIT_HEIGHT = 13
-        private const val SLOT_ICON_SIZE = 7
 
         private const val MODULE_SLOT_LEFT = 14
         private const val MODULE_SLOT_TOP = 139
@@ -732,30 +633,6 @@ class CommandPostPcScreen(
         private const val HIDDEN_SLOT_X = -10_000
         private const val HIDDEN_SLOT_Y = -10_000
 
-        private val PC_BASE = cobblemon("textures/gui/pc/pc_base.png")
-        private val PORTRAIT_BACKGROUND = cobblemon("textures/gui/pc/portrait_background.png")
-        private val INFO_BOX = cobblemon("textures/gui/pc/info_box.png")
-        private val SCREEN_GRID = cobblemon("textures/gui/pc/pc_screen_grid.png")
-        private val SCREEN_OVERLAY = cobblemon("textures/gui/pc/pc_screen_overlay.png")
-        private val SCREEN_GLOW = cobblemon("textures/gui/pc/pc_screen_glow.png")
-        private val SLOT_OVERLAY = cobblemon("textures/gui/pc/pc_slot_overlay.png")
-        private val POINTER = cobblemon("textures/gui/pc/pc_pointer.png")
-        private val SLOT_PASTURE_ICON = cobblemon("textures/gui/pasture/pc_slot_icon_pasture.png")
-        private val SLOT_MOVE_ICON = cobblemon("textures/gui/pasture/pc_slot_icon_move.png")
-        private val SLOT_DEFEND_ICON = cobblemon("textures/gui/pasture/pasture_slot_icon_defend.png")
-        private val PASTURE_PANEL = cobblemon("textures/gui/pasture/pasture_panel.png")
-        private val PASTURE_SCROLL_OVERLAY = cobblemon("textures/gui/pasture/pasture_scroll_overlay.png")
-        private val PASTURE_SLOT = cobblemon("textures/gui/pasture/pasture_slot.png")
-        private val PASTURE_SLOT_OWNER = cobblemon("textures/gui/pasture/pasture_slot_owner.png")
-        private val PASTURE_BUTTON = cobblemon("textures/gui/pasture/pasture_button.png")
-        private val NAV_PREVIOUS = cobblemon("textures/gui/pc/pc_arrow_previous.png")
-        private val NAV_NEXT = cobblemon("textures/gui/pc/pc_arrow_next.png")
-        private val SOURCE_BUTTON_TEXTURE = cobblemon("textures/gui/pc/pc_icon_filter.png")
-        private val BACK_BUTTON = cobblemon("textures/gui/common/back_button.png")
-        private val BACK_BUTTON_ICON = cobblemon("textures/gui/common/back_button_icon.png")
-        private val GENDER_MALE = cobblemon("textures/gui/pc/gender_icon_male.png")
-        private val GENDER_FEMALE = cobblemon("textures/gui/pc/gender_icon_female.png")
-
-        private fun cobblemon(path: String): Identifier = Identifier.of("cobblemon", path)
+        private val SOURCE_BUTTON_TEXTURE = CommandPostPcShell.cobblemon("textures/gui/pc/pc_icon_filter.png")
     }
 }

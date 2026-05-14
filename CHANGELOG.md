@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.28
+
+- Split the Command Post PC/Pasture screen into dedicated Cobblemon-derived shell, storage, pasture, and textured button widgets instead of keeping the roster/grid anatomy buried in the screen class.
+- Moved the Command Post roster panel onto a Pasture-widget-style owner: pasture panel texture, count header, scroll overlay, recall button, row frame geometry, move/defend icons, and row hitboxes now share one derived component.
+- Moved the Party/PC source grid frame and navigation arrows onto a Storage-widget-style owner, and routed shared small text through Cobblemon's scaled text helper.
+
 ## 0.2.27
 
 - Rebuilt the Pokemon tag detail and role policy/filter screens on the Cobblemon PC shell instead of the old CobblePals tan panel theme.
