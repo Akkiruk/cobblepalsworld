@@ -169,7 +169,7 @@ class RouterScreen(
         return localMouseX in left until (left + width) && localMouseY in top until (top + height)
     }
 
-    private fun hoveredTooltip(localMouseX: Int, localMouseY: Int, jobCardCount: Int, idleCount: Int, queuedCount: Int, controllerNativeCount: Int, hint: String): HoverTooltip? {
+    private fun hoveredTooltip(localMouseX: Int, localMouseY: Int, jobCardCount: Int, idleCount: Int, queuedCount: Int, hint: String): HoverTooltip? {
         val linkChipText = if (handler.linked) Text.literal("LINKED") else Text.literal("UNLINKED")
         val chipLeft = backgroundWidth - textRenderer.getWidth(linkChipText) - 24
         val chipWidth = textRenderer.getWidth(linkChipText) + 16
@@ -197,7 +197,7 @@ class RouterScreen(
                 id = "pasture-relay",
                 lines = listOf(
                     Text.literal("Pasture Relay"),
-                    Text.literal(if (handler.linked) "This post is linked to a pasture." else if (controllerNativeCount > 0) "Worker jobs need a pasture link, but controller-native jobs still run." else "This post is not linked yet."),
+                    Text.literal(if (handler.linked) "This post is linked to a pasture." else "This post is not linked yet."),
                     Text.literal("Hover the counters for details.")
                 )
             )
@@ -324,20 +324,13 @@ class RouterScreen(
     override fun drawForeground(context: DrawContext, mouseX: Int, mouseY: Int) {
         val moduleSlots = handler.slots.take(RouterBlockEntity.MODULE_SLOT_COUNT)
         val jobCardCount = moduleSlots.count { it.hasStack() }
-        val controllerNativeCount = moduleSlots.count { slot ->
-            val item = slot.stack.item as? TagItem
-            item?.tagType?.controllerNative == true
-        }
-        val workerManagedCount = (jobCardCount - controllerNativeCount).coerceAtLeast(0)
         val idleCount = (handler.assignedCount - handler.activeCount).coerceAtLeast(0)
         val queuedCount = (jobCardCount - handler.assignedCount).coerceAtLeast(0)
         val hint = when {
             jobCardCount <= 0 -> "Insert tag cards in the jobs grid."
-            !handler.linked && workerManagedCount > 0 && controllerNativeCount > 0 -> "Link a pasture to enable $workerManagedCount worker jobs. $controllerNativeCount controller jobs still run."
-            !handler.linked && workerManagedCount > 0 -> "Sneak-use near a pasture to enable worker-managed jobs."
-            !handler.linked -> "Controller-native jobs can run without a pasture link."
-            handler.rosterCount <= 0 && workerManagedCount > 0 -> "The linked pasture has no active pals for worker-managed jobs."
-            queuedCount > 0 -> "$queuedCount worker jobs are waiting for free pals."
+            !handler.linked -> "Sneak-use near a pasture to enable installed jobs."
+            handler.rosterCount <= 0 && jobCardCount > 0 -> "The linked pasture has no active pals for installed jobs."
+            queuedCount > 0 -> "$queuedCount installed jobs are waiting for free pals."
             handler.activeCount <= 0 -> "Runnable job slots are ready and waiting for work."
             else -> "Sneak-use the block to relink it."
         }
@@ -372,24 +365,17 @@ class RouterScreen(
 
         val moduleSlots = handler.slots.take(RouterBlockEntity.MODULE_SLOT_COUNT)
         val jobCardCount = moduleSlots.count { it.hasStack() }
-        val controllerNativeCount = moduleSlots.count { slot ->
-            val item = slot.stack.item as? TagItem
-            item?.tagType?.controllerNative == true
-        }
-        val workerManagedCount = (jobCardCount - controllerNativeCount).coerceAtLeast(0)
         val idleCount = (handler.assignedCount - handler.activeCount).coerceAtLeast(0)
         val queuedCount = (jobCardCount - handler.assignedCount).coerceAtLeast(0)
         val hint = when {
             jobCardCount <= 0 -> "Insert tag cards in the jobs grid."
-            !handler.linked && workerManagedCount > 0 && controllerNativeCount > 0 -> "Link a pasture to enable $workerManagedCount worker jobs. $controllerNativeCount controller jobs still run."
-            !handler.linked && workerManagedCount > 0 -> "Sneak-use near a pasture to enable worker-managed jobs."
-            !handler.linked -> "Controller-native jobs can run without a pasture link."
-            handler.rosterCount <= 0 && workerManagedCount > 0 -> "The linked pasture has no active pals for worker-managed jobs."
-            queuedCount > 0 -> "$queuedCount worker jobs are waiting for free pals."
+            !handler.linked -> "Sneak-use near a pasture to enable installed jobs."
+            handler.rosterCount <= 0 && jobCardCount > 0 -> "The linked pasture has no active pals for installed jobs."
+            queuedCount > 0 -> "$queuedCount installed jobs are waiting for free pals."
             handler.activeCount <= 0 -> "Runnable job slots are ready and waiting for work."
             else -> "Sneak-use the block to relink it."
         }
-        val hoveredTooltip = hoveredTooltip(mouseX - x, mouseY - y, jobCardCount, idleCount, queuedCount, controllerNativeCount, hint)
+        val hoveredTooltip = hoveredTooltip(mouseX - x, mouseY - y, jobCardCount, idleCount, queuedCount, hint)
         val now = System.currentTimeMillis()
 
         if (hoveredTooltip?.id != hoveredTooltipId) {

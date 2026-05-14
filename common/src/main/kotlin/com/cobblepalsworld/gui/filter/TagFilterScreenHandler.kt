@@ -18,6 +18,8 @@ import net.minecraft.screen.ScreenHandler
 import net.minecraft.screen.slot.Slot
 import net.minecraft.screen.slot.SlotActionType
 import net.minecraft.util.Hand
+import net.minecraft.util.Formatting
+import net.minecraft.text.Text
 
 class TagFilterScreenHandler : ScreenHandler {
     private val filterInventory: SimpleInventory
@@ -27,6 +29,8 @@ class TagFilterScreenHandler : ScreenHandler {
     private val trackedSlotIndex: Int
     private var matchTags: List<String> = emptyList()
     private var matchModIds: List<String> = emptyList()
+    private var trackedTagId: String? = null
+    private var trackedRevision: Long = 0L
 
     companion object {
         private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
@@ -72,8 +76,11 @@ class TagFilterScreenHandler : ScreenHandler {
     private fun loadTrackedTag(stack: ItemStack, playerInventory: PlayerInventory) {
         if (stack.item is TagItem) {
             val registries = playerInventory.player.world.registryManager
-            val filter = TagItem.getFilter(stack, registries)
-            val settings = TagItem.getSettings(stack)
+            trackedTagId = TagItem.ensureTrackingId(stack)
+            trackedRevision = TagItem.getRevision(stack)
+            val spec = TagItem.getSpec(stack, registries)
+            val filter = spec?.filter ?: TagFilter.EMPTY
+            val settings = spec?.settings ?: TagSettings.EMPTY
             val tagType = (stack.item as TagItem).tagType
             this.matchTags = filter.matchTags
             this.matchModIds = filter.matchModIds
@@ -91,6 +98,8 @@ class TagFilterScreenHandler : ScreenHandler {
                 }
             }
         } else {
+            trackedTagId = null
+            trackedRevision = 0L
             this.matchTags = emptyList()
             this.matchModIds = emptyList()
             filterData.set(6, 64)
@@ -202,6 +211,23 @@ class TagFilterScreenHandler : ScreenHandler {
         if (!player.world.isClient && trackedInventory != null && trackedSlotIndex >= 0) {
             val stack = trackedInventory.getStack(trackedSlotIndex)
             if (!stack.isEmpty && stack.item is TagItem) {
+                if (trackedTagId != null && TagItem.getTrackingId(stack) != trackedTagId) {
+                    player.sendMessage(
+                        Text.literal("That tag moved while the editor was open. Reopen it to edit the current stack.")
+                            .formatted(Formatting.YELLOW),
+                        true
+                    )
+                    return
+                }
+                if (TagItem.getRevision(stack) != trackedRevision) {
+                    player.sendMessage(
+                        Text.literal("That tag changed while the editor was open. Reopen it to edit the latest version.")
+                            .formatted(Formatting.YELLOW),
+                        true
+                    )
+                    return
+                }
+
                 val filter = if (usesFilter) {
                     val items = (0 until TagFilter.MAX_FILTER_SLOTS)
                         .map { filterInventory.getStack(it) }
@@ -210,15 +236,15 @@ class TagFilterScreenHandler : ScreenHandler {
                 } else {
                     TagFilter.EMPTY
                 }
-                val existingSettings = TagItem.getSettings(stack)
-                val settings = existingSettings.copy(
+                val spec = TagItem.getSpec(stack, player.world.registryManager) ?: return
+                val settings = spec.settings.copy(
                     targetStrategy = targetStrategy,
                     redstoneMode = redstoneMode,
                     regulatorAmount = regulatorAmount,
                     terminateAfterSuccess = terminateAfterSuccess
                 )
-                TagItem.setFilter(stack, filter, player.world.registryManager)
-                TagItem.setSettings(stack, settings)
+                TagItem.setSpec(stack, spec.copy(filter = filter, settings = settings), player.world.registryManager)
+                trackedInventory.markDirty()
             }
         }
     }

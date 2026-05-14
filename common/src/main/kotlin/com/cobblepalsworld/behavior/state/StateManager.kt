@@ -1,34 +1,24 @@
 package com.cobblepalsworld.behavior.state
 
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import com.cobblepalsworld.session.WorkerSessionManager
 
 object StateManager {
-    private val states = ConcurrentHashMap<UUID, WorkerState>()
-
     fun getOrCreate(pokemonId: UUID): WorkerState {
-        return states.getOrPut(pokemonId) { WorkerState(pokemonId) }
+        return WorkerSessionManager.getOrCreateState(pokemonId)
     }
 
-    fun get(pokemonId: UUID): WorkerState? = states[pokemonId]
+    fun get(pokemonId: UUID): WorkerState? = WorkerSessionManager.getState(pokemonId)
 
     fun pruneStale(currentTime: Long, staleAfterTicks: Long): Set<UUID> {
-        val removed = mutableSetOf<UUID>()
-        states.entries.removeIf { (pokemonId, state) ->
-            val isStale = state.lastSeenTick > 0L && currentTime - state.lastSeenTick > staleAfterTicks
-            if (isStale) {
-                removed += pokemonId
-            }
-            isStale
-        }
-        return removed
+        return WorkerSessionManager.pruneStaleRuntime(currentTime, staleAfterTicks)
     }
 
     fun remove(pokemonId: UUID) {
-        states.remove(pokemonId)
+        WorkerSessionManager.removeState(pokemonId)
     }
 
-    fun count(): Int = states.size
+    fun count(): Int = WorkerSessionManager.countStates()
 
-    fun clear() = states.clear()
+    fun clear() = WorkerSessionManager.clearStates()
 }

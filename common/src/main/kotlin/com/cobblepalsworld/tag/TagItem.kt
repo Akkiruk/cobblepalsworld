@@ -1,5 +1,6 @@
 package com.cobblepalsworld.tag
 
+import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.tag.filter.FilterSerializer
 import com.cobblepalsworld.tag.filter.TagFilter
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
@@ -20,6 +21,7 @@ import net.minecraft.util.Hand
 import net.minecraft.util.TypedActionResult
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
+import java.util.UUID
 
 class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boolean = true) : Item(settings) {
 
@@ -38,6 +40,62 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
         private const val KEY_PENDING_AREA_Y = "PendingAreaY"
         private const val KEY_PENDING_AREA_Z = "PendingAreaZ"
         private const val KEY_SETTINGS = "TagSettings"
+        private const val KEY_REVISION = "TagRevision"
+        private const val KEY_TRACKING_ID = "TagTrackingId"
+
+        fun getRevision(stack: ItemStack): Long {
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: return 0L
+            return if (nbt.contains(KEY_REVISION)) nbt.getLong(KEY_REVISION) else 0L
+        }
+
+        fun getTrackingId(stack: ItemStack): String? {
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: return null
+            return if (nbt.contains(KEY_TRACKING_ID)) nbt.getString(KEY_TRACKING_ID) else null
+        }
+
+        fun ensureTrackingId(stack: ItemStack): String {
+            getTrackingId(stack)?.let { return it }
+
+            val trackingId = UUID.randomUUID().toString()
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: NbtCompound()
+            nbt.putString(KEY_TRACKING_ID, trackingId)
+            stack.set(
+                net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
+                net.minecraft.component.type.NbtComponent.of(nbt)
+            )
+            return trackingId
+        }
+
+        fun getSpec(stack: ItemStack, registries: RegistryWrapper.WrapperLookup): TagSpec? {
+            val tagItem = stack.item as? TagItem ?: return null
+            return TagSpec(
+                type = tagItem.tagType,
+                filter = getFilter(stack, registries),
+                boundPos = getBoundPos(stack),
+                boundArea = getBoundArea(stack),
+                settings = getSettings(stack)
+            )
+        }
+
+        fun setSpec(stack: ItemStack, spec: TagSpec, registries: RegistryWrapper.WrapperLookup) {
+            setFilter(stack, spec.filter, registries)
+            clearBinding(stack)
+            spec.boundArea?.let { setBoundArea(stack, it) } ?: spec.boundPos?.let { setBoundPos(stack, it) }
+            setSettings(stack, spec.settings)
+        }
+
+        fun toTagInstance(
+            stack: ItemStack,
+            registries: RegistryWrapper.WrapperLookup,
+            augments: AugmentSet = AugmentSet.EMPTY,
+            controllerPos: BlockPos? = null
+        ): TagInstance? {
+            val spec = getSpec(stack, registries) ?: return null
+            return spec.toTagInstance(augments = augments, controllerPos = controllerPos)
+        }
 
         fun getFilter(stack: ItemStack, registries: RegistryWrapper.WrapperLookup): TagFilter {
             val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
@@ -54,6 +112,7 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
                 net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
                 net.minecraft.component.type.NbtComponent.of(nbt)
             )
+            bumpRevision(stack)
         }
 
         fun getBoundPos(stack: ItemStack): BlockPos? {
@@ -73,6 +132,7 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
                 net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
                 net.minecraft.component.type.NbtComponent.of(nbt)
             )
+            bumpRevision(stack)
         }
 
         fun clearBoundPos(stack: ItemStack) {
@@ -120,6 +180,7 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
                 net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
                 net.minecraft.component.type.NbtComponent.of(nbt)
             )
+            bumpRevision(stack)
         }
 
         fun getPendingAreaStart(stack: ItemStack): BlockPos? {
@@ -182,6 +243,7 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
                     net.minecraft.component.type.NbtComponent.of(nbt)
                 )
             }
+            bumpRevision(stack)
         }
 
         fun getSettings(stack: ItemStack): TagSettings {
@@ -195,6 +257,17 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
             val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
                 ?.copyNbt() ?: NbtCompound()
             nbt.put(KEY_SETTINGS, TagSettingsSerializer.toNbt(settings))
+            stack.set(
+                net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
+                net.minecraft.component.type.NbtComponent.of(nbt)
+            )
+            bumpRevision(stack)
+        }
+
+        private fun bumpRevision(stack: ItemStack) {
+            val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
+                ?.copyNbt() ?: NbtCompound()
+            nbt.putLong(KEY_REVISION, nbt.getLong(KEY_REVISION) + 1L)
             stack.set(
                 net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
                 net.minecraft.component.type.NbtComponent.of(nbt)

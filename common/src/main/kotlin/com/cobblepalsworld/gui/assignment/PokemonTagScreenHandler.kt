@@ -12,6 +12,7 @@ import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagRegistry
+import com.cobblepalsworld.tag.toSpec
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.inventory.SimpleInventory
@@ -93,10 +94,7 @@ class PokemonTagScreenHandler : ScreenHandler {
             val item = TagRegistry.getItem(existing.type)
             if (item != null) {
                 val stack = ItemStack(item)
-                TagItem.setFilter(stack, existing.filter, playerInventory.player.world.registryManager)
-                existing.boundPos?.let { TagItem.setBoundPos(stack, it) }
-                existing.boundArea?.let { TagItem.setBoundArea(stack, it) }
-                TagItem.setSettings(stack, existing.settings)
+                TagItem.setSpec(stack, existing.toSpec(), playerInventory.player.world.registryManager)
                 tagInventory.setStack(0, stack)
             }
             for ((i, entry) in collapseAugmentsForDisplay(existing.augments).withIndex()) {
@@ -201,22 +199,11 @@ class PokemonTagScreenHandler : ScreenHandler {
                 if (normalizedStack.item !== stack.item) {
                     tagInventory.setStack(0, normalizedStack)
                 }
-                val tagItem = normalizedStack.item as TagItem
-                val filter = TagItem.getFilter(normalizedStack, player.world.registryManager)
-                val boundPos = TagItem.getBoundPos(normalizedStack)
-                val boundArea = TagItem.getBoundArea(normalizedStack)
+                val spec = TagItem.getSpec(normalizedStack, player.world.registryManager) ?: return
                 val augments = readAugmentsFromSlots()
-                val settings = TagItem.getSettings(normalizedStack)
 
                 val oldTag = TagAssignmentManager.get(currentPokemonId)
-                val newTag = TagInstance(
-                    type = tagItem.tagType,
-                    filter = filter,
-                    boundPos = boundPos,
-                    boundArea = boundArea,
-                    augments = augments,
-                    settings = settings
-                )
+                val newTag = spec.toTagInstance(augments = augments)
 
                 // If tag type changed or was re-configured, clean up old work state
                 if (oldTag != null && (oldTag.type != newTag.type || oldTag != newTag)) {

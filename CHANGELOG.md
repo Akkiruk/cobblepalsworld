@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.30
+
+- Removed the dormant controller-native execution branch entirely so Command Post jobs now have one worker-led runtime instead of a half-dead second scheduler and UI state model.
+- Simplified Command Post routing, pasture ticking, and status messaging around the real rule set: installed jobs need a linked pasture and active pals, with no hidden exception path.
+- Kept the new session/spec architecture from 0.1.29 and finished the cleanup by deleting the unused router-native executor instead of leaving dead code behind.
+
+## 0.1.29
+
+- Rebuilt CobblePals' runtime authority around one shared worker-session store so assignments, carried inventories, and live worker state now travel through one canonical model instead of three parallel managers.
+- Added a shared tag-spec layer and routed the Command Post, Pokemon assignment screen, and tag editor through it so tag config is no longer rebuilt field-by-field in different UI paths.
+- Hardened slot-based tag editing with stack identity and revision checks, stopped saving Command Post worker-slot runtime into block NBT, and made controller-owned cleanup try to return carried items to the Command Post buffer before dropping anything.
+
 ## 0.1.28
 
 - Moved CobblePals persistence onto one server-wide save authority so assignments and carried inventories no longer fight per-dimension state files or risk being wiped during shutdown.

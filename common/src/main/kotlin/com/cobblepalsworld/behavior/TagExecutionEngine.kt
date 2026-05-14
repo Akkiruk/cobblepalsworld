@@ -13,14 +13,17 @@ import com.cobblepalsworld.behavior.behaviors.GuardianBehavior
 import com.cobblepalsworld.behavior.behaviors.SenderBehavior
 import com.cobblepalsworld.behavior.behaviors.ShepherdBehavior
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.ContainerFinder
 import com.cobblepalsworld.navigation.NavigationHelper
 import com.cobblepalsworld.pasture.PastureWorkerManager
+import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.RedstoneControlMode
 import com.cobblepalsworld.visual.WorkVisualHandler
+import net.minecraft.inventory.Inventory
 import net.minecraft.item.ItemStack
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
@@ -122,19 +125,9 @@ object TagExecutionEngine {
     fun cleanup(pokemonId: java.util.UUID, world: World? = null, pos: BlockPos? = null) {
         cleanupRuntimeOnly(pokemonId)
 
-        // Drop carried items instead of deleting them
         val inventory = InventoryManager.remove(pokemonId)
         if (inventory != null && world != null && pos != null) {
-            for (slot in 0 until inventory.size()) {
-                val stack = inventory.getStack(slot)
-                if (!stack.isEmpty) {
-                    net.minecraft.entity.ItemEntity(
-                        world,
-                        pos.x + 0.5, pos.y + 1.0, pos.z + 0.5,
-                        stack
-                    ).also { world.spawnEntity(it) }
-                }
-            }
+            recoverCarriedInventory(pokemonId, world, pos, inventory)
             PastureWorkerManager.markDirtyNow(world)
         }
     }
@@ -163,6 +156,59 @@ object TagExecutionEngine {
         SenderBehavior.clearAllRuntimeState()
         DistributorBehavior.clearAllRuntimeState()
         ShepherdBehavior.clearAllRuntimeState()
+    }
+
+    private fun recoverCarriedInventory(pokemonId: java.util.UUID, world: World, pos: BlockPos, inventory: PokemonInventory) {
+        val recoveryTargets = buildList {
+            val dimensionId = world.registryKey.value.toString()
+            TagAssignmentManager.getView(pokemonId)?.controllerBinding
+                ?.takeIf { it.dimensionId == dimensionId }
+                ?.pos
+                ?.toImmutable()
+                ?.let { add(it) }
+
+            if (ContainerFinder.getInventoryAt(world, pos) != null) {
+                val fallbackPos = pos.toImmutable()
+                if (fallbackPos !in this) {
+                    add(fallbackPos)
+                }
+            }
+        }
+
+        recoveryTargets.forEach { targetPos ->
+            val targetInventory = ContainerFinder.getInventoryAt(world, targetPos) ?: return@forEach
+            depositInventory(targetInventory, inventory)
+            targetInventory.markDirty()
+            if (inventory.isEmpty) {
+                return
+            }
+        }
+
+        dropRemainingInventory(world, pos, inventory)
+    }
+
+    private fun depositInventory(target: Inventory, source: PokemonInventory) {
+        for (slot in 0 until source.size()) {
+            val stack = source.getStack(slot)
+            if (stack.isEmpty) continue
+
+            val remaining = ContainerFinder.insertStack(target, stack.copy())
+            source.setStack(slot, remaining)
+        }
+    }
+
+    private fun dropRemainingInventory(world: World, pos: BlockPos, inventory: PokemonInventory) {
+        for (slot in 0 until inventory.size()) {
+            val stack = inventory.getStack(slot)
+            if (stack.isEmpty) continue
+
+            net.minecraft.entity.ItemEntity(
+                world,
+                pos.x + 0.5, pos.y + 1.0, pos.z + 0.5,
+                stack
+            ).also { world.spawnEntity(it) }
+            inventory.setStack(slot, ItemStack.EMPTY)
+        }
     }
 
     private fun passesRedstoneGate(world: World, origin: BlockPos, tag: TagInstance, state: WorkerState): Boolean {

@@ -81,10 +81,12 @@ class PokemonTagScreen(
         val tagStack = handler.slots[PokemonTagScreenHandler.TAG_SLOT].stack
         if (!tagStack.isEmpty && tagStack.item is TagItem) {
             val tagItem = tagStack.item as TagItem
+            val registries = client!!.world?.registryManager
+            val spec = registries?.let { TagItem.getSpec(tagStack, it) }
 
             if (tagItem.tagType.supportsBinding) {
-                val boundArea = TagItem.getBoundArea(tagStack)
-                val boundPos = TagItem.getBoundPos(tagStack)
+                val boundArea = spec?.boundArea
+                val boundPos = spec?.boundPos
                 if (boundArea != null) {
                     context.drawText(textRenderer, Text.literal("${boundArea.width()}x${boundArea.depth()}"), sx, sy, 0x50C864, false)
                     context.drawText(textRenderer, Text.literal("area"), sx, sy + 9, 0x50C864, false)
@@ -100,9 +102,8 @@ class PokemonTagScreen(
                 sy += 11
             }
 
-            val registries = client!!.world?.registryManager
-            if (registries != null) {
-                val filter = TagItem.getFilter(tagStack, registries)
+            if (spec != null) {
+                val filter = spec.filter
                 val filterText = if (filter.items.isEmpty()) {
                     if (filter.whitelist) "Allow none" else "Allow all"
                 } else {
@@ -110,7 +111,7 @@ class PokemonTagScreen(
                 }
                 context.drawText(textRenderer, Text.literal(filterText), sx, sy, 0x707078, false)
 
-                val settings = TagItem.getSettings(tagStack)
+                val settings = spec.settings
                 val statusText = when {
                     settings.redstoneMode != RedstoneControlMode.ALWAYS -> compactValue(settings.redstoneMode.id)
                     tagItem.tagType.supportsTargetList -> compactValue(settings.targetStrategy.id)

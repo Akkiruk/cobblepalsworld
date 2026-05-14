@@ -100,13 +100,6 @@ object PastureWorkerManager {
 
             val tag = TagAssignmentManager.get(pokemon.uuid)
             if (tag != null) {
-                if (TagAssignmentManager.getControllerBinding(pokemon.uuid) != null && tag.type.controllerNative) {
-                    if (StateManager.get(pokemon.uuid) != null || InventoryManager.get(pokemon.uuid) != null) {
-                        TagExecutionEngine.cleanup(pokemon.uuid, world, pos)
-                    }
-                    tickIdleWander(world, entity, pos)
-                    continue
-                }
                 if (workerCount >= maxWorkers) continue
                 try {
                     TagExecutionEngine.tick(world, entity, pokemon, tag, pos)

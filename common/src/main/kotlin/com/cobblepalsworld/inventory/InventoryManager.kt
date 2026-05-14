@@ -1,57 +1,29 @@
 package com.cobblepalsworld.inventory
 
 import com.cobblemon.mod.common.pokemon.Pokemon
+import com.cobblepalsworld.session.WorkerSessionManager
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 object InventoryManager {
-    private val inventories = ConcurrentHashMap<UUID, PokemonInventory>()
-
     fun getOrCreate(pokemon: Pokemon): PokemonInventory {
-        val current = inventories[pokemon.uuid]
-        val desiredSlots = InventorySizeCalculator.calculate(pokemon)
-        if (current == null) {
-            return PokemonInventory(pokemon.uuid, desiredSlots).also { inventories[pokemon.uuid] = it }
-        }
-
-        if (desiredSlots == current.size()) {
-            return current
-        }
-
-        val resized = resizeInventory(pokemon.uuid, current, desiredSlots) ?: return current
-        inventories[pokemon.uuid] = resized
-        return resized
+        return WorkerSessionManager.getOrCreateInventory(pokemon)
     }
 
-    fun get(pokemonId: UUID): PokemonInventory? = inventories[pokemonId]
+    fun get(pokemonId: UUID): PokemonInventory? = WorkerSessionManager.getInventory(pokemonId)
 
-    fun remove(pokemonId: UUID): PokemonInventory? = inventories.remove(pokemonId)
+    fun remove(pokemonId: UUID): PokemonInventory? = WorkerSessionManager.removeInventory(pokemonId)
 
     fun put(pokemonId: UUID, inventory: PokemonInventory) {
-        inventories[pokemonId] = inventory
+        WorkerSessionManager.putInventory(pokemonId, inventory)
     }
 
-    fun count(): Int = inventories.size
+    fun count(): Int = WorkerSessionManager.countInventories()
 
-    fun forEach(action: (UUID, PokemonInventory) -> Unit) = inventories.forEach(action)
+    fun forEach(action: (UUID, PokemonInventory) -> Unit) = WorkerSessionManager.forEachInventory(action)
 
     fun pruneStale(shouldKeep: (UUID, PokemonInventory) -> Boolean) {
-        inventories.entries.removeIf { (pokemonId, inventory) -> !shouldKeep(pokemonId, inventory) }
+        WorkerSessionManager.pruneInventories(shouldKeep)
     }
 
-    fun clear() = inventories.clear()
-
-    private fun resizeInventory(pokemonId: UUID, current: PokemonInventory, desiredSlots: Int): PokemonInventory? {
-        val resized = PokemonInventory(pokemonId, desiredSlots)
-        for (slot in 0 until current.size()) {
-            val stack = current.getStack(slot)
-            if (stack.isEmpty) continue
-
-            val remainder = resized.insertStack(stack.copy())
-            if (!remainder.isEmpty) {
-                return null
-            }
-        }
-        return resized
-    }
+    fun clear() = WorkerSessionManager.clearInventories()
 }

@@ -154,16 +154,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
 
     fun tagInModuleSlot(index: Int, registries: RegistryWrapper.WrapperLookup, augments: AugmentSet): TagInstance? {
         val stack = TagRegistry.normalizeInventorySlot(this, MODULE_SLOT_START + index)
-        val item = stack.item as? TagItem ?: return null
-        return TagInstance(
-            type = item.tagType,
-            filter = TagItem.getFilter(stack, registries),
-            boundPos = TagItem.getBoundPos(stack),
-            boundArea = TagItem.getBoundArea(stack),
-            controllerPos = pos.toImmutable(),
-            augments = augments,
-            settings = TagItem.getSettings(stack)
-        )
+        return TagItem.toTagInstance(stack, registries, augments = augments, controllerPos = pos.toImmutable())
     }
 
     fun storageInventory(): Inventory = storageInventoryView
@@ -316,8 +307,8 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         val controlled = TagAssignmentManager.findControlledBy(dimensionId, pos)
         var changed = false
         controlled.forEach { pokemonId ->
+            com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(pokemonId, world, cleanupPos)
             if (TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, pos) != null) {
-                com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(pokemonId, world, cleanupPos)
                 changed = true
             }
         }
@@ -368,16 +359,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
             }
         }
 
-        val assignedNbt = NbtList()
-        assignedWorkers.forEachIndexed { index, pokemonId ->
-            if (pokemonId == null) return@forEachIndexed
-            val entry = NbtCompound()
-            entry.putInt("Slot", index)
-            entry.putUuid("Pokemon", pokemonId)
-            assignedNbt.add(entry)
-        }
-        nbt.put("AssignedWorkers", assignedNbt)
-
         val items = NbtList()
         for (slot in 0 until TOTAL_SLOTS) {
             val stack = getStack(slot)
@@ -407,13 +388,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         }
         assignedWorkers.fill(null)
         clearAllModuleRuntime()
-        val assignedNbt = nbt.getList("AssignedWorkers", 10)
-        for (index in 0 until assignedNbt.size) {
-            val entry = assignedNbt.getCompound(index)
-            val slot = entry.getInt("Slot")
-            if (slot !in 0 until MODULE_SLOT_COUNT || !entry.containsUuid("Pokemon")) continue
-            assignedWorkers[slot] = entry.getUuid("Pokemon")
-        }
         linkedWorkerCount = 0
         assignedWorkerCount = 0
         activeWorkerCount = 0

@@ -1,9 +1,9 @@
 package com.cobblepalsworld.pasture
 
 import com.cobblepalsworld.tag.TagInstance
+import com.cobblepalsworld.session.WorkerSessionManager
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 data class PastureBinding(val dimensionId: String, val pos: BlockPos)
 data class ControllerBinding(val dimensionId: String, val pos: BlockPos)
@@ -14,95 +14,54 @@ data class AssignmentView(
     val controllerBinding: ControllerBinding?
 )
 
-private data class AssignmentRecord(
-    val tag: TagInstance,
-    val pastureBinding: PastureBinding? = null,
-    val controllerBinding: ControllerBinding? = null
-)
-
 object TagAssignmentManager {
-    private val assignments = ConcurrentHashMap<UUID, AssignmentRecord>()
-
     fun assign(pokemonId: UUID, tag: TagInstance) {
-        val normalizedTag = tag.copy(controllerPos = null)
-        val existing = assignments[pokemonId]
-        assignments[pokemonId] = if (existing == null) {
-            AssignmentRecord(normalizedTag)
-        } else {
-            existing.copy(tag = normalizedTag, controllerBinding = null)
-        }
+        WorkerSessionManager.assign(pokemonId, tag)
     }
 
     fun assignFromController(pokemonId: UUID, tag: TagInstance, dimensionId: String, pos: BlockPos) {
-        val controllerPos = pos.toImmutable()
-        val normalizedTag = tag.copy(controllerPos = controllerPos)
-        val existing = assignments[pokemonId]
-        val controllerBinding = ControllerBinding(dimensionId, controllerPos)
-        assignments[pokemonId] = if (existing == null) {
-            AssignmentRecord(normalizedTag, controllerBinding = controllerBinding)
-        } else {
-            existing.copy(tag = normalizedTag, controllerBinding = controllerBinding)
-        }
+        WorkerSessionManager.assignFromController(pokemonId, tag, dimensionId, pos)
     }
 
     fun associateWithPasture(pokemonId: UUID, dimensionId: String, pos: BlockPos) {
-        assignments.computeIfPresent(pokemonId) { _, existing ->
-            existing.copy(pastureBinding = PastureBinding(dimensionId, pos.toImmutable()))
-        }
+        WorkerSessionManager.associateWithPasture(pokemonId, dimensionId, pos)
     }
 
     fun findOrphansAt(dimensionId: String, pos: BlockPos, currentIds: Set<UUID>): Set<UUID> {
-        return assignments.entries.asSequence()
-            .filter { (pokemonId, record) ->
-                val binding = record.pastureBinding
-                binding != null && binding.dimensionId == dimensionId && binding.pos == pos && pokemonId !in currentIds
-            }
-            .map { it.key }
-            .toSet()
+        return WorkerSessionManager.findOrphansAt(dimensionId, pos, currentIds)
     }
 
-    fun get(pokemonId: UUID): TagInstance? = assignments[pokemonId]?.tag
+    fun get(pokemonId: UUID): TagInstance? = WorkerSessionManager.getAssignment(pokemonId)
 
     fun getView(pokemonId: UUID): AssignmentView? {
-        val record = assignments[pokemonId] ?: return null
-        return AssignmentView(record.tag, record.pastureBinding, record.controllerBinding)
+        return WorkerSessionManager.getAssignmentView(pokemonId)
     }
 
-    fun getControllerBinding(pokemonId: UUID): ControllerBinding? = assignments[pokemonId]?.controllerBinding
+    fun getControllerBinding(pokemonId: UUID): ControllerBinding? = WorkerSessionManager.getControllerBinding(pokemonId)
 
     fun isControlledBy(pokemonId: UUID, dimensionId: String, pos: BlockPos): Boolean {
-        val binding = assignments[pokemonId]?.controllerBinding ?: return false
-        return binding.dimensionId == dimensionId && binding.pos == pos
+        return WorkerSessionManager.isControlledBy(pokemonId, dimensionId, pos)
     }
 
     fun findControlledBy(dimensionId: String, pos: BlockPos): Set<UUID> {
-        return assignments.entries.asSequence()
-            .filter { (_, record) ->
-                val binding = record.controllerBinding
-                binding != null && binding.dimensionId == dimensionId && binding.pos == pos
-            }
-            .map { it.key }
-            .toSet()
+        return WorkerSessionManager.findControlledBy(dimensionId, pos)
     }
 
     fun removeIfControlledBy(pokemonId: UUID, dimensionId: String, pos: BlockPos): TagInstance? {
-        val record = assignments[pokemonId] ?: return null
-        val binding = record.controllerBinding ?: return null
-        if (binding.dimensionId != dimensionId || binding.pos != pos) return null
-        return assignments.remove(pokemonId)?.tag
+        return WorkerSessionManager.removeIfControlledBy(pokemonId, dimensionId, pos)
     }
 
-    fun remove(pokemonId: UUID): TagInstance? = assignments.remove(pokemonId)?.tag
+    fun remove(pokemonId: UUID): TagInstance? = WorkerSessionManager.removeAssignment(pokemonId)
 
-    fun has(pokemonId: UUID): Boolean = assignments.containsKey(pokemonId)
+    fun has(pokemonId: UUID): Boolean = WorkerSessionManager.hasAssignment(pokemonId)
 
-    fun count(): Int = assignments.size
+    fun count(): Int = WorkerSessionManager.countAssignments()
 
-    fun forEach(action: (UUID, TagInstance) -> Unit) = assignments.forEach { uuid, record -> action(uuid, record.tag) }
+    fun forEach(action: (UUID, TagInstance) -> Unit) = WorkerSessionManager.forEachAssignment(action)
 
     fun forEachRecord(action: (UUID, TagInstance, PastureBinding?, ControllerBinding?) -> Unit) {
-        assignments.forEach { uuid, record -> action(uuid, record.tag, record.pastureBinding, record.controllerBinding) }
+        WorkerSessionManager.forEachAssignmentRecord(action)
     }
 
-    fun clear() = assignments.clear()
+    fun clear() = WorkerSessionManager.clearAssignments()
 }

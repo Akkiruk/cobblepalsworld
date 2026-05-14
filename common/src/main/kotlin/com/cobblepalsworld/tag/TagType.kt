@@ -26,7 +26,6 @@ enum class TagType(
     val bindingMode: BindingMode = BindingMode.NONE,
     val usesFilter: Boolean = true,
     val supportsTargetList: Boolean = false,
-    val controllerNative: Boolean = false,
     val description: String,
     val color: Formatting = Formatting.WHITE,
     val arrivalParticle: ParticleEffect = ParticleTypes.HAPPY_VILLAGER,
