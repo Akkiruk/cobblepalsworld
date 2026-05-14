@@ -2,6 +2,7 @@ package com.cobblepalsworld.networking
 
 import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.api.storage.pc.POKEMON_PER_BOX
+import com.cobblemon.mod.common.api.storage.party.PartyPosition
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
@@ -466,14 +467,20 @@ object CobblePalsNetworking {
         val changed = if (addToCrew) {
             val pokemon = locatedPokemon.pokemon
             if (pokemon.isFainted()) return
+            if (CommandPostCrewManager.bindingFor(pokemonId) != null) return
+            val crewSource = if (locatedPokemon.sourceType == CrewSourceType.PARTY) {
+                movePartyPokemonToPc(player, locatedPokemon) ?: return
+            } else {
+                locatedPokemon
+            }
             CommandPostCrewManager.assign(
                 pokemonId = pokemonId,
                 ownerUuid = player.uuid,
                 dimensionId = dimensionId,
                 pos = controllerPos,
-                sourceType = locatedPokemon.sourceType.name,
-                boxIndex = locatedPokemon.boxIndex,
-                slotIndex = locatedPokemon.slotIndex,
+                sourceType = crewSource.sourceType.name,
+                boxIndex = crewSource.boxIndex,
+                slotIndex = crewSource.slotIndex,
                 displayName = pokemon.getDisplayName(false).string,
                 species = pokemon.species.name,
                 level = pokemon.level
@@ -495,6 +502,20 @@ object CobblePalsNetworking {
         }
         handleCommandPostCrewRequest(player, controllerPos)
         handleCrewSourceRequest(player, controllerPos)
+    }
+
+    private fun movePartyPokemonToPc(player: ServerPlayerEntity, locatedPokemon: LocatedPokemon): LocatedPokemon? {
+        val registries = player.server.registryManager
+        val storage = Cobblemon.storage
+        val party = storage.getParty(player.uuid, registries)
+        val pc = storage.getPC(player.uuid, registries)
+        val pokemon = party.get(locatedPokemon.slotIndex) ?: return null
+        if (pokemon.uuid != locatedPokemon.pokemon.uuid) return null
+        if (party.filterNotNull().size == 1 && Cobblemon.config.preventCompletePartyDeposit) return null
+        val pcPosition = pc.getFirstAvailablePosition() ?: return null
+        party.remove(PartyPosition(locatedPokemon.slotIndex))
+        pc[pcPosition] = pokemon
+        return LocatedPokemon(pokemon, CrewSourceType.PC, pcPosition.box, pcPosition.slot)
     }
 
     private fun handleReturnCrewHome(player: ServerPlayerEntity, routerPos: BlockPos, pokemonId: UUID) {

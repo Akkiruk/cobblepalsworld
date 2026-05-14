@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.22
+
+- Changed Command Post crew assignment from Party so selected Pokemon are moved out of the active Party into the owner's PC before the Command Post lease is created.
+- Stored the new PC box/slot coordinates on Party-origin crew leases so the Command Post roster and source picker reflect the Pokemon's real Cobblemon storage location.
+- Preserved Cobblemon's complete-party-deposit and PC-space safeguards when assigning Party Pokemon to a Command Post.
+
 ## 0.2.21
 
 - Rebuilt the Command Post crew-source packet model around fixed Party slots and PC box slots, including empty slots, box labels, and real slot coordinates.
