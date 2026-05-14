@@ -5,7 +5,12 @@ import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.navigation.SafePositionResolver
+import com.cobblepalsworld.router.RouterBlockEntity
+import net.minecraft.registry.RegistryKey
+import net.minecraft.registry.RegistryKeys
+import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
+import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Vec3d
 import java.util.UUID
@@ -49,6 +54,16 @@ object CommandPostCrewLifecycle {
         val pokemon = resolvePokemon(world, member, fallbackOwnerUuid) ?: return
         if (pokemon.entity != null) {
             pokemon.tryRecallWithAnimation()
+        }
+    }
+
+    fun recallAll(server: MinecraftServer) {
+        CommandPostCrewManager.forEachPost { binding, members ->
+            val world = server.getWorld(RegistryKey.of(RegistryKeys.WORLD, Identifier.of(binding.dimensionId))) ?: return@forEachPost
+            val fallbackOwnerUuid = (world.getBlockEntity(binding.pos) as? RouterBlockEntity)?.ownerUuid()
+            members.forEach { member ->
+                recall(world, member, fallbackOwnerUuid)
+            }
         }
     }
 

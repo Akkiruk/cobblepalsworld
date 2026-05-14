@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.18
+
+- Added a native Command Post crew server-stop recall pass so locally managed workers are recalled before shared runtime state is reset during shutdown.
+
 ## 0.2.17
 
 - Finished the Command Post Crew tab cutover to native roster snapshots for filtering, paging, selection, details, and tooltips instead of falling back to old pasture snapshots.
