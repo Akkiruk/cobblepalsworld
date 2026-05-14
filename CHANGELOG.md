@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.33
+
+- Added editable Command Post page background PNGs for Jobs, Policy, and Logistics so non-Pokemon screens no longer have to share the plain PC grid asset.
+- Wired the Jobs, Policy, and Logistics screens to use their own CobblePals World textures while the Party/PC source page continues using Cobblemon's native PC screen grid.
+
 ## 0.2.32
 
 - Fixed Command Post PC render artifacts by hiding vanilla handled slots in Source mode and only enabling real item slots in the modes that need inventory interaction.

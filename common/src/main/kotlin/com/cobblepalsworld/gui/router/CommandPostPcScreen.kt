@@ -636,7 +636,17 @@ class CommandPostPcScreen(
     }
 
     private fun drawOperationalFrame(context: DrawContext, title: String) {
-        CommandPostStorageWidget.drawFrame(context, x, y)
+        val background = when (commandMode) {
+            CommandPostMode.JOBS -> CommandPostStorageWidget.JOBS_BACKGROUND
+            CommandPostMode.POLICY -> CommandPostStorageWidget.POLICY_BACKGROUND
+            CommandPostMode.LOGISTICS -> CommandPostStorageWidget.LOGISTICS_BACKGROUND
+            CommandPostMode.SOURCE -> null
+        }
+        if (background == null) {
+            CommandPostStorageWidget.drawFrame(context, x, y)
+        } else {
+            CommandPostStorageWidget.drawFrame(context, x, y, background)
+        }
         CommandPostStorageWidget.drawTitle(context, textRenderer, x, y, title)
     }
 
