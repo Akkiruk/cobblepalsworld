@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.25
+
+- Added a root `LICENSE` file and formally locked the entire CobblePals World project to MPL 2.0 going forward.
+- Kept Fabric and NeoForge metadata aligned with the project-wide MPL 2.0 license declaration.
+
 ## 0.2.24
 
 - Reworked the Command Post shell, tabs, panels, slots, chips, and roster/detail surfaces around a warmer Cobblemon pasture/PC-style visual language.
