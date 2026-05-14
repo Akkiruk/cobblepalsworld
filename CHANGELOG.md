@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.27
+
+- Rebuilt the Pokemon tag detail and role policy/filter screens on the Cobblemon PC shell instead of the old CobblePals tan panel theme.
+- Added shared Cobblemon-derived UI chrome for detached screens, including PC base, storage screen, pasture side panel, textured buttons, slot overlays, back button, and Cobblemon PC click sounds.
+- Surfaced behavior settings from the tag gameplay audit directly in normal role views, including signal mode, target order, run mode, regulator count, filter mode, NBT mode, and match mode.
+- Removed the now-unused CobblePals custom theme and pixel-glyph button helpers so new UI work continues from Cobblemon anatomy.
+
 ## 0.2.26
 
 - Replaced the Command Post dashboard with a Command Post-owned Cobblemon PC/Pasture-style screen using Cobblemon PC shell, storage grid, pasture panel, slot overlays, pointer hover, textured buttons, sounds, and real Pokemon model rendering.
