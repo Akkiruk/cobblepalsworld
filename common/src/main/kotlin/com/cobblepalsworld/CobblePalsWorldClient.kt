@@ -7,7 +7,7 @@ import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
 import com.cobblepalsworld.gui.filter.TagFilterScreen
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
-import com.cobblepalsworld.gui.router.RouterScreen
+import com.cobblepalsworld.gui.router.CommandPostPcScreen
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.visual.WorkerOverlayRenderer
@@ -22,7 +22,7 @@ object CobblePalsWorldClient {
             PokemonTagScreen(handler, inv, title)
         }
         MenuRegistry.registerScreenFactory(MenuTypes.ROUTER.get()) { handler: RouterScreenHandler, inv, title ->
-            RouterScreen(handler, inv, title)
+            CommandPostPcScreen(handler, inv, title)
         }
 
         CobblePalsNetworking.registerClient(

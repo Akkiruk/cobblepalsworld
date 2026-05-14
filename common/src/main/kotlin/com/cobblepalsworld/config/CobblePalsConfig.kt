@@ -61,19 +61,7 @@ data class CobblePalsConfig(
     fun getTagConfig(type: TagType): TagConfig {
         val direct = tags[type.id]
         if (direct != null) return direct
-
-        val legacy = when (type) {
-            TagType.COURIER -> tags["courier"]
-            TagType.STASHER -> tags["stasher"]
-            else -> null
-        }
-        if (legacy != null) return legacy
-
-        return TAG_DEFAULTS[type.id] ?: when (type) {
-            TagType.COURIER -> TAG_DEFAULTS["courier"]
-            TagType.STASHER -> TAG_DEFAULTS["stasher"]
-            else -> null
-        } ?: TagConfig()
+        return TAG_DEFAULTS[type.id] ?: TagConfig()
     }
 
     companion object {
@@ -83,10 +71,8 @@ data class CobblePalsConfig(
             "harvester" to TagConfig(enabled = true, range = 8),
             "vacuum" to TagConfig(enabled = true, range = 8),
             "sender" to TagConfig(enabled = true, range = 16),
-            "courier" to TagConfig(enabled = true, range = 16),
             "puller" to TagConfig(enabled = true, range = 16),
             "distributor" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
-            "stasher" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "dropper" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "void" to TagConfig(enabled = true, range = 16, maxItemsPerTrip = 16),
             "activator" to TagConfig(enabled = true, range = 8),

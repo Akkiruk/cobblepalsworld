@@ -119,6 +119,11 @@ class CobblePalsSaveData : PersistentState() {
                 idNbt.putInt("SlotIndex", member.slotIndex)
                 idNbt.putString("DisplayName", member.displayName)
                 idNbt.putString("Species", member.species)
+                idNbt.putString("SpeciesIdentifier", member.speciesIdentifier)
+                val aspectsNbt = NbtList()
+                member.aspects.forEach { aspect -> aspectsNbt.add(net.minecraft.nbt.NbtString.of(aspect)) }
+                idNbt.put("Aspects", aspectsNbt)
+                idNbt.putString("HeldItemId", member.heldItemId)
                 idNbt.putInt("Level", member.level)
                 idsNbt.add(idNbt)
             }
@@ -203,17 +208,12 @@ class CobblePalsSaveData : PersistentState() {
                         } else {
                             TagAssignmentManager.assign(uuid, tag)
                         }
-                        val worksiteDimension = when {
-                            tagNbt.contains("WorksiteDimension") -> tagNbt.getString("WorksiteDimension")
-                            tagNbt.contains("PastureDimension") -> tagNbt.getString("PastureDimension")
-                            else -> null
-                        }
+                        val worksiteDimension = if (tagNbt.contains("WorksiteDimension")) tagNbt.getString("WorksiteDimension") else null
                         if (worksiteDimension != null) {
-                            val keyPrefix = if (tagNbt.contains("WorksiteDimension")) "Worksite" else "Pasture"
                             val worksitePos = BlockPos(
-                                tagNbt.getInt("${keyPrefix}X"),
-                                tagNbt.getInt("${keyPrefix}Y"),
-                                tagNbt.getInt("${keyPrefix}Z")
+                                tagNbt.getInt("WorksiteX"),
+                                tagNbt.getInt("WorksiteY"),
+                                tagNbt.getInt("WorksiteZ")
                             )
                             TagAssignmentManager.associateWithWorksite(uuid, worksiteDimension, worksitePos)
                         }
@@ -245,14 +245,17 @@ class CobblePalsSaveData : PersistentState() {
                                     add(
                                         CommandPostCrewMember(
                                             pokemonId = idNbt.getUuid("PokemonId"),
-                                            ownerUuid = if (idNbt.containsUuid("OwnerUuid")) idNbt.getUuid("OwnerUuid") else UUID(0L, 0L),
+                                            ownerUuid = idNbt.getUuid("OwnerUuid"),
                                             binding = binding,
-                                            sourceType = idNbt.getString("SourceType").ifBlank { "UNKNOWN" },
+                                            sourceType = idNbt.getString("SourceType"),
                                             boxIndex = idNbt.getInt("BoxIndex"),
                                             slotIndex = idNbt.getInt("SlotIndex"),
-                                            displayName = idNbt.getString("DisplayName").ifBlank { "Unknown Pokemon" },
-                                            species = idNbt.getString("Species").ifBlank { "unknown" },
-                                            level = if (idNbt.contains("Level")) idNbt.getInt("Level") else 0
+                                            displayName = idNbt.getString("DisplayName"),
+                                            species = idNbt.getString("Species"),
+                                            speciesIdentifier = idNbt.getString("SpeciesIdentifier"),
+                                            aspects = idNbt.getList("Aspects", 8).let { list -> (0 until list.size).map { list.getString(it) }.toSet() },
+                                            heldItemId = idNbt.getString("HeldItemId"),
+                                            level = idNbt.getInt("Level")
                                         )
                                     )
                                 }

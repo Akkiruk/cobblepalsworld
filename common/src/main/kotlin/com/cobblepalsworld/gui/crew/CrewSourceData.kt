@@ -19,6 +19,9 @@ data class CrewSourcePokemonSnapshot(
     val slotIndex: Int,
     val displayName: String,
     val species: String,
+    val speciesIdentifier: String,
+    val aspects: Set<String>,
+    val heldItemId: String,
     val level: Int,
     val isFainted: Boolean,
     val isCrewMember: Boolean,
@@ -47,6 +50,10 @@ data class CrewSourcePokemonSnapshot(
         buf.writeVarInt(slotIndex)
         buf.writeString(displayName)
         buf.writeString(species)
+        buf.writeString(speciesIdentifier)
+        buf.writeVarInt(aspects.size)
+        aspects.forEach(buf::writeString)
+        buf.writeString(heldItemId)
         buf.writeVarInt(level)
         buf.writeBoolean(isFainted)
         buf.writeBoolean(isCrewMember)
@@ -66,6 +73,9 @@ data class CrewSourcePokemonSnapshot(
             slotIndex = buf.readVarInt(),
             displayName = buf.readString(),
             species = buf.readString(),
+            speciesIdentifier = buf.readString(),
+            aspects = (0 until buf.readVarInt()).map { buf.readString() }.toSet(),
+            heldItemId = buf.readString(),
             level = buf.readVarInt(),
             isFainted = buf.readBoolean(),
             isCrewMember = buf.readBoolean(),

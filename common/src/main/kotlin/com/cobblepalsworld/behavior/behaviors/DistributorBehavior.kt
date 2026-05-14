@@ -23,7 +23,7 @@ import java.util.UUID
  * Round-robin distributes items from the Command Post buffer into multiple target containers.
  */
 object DistributorBehavior : TagBehavior {
-    override val tagType = TagType.STASHER
+    override val tagType = TagType.DISTRIBUTOR
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
     override val handlesOwnInventory = true
 

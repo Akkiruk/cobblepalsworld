@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.26
+
+- Replaced the Command Post dashboard with a Command Post-owned Cobblemon PC/Pasture-style screen using Cobblemon PC shell, storage grid, pasture panel, slot overlays, pointer hover, textured buttons, sounds, and real Pokemon model rendering.
+- Moved Party/PC crew assignment into Cobblemon-style storage slots and pasture rows, removing Add/Drop text chips, the top tab strip, fake Pokemon avatars, tan dashboard panels, and the separate Cobblemon PC bridge path.
+- Added render metadata to Command Post crew/source packets and removed the old linked-pasture migration/NBT compatibility path from the native Command Post runtime.
+
 ## 0.2.25
 
 - Added a root `LICENSE` file and formally locked the entire CobblePals World project to MPL 2.0 going forward.

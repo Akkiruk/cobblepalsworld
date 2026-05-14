@@ -443,6 +443,9 @@ object CobblePalsNetworking {
             slotIndex = slotIndex,
             displayName = getDisplayName(false).string,
             species = species.name,
+            speciesIdentifier = species.resourceIdentifier.toString(),
+            aspects = aspects,
+            heldItemId = heldItem().takeUnless { it.isEmpty }?.let { net.minecraft.registry.Registries.ITEM.getId(it.item).toString() } ?: "",
             level = level,
             isFainted = isFainted(),
             isCrewMember = alreadyHere,
@@ -483,6 +486,9 @@ object CobblePalsNetworking {
                 slotIndex = crewSource.slotIndex,
                 displayName = pokemon.getDisplayName(false).string,
                 species = pokemon.species.name,
+                speciesIdentifier = pokemon.species.resourceIdentifier.toString(),
+                aspects = pokemon.aspects,
+                heldItemId = pokemon.heldItem().takeUnless { it.isEmpty }?.let { net.minecraft.registry.Registries.ITEM.getId(it.item).toString() } ?: "",
                 level = pokemon.level
             )
         } else {

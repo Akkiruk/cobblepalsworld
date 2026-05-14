@@ -1,6 +1,5 @@
 package com.cobblepalsworld.router
 
-import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblepalsworld.augment.AugmentItem
 import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
@@ -40,9 +39,7 @@ import java.util.UUID
 
 class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRegistry.ROUTER_BLOCK_ENTITY.get(), pos, state), SidedInventory, NamedScreenHandlerFactory {
     companion object {
-        // Slot 0 stays unused so saved router inventories keep the same layout after the Command Post rework.
-        const val RESERVED_SLOT = 0
-        const val MODULE_SLOT_START = 1
+        const val MODULE_SLOT_START = 0
         const val MODULE_SLOT_COUNT = 9
         const val MODULE_SLOT_END = MODULE_SLOT_START + MODULE_SLOT_COUNT
         const val UPGRADE_SLOT_START = MODULE_SLOT_END
@@ -94,8 +91,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     var cooldownTicks: Int = 0
     private var ownerUuid: UUID? = null
     private var ownerName: String = ""
-    private var linkedPastureDimension: String? = null
-    private var linkedPasturePos: BlockPos? = null
     private var dispatchCursor: Int = 0
     private var moduleExecutionCursor: Int = 0
     private val assignedWorkers = arrayOfNulls<UUID>(MODULE_SLOT_COUNT)
@@ -128,13 +123,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     }
 
     fun ownerUuid(): UUID? = ownerUuid
-
-    fun linkedPasture(world: ServerWorld): PokemonPastureBlockEntity? {
-        val dimensionId = linkedPastureDimension ?: return null
-        val pasturePos = linkedPasturePos ?: return null
-        if (dimensionId != world.registryKey.value.toString()) return null
-        return world.getBlockEntity(pasturePos) as? PokemonPastureBlockEntity
-    }
 
     fun tagInModuleSlot(index: Int, registries: RegistryWrapper.WrapperLookup, augments: AugmentSet): TagInstance? {
         val stack = TagRegistry.normalizeInventorySlot(this, MODULE_SLOT_START + index)
@@ -336,17 +324,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         }
     }
 
-    fun unlinkPasture() {
-        clearLinkedPasture()
-    }
-
-    private fun clearLinkedPasture() {
-        if (linkedPastureDimension == null && linkedPasturePos == null) return
-        linkedPastureDimension = null
-        linkedPasturePos = null
-        markDirty()
-    }
-
     private fun nativeCrewCount(): Int {
         val serverWorld = world as? ServerWorld ?: return 0
         return CommandPostCrewManager.countAt(serverWorld.registryKey.value.toString(), pos)
@@ -361,15 +338,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         }
         nbt.putInt("Cooldown", cooldownTicks)
         nbt.putInt("DispatchCursor", dispatchCursor)
-
-        linkedPastureDimension?.let { dimensionId ->
-            nbt.putString("LinkedPastureDimension", dimensionId)
-            linkedPasturePos?.let { pasturePos ->
-                nbt.putInt("LinkedPastureX", pasturePos.x)
-                nbt.putInt("LinkedPastureY", pasturePos.y)
-                nbt.putInt("LinkedPastureZ", pasturePos.z)
-            }
-        }
 
         val items = NbtList()
         for (slot in 0 until TOTAL_SLOTS) {
@@ -392,12 +360,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         ownerName = nbt.getString("OwnerName")
         cooldownTicks = nbt.getInt("Cooldown")
         dispatchCursor = nbt.getInt("DispatchCursor")
-        linkedPastureDimension = if (nbt.contains("LinkedPastureDimension")) nbt.getString("LinkedPastureDimension") else null
-        linkedPasturePos = if (nbt.contains("LinkedPastureX")) {
-            BlockPos(nbt.getInt("LinkedPastureX"), nbt.getInt("LinkedPastureY"), nbt.getInt("LinkedPastureZ"))
-        } else {
-            null
-        }
         assignedWorkers.fill(null)
         clearAllModuleRuntime()
         linkedWorkerCount = 0

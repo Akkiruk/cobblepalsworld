@@ -46,9 +46,9 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(GuardianBehavior)
         TagBehaviorRegistry.register(HarvesterBehavior)
         TagBehaviorRegistry.register(VacuumBehavior)
-        TagBehaviorRegistry.register(SenderBehavior)      // Courier
+        TagBehaviorRegistry.register(SenderBehavior)
         TagBehaviorRegistry.register(PullerBehavior)
-        TagBehaviorRegistry.register(DistributorBehavior)  // Stasher
+        TagBehaviorRegistry.register(DistributorBehavior)
         TagBehaviorRegistry.register(DropperBehavior)
         TagBehaviorRegistry.register(VoidBehavior)
         TagBehaviorRegistry.register(ActivatorBehavior)

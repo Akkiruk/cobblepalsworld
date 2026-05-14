@@ -12,6 +12,9 @@ data class CommandPostCrewMemberSnapshot(
     val pokemonId: UUID,
     val displayName: String,
     val species: String,
+    val speciesIdentifier: String,
+    val aspects: Set<String>,
+    val heldItemId: String,
     val level: Int,
     val sourceType: String,
     val boxIndex: Int,
@@ -88,6 +91,10 @@ data class CommandPostCrewMemberSnapshot(
         buf.writeUuid(pokemonId)
         buf.writeString(displayName)
         buf.writeString(species)
+        buf.writeString(speciesIdentifier)
+        buf.writeVarInt(aspects.size)
+        aspects.forEach(buf::writeString)
+        buf.writeString(heldItemId)
         buf.writeVarInt(level)
         buf.writeString(sourceType)
         buf.writeVarInt(boxIndex)
@@ -112,6 +119,9 @@ data class CommandPostCrewMemberSnapshot(
             pokemonId = buf.readUuid(),
             displayName = buf.readString(),
             species = buf.readString(),
+            speciesIdentifier = buf.readString(),
+            aspects = (0 until buf.readVarInt()).map { buf.readString() }.toSet(),
+            heldItemId = buf.readString(),
             level = buf.readVarInt(),
             sourceType = buf.readString(),
             boxIndex = buf.readVarInt(),

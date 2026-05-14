@@ -73,7 +73,7 @@ enum class TagType(
     ),
 
     // --- Logistics ---
-    COURIER(
+    SENDER(
         id = "sender",
         bindingMode = BindingMode.CONTAINER,
         description = "Sends filtered items from the Command Post buffer to one bound container",
@@ -91,7 +91,7 @@ enum class TagType(
         workParticle = ParticleTypes.ENCHANT,
         workSound = SoundEvents.BLOCK_CHEST_OPEN
     ),
-    STASHER(
+    DISTRIBUTOR(
         id = "distributor",
         bindingMode = BindingMode.CONTAINER,
         supportsTargetList = true,
@@ -143,12 +143,7 @@ enum class TagType(
     val supportsBinding: Boolean get() = bindingMode != BindingMode.NONE
 
     companion object {
-        private val byId: Map<String, TagType> = buildMap {
-            TagType.entries.forEach { put(it.id, it) }
-            // Backward compat: old save IDs and legacy item ids
-            put("courier", COURIER)
-            put("stasher", STASHER)
-        }
+        private val byId: Map<String, TagType> = TagType.entries.associateBy { it.id }
         fun fromId(id: String): TagType? = byId[id]
     }
 }

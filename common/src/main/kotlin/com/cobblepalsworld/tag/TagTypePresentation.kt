@@ -21,7 +21,7 @@ object TagTypePresentation {
     fun familyOf(tagType: TagType): TagRoleFamily {
         return when (tagType) {
             TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM -> TagRoleFamily.Gathering
-            TagType.COURIER, TagType.PULLER, TagType.STASHER, TagType.DROPPER, TagType.VOID -> TagRoleFamily.Logistics
+            TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> TagRoleFamily.Logistics
             TagType.GUARDIAN -> TagRoleFamily.Defense
             TagType.ACTIVATOR -> TagRoleFamily.Interaction
             TagType.SHEPHERD -> TagRoleFamily.Care

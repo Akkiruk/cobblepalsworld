@@ -5,7 +5,6 @@ import com.cobblepalsworld.tag.filter.FilterSerializer
 import com.cobblepalsworld.tag.filter.TagFilter
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.navigation.ContainerFinder
-import net.minecraft.entity.Entity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
@@ -23,7 +22,7 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import java.util.UUID
 
-class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boolean = true) : Item(settings) {
+class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
 
     companion object {
         private const val KEY_FILTER = "TagFilter"
@@ -274,17 +273,6 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
             )
         }
 
-    }
-
-    override fun inventoryTick(stack: ItemStack, world: World, entity: Entity, slot: Int, selected: Boolean) {
-        super.inventoryTick(stack, world, entity, slot, selected)
-        if (world.isClient || isCanonicalItem) return
-
-        val player = entity as? PlayerEntity ?: return
-        val normalized = TagRegistry.normalizeStack(stack)
-        if (normalized.item !== stack.item) {
-            player.inventory.setStack(slot, normalized)
-        }
     }
 
     override fun useOnBlock(context: ItemUsageContext): ActionResult {

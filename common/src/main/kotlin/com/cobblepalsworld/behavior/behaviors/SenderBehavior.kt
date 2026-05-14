@@ -18,7 +18,7 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
 object SenderBehavior : TagBehavior {
-    override val tagType = TagType.COURIER
+    override val tagType = TagType.SENDER
     override val defaultRange get() = ConfigManager.config.getTagConfig(tagType).range
     override val handlesOwnInventory = true
 

@@ -1,7 +1,5 @@
 package com.cobblepalsworld.router
 
-import com.cobblemon.mod.common.Cobblemon
-import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
@@ -32,17 +30,6 @@ object RouterExecutionEngine {
         ServerScaleRuntime.beforeWorksiteTick(world)
         val dimensionId = world.registryKey.value.toString()
         var changed = false
-
-        val legacyPasture = router.linkedPasture(world)
-        if (legacyPasture != null && CommandPostCrewManager.countAt(dimensionId, pos) == 0) {
-            if (migrateLinkedPastureCrew(world, router, legacyPasture, dimensionId, pos)) {
-                changed = true
-            }
-        }
-        if (legacyPasture != null) {
-            router.unlinkPasture()
-            changed = true
-        }
 
         val nativeCrewMembers = CommandPostCrewManager.findMembers(dimensionId, pos)
         val hasNativeCrew = nativeCrewMembers.isNotEmpty()
@@ -247,60 +234,6 @@ object RouterExecutionEngine {
         )
     }
 
-    private fun migrateLinkedPastureCrew(
-        world: ServerWorld,
-        router: RouterBlockEntity,
-        pasture: PokemonPastureBlockEntity,
-        dimensionId: String,
-        controllerPos: BlockPos
-    ): Boolean {
-        val ownerUuid = router.ownerUuid() ?: return false
-        var migrated = false
-        pasture.tetheredPokemon.forEach { tethering ->
-            val pokemon = try {
-                tethering.getPokemon()
-            } catch (_: Exception) {
-                null
-            } ?: return@forEach
-            val source = locateOwnedSource(world, ownerUuid, pokemon.uuid)
-            if (CommandPostCrewManager.assign(
-                    pokemonId = pokemon.uuid,
-                    ownerUuid = ownerUuid,
-                    dimensionId = dimensionId,
-                    pos = controllerPos,
-                    sourceType = source?.sourceType ?: "UNKNOWN",
-                    boxIndex = source?.boxIndex ?: -1,
-                    slotIndex = source?.slotIndex ?: -1,
-                    displayName = pokemon.getDisplayName(false).string,
-                    species = pokemon.species.name,
-                    level = pokemon.level
-                )
-            ) {
-                migrated = true
-            }
-        }
-        if (migrated) {
-            router.unlinkPasture()
-        }
-        return migrated
-    }
-
-    private fun locateOwnedSource(world: ServerWorld, ownerUuid: UUID, pokemonId: UUID): CrewSourceLocation? {
-        val storage = Cobblemon.storage
-        val party = storage.getParty(ownerUuid, world.registryManager)
-        for (slot in 0 until party.size()) {
-            val pokemon = party.get(slot) ?: continue
-            if (pokemon.uuid == pokemonId) return CrewSourceLocation("PARTY", -1, slot)
-        }
-        val pc = storage.getPC(ownerUuid, world.registryManager)
-        pc.boxes.forEachIndexed { boxIndex, box ->
-            box.getNonEmptySlots().entries.forEach { entry ->
-                if (entry.value.uuid == pokemonId) return CrewSourceLocation("PC", boxIndex, entry.key)
-            }
-        }
-        return null
-    }
-
     private fun selectCandidate(
         roster: List<WorkerCandidate>,
         rosterById: Map<UUID, WorkerCandidate>,
@@ -370,5 +303,4 @@ object RouterExecutionEngine {
     }
 
     private data class WorkerCandidate(val pokemonId: UUID, val pokemon: Pokemon? = null, val entity: PokemonEntity? = null)
-    private data class CrewSourceLocation(val sourceType: String, val boxIndex: Int, val slotIndex: Int)
 }
