@@ -35,6 +35,8 @@ internal enum class CommandPostRosterFilter(val label: String) {
 internal enum class CommandPostRosterSort(val label: String) {
     STATUS("Status"),
     ROLE("Role"),
+    FAMILY("Family"),
+    ASSIGNMENT("Assign"),
     SOURCE("Source")
 }
 
@@ -78,7 +80,15 @@ internal object CommandPostModeDrawer {
         CommandPostIconButton.draw(context, OPTIONS_TEXTURE, originX, originY, OPTIONS_LEFT, TOOL_TOP, TOOL_SIZE, TOOL_SIZE, localMouseX, localMouseY, scaled = true)
     }
 
-    fun drawDrawerLabel(context: DrawContext, textRenderer: TextRenderer, originX: Int, originY: Int, filter: CommandPostRosterFilter, sort: CommandPostRosterSort) {
-        CobblemonUiChrome.drawSmallText(context, textRenderer, "${filter.label} / ${sort.label}", originX + 160, originY + 188, 0xFFEFE7D7.toInt(), true)
+    fun drawDrawerLabel(
+        context: DrawContext,
+        textRenderer: TextRenderer,
+        originX: Int,
+        originY: Int,
+        role: CommandPostRoleFamilyFilter,
+        state: CommandPostStateFilter,
+        sort: CommandPostRosterSort
+    ) {
+        CobblemonUiChrome.drawSmallText(context, textRenderer, "${role.label} / ${state.label} / ${sort.label}", originX + 144, originY + 188, 0xFFEFE7D7.toInt(), true)
     }
 }

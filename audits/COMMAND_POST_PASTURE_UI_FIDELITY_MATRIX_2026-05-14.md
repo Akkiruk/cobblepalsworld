@@ -3,6 +3,16 @@
 Date: 2026-05-14
 Scope: CobblePals World Command Post UI compared against Cobblemon Pasture Block / PC UI.
 
+## 2026-05-14 v0.2.31 Completion Update
+
+- Completed exact Party anatomy with `CommandPostPartyWidget` plus `CommandPostPartySlot`; Party source now uses Cobblemon's `party_panel.png` layout instead of the PC box grid.
+- Completed the named widget decomposition: `CommandPostStorageSlot`, `CommandPostPastureScrollList`, `CommandPostPastureSlot`, `CommandPostRecallButton`, and `CommandPostInfoPanel` own slot overlays, row hitboxes, recall rendering, and preview/info layout.
+- Completed the Cobblemon-style filter/options drawer using `pc_icon_filter.png` and `pc_icon_options.png`; source and roster filtering now cover text search, role family, state, assignment mode, availability, and assigned/unassigned source status.
+- Completed in-shell Command Post mode drawers for source browsing, jobs, policy, and logistics without restoring a top tab strip.
+- Completed richer selected Pokemon info with `info_box_stats.png`-style sections for role, status, cargo, source, missing/fainted/blocked states, and one compact empty label.
+- Completed jobs-first operational rows with staffed/open/blocked state and one visible cause chip, plus contextual policy side sheets inside the same PC shell.
+- Completed source payload tightening for the UI path: source refreshes request the active Party/PC source, active PC box, and search query instead of syncing every PC box.
+
 ## Executive Decision
 
 The current v0.2.24 Command Post screen is still a CobblePals dashboard with warmer colors. It does not yet look or behave like Cobblemon's Pasture Block UI.

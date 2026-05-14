@@ -40,7 +40,6 @@ internal object CommandPostPastureWidget {
 
     private val PASTURE_PANEL = CommandPostPcShell.cobblemon("textures/gui/pasture/pasture_panel.png")
     private val PASTURE_SCROLL_OVERLAY = CommandPostPcShell.cobblemon("textures/gui/pasture/pasture_scroll_overlay.png")
-    private val PASTURE_BUTTON = CommandPostPcShell.cobblemon("textures/gui/pasture/pasture_button.png")
 
     fun maxScroll(rowCount: Int): Int = kotlin.math.max(0, rowCount - VISIBLE_ROWS)
 
@@ -55,16 +54,11 @@ internal object CommandPostPastureWidget {
 
     fun drawControls(context: DrawContext, textRenderer: TextRenderer, originX: Int, originY: Int, memberCount: Int, maxWorkers: Int, localMouseX: Int, localMouseY: Int) {
         CobblemonUiChrome.drawSmallText(context, textRenderer, "$memberCount/$maxWorkers", originX + X + 36, originY + Y + 24, 0xFFFFFFFF.toInt(), true)
-        drawRecallButton(context, textRenderer, originX, originY, localMouseX, localMouseY)
+        CommandPostRecallButton.draw(context, textRenderer, originX, originY, localMouseX, localMouseY)
     }
 
     fun drawScrollOverlay(context: DrawContext, originX: Int, originY: Int) {
         blitk(matrixStack = context.matrices, texture = PASTURE_SCROLL_OVERLAY, x = originX + LIST_LEFT, y = originY + LIST_TOP - 13, width = LIST_WIDTH, height = 131)
-    }
-
-    fun drawRecallButton(context: DrawContext, textRenderer: TextRenderer, originX: Int, originY: Int, localMouseX: Int, localMouseY: Int) {
-        CommandPostIconButton.draw(context, PASTURE_BUTTON, originX, originY, RECALL_LEFT, RECALL_TOP, RECALL_WIDTH, RECALL_HEIGHT, localMouseX, localMouseY)
-        CobblemonUiChrome.drawSmallText(context, textRenderer, "Recall", originX + RECALL_LEFT + 22, originY + RECALL_TOP + 5, 0xFFFFFFFF.toInt(), true)
     }
 
     fun drawRowFrame(context: DrawContext, originX: Int, originY: Int, left: Int, top: Int, active: Boolean, hovered: Boolean) {
@@ -99,6 +93,6 @@ internal object CommandPostPastureWidget {
     }
 
     fun recallContains(mouseX: Int, mouseY: Int): Boolean {
-        return CommandPostIconButton.contains(mouseX, mouseY, RECALL_LEFT, RECALL_TOP, RECALL_WIDTH, RECALL_HEIGHT)
+        return CommandPostRecallButton.contains(mouseX, mouseY)
     }
 }

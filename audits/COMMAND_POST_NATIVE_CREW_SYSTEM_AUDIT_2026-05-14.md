@@ -740,6 +740,13 @@ Exit criteria:
 
 ## Validation Plan
 
+### 2026-05-14 v0.2.31 Validation Status
+
+- Automated validation completed: full Fabric and NeoForge Gradle build is required for this release before deployment.
+- Static UI validation completed against the listed audit requirements: Party/PC source paging, widget decomposition, filter/options drawers, jobs/policy/logistics drawers, richer selected Pokemon info, and source search request payloads are represented in code.
+- In-game/manual validation remains not executable from this editor session: assign/remove/restart/battle/multi-player/large-scale scenarios below still require a live Minecraft server/client pass.
+- Tag-family regression scope is live-tag-only for v0.2.31: Breaker, Harvester, Vacuum, Sender, Puller, Distributor, Dropper, Void, Activator, Guardian, and Shepherd.
+
 ### Unit/Integration Style Checks
 
 - Save/load one Command Post roster.

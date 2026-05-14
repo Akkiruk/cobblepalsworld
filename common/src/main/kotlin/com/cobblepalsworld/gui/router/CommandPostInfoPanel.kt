@@ -16,6 +16,7 @@ import net.minecraft.item.ItemStack
 
 internal object CommandPostInfoPanel {
     data class DetailLine(val value: String, val color: Int = 0xFFDDE7EA.toInt(), val shadow: Boolean = false)
+    private val STATS_SECTION = CommandPostPcShell.cobblemon("textures/gui/pc/info_box_stats.png")
 
     fun draw(
         context: DrawContext,
@@ -31,14 +32,18 @@ internal object CommandPostInfoPanel {
         CobblemonUiChrome.drawSmallText(context, textRenderer, "COMMAND POST", originX + 17, originY + 131, 0xFFEFE7D7.toInt(), true)
 
         if (preview == null) {
-            CobblemonUiChrome.drawSmallText(context, textRenderer, "No Pokemon", originX + 18, originY + 145, 0xFFB8C3C7.toInt(), false)
-            CobblemonUiChrome.drawSmallText(context, textRenderer, "Hover a slot", originX + 18, originY + 156, 0xFF8FA0A8.toInt(), false)
+            CobblemonUiChrome.drawSmallText(context, textRenderer, "No Pokemon", originX + 18, originY + 150, 0xFFB8C3C7.toInt(), false)
             return
         }
 
         CobblemonUiChrome.drawSmallText(context, textRenderer, fit(preview.displayName, 58), originX + 15, originY + 145, 0xFFFFFFFF.toInt(), true)
-        detailLines.take(4).forEachIndexed { index, line ->
-            CobblemonUiChrome.drawSmallText(context, textRenderer, fit(line.value, 58), originX + 15, originY + 156 + index * 10, line.color, line.shadow)
+        detailLines.take(6).forEachIndexed { index, line ->
+            val top = 155 + index * 7
+            context.matrices.push()
+            context.matrices.translate(0.0, 0.0, 20.0)
+            com.cobblemon.mod.common.api.gui.blitk(matrixStack = context.matrices, texture = STATS_SECTION, x = originX + 14, y = originY + top - 1, width = 55, height = 7, alpha = if (line.shadow) 0.72F else 0.42F)
+            context.matrices.pop()
+            CobblemonUiChrome.drawSmallText(context, textRenderer, fit(line.value, 54), originX + 16, originY + top + 1, line.color, line.shadow)
         }
         heldStack(preview.heldItemId)?.let { stack ->
             renderScaledGuiItemIcon(itemStack = stack, x = originX + 55.0, y = originY + 176.0, scale = 0.5, matrixStack = context.matrices)

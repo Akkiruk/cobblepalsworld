@@ -14,6 +14,8 @@ import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.client.gui.drawProfilePokemon
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState
 import com.cobblemon.mod.common.pokemon.RenderablePokemon
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
+import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.gui.CobblemonUiChrome
 import com.cobblepalsworld.gui.crew.CommandPostCrewMemberSnapshot
 import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
@@ -40,6 +42,7 @@ import net.minecraft.registry.Registries
 import net.minecraft.sound.SoundEvent
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
+import org.lwjgl.glfw.GLFW
 import org.joml.Quaternionf
 import java.util.UUID
 import java.util.Locale
@@ -58,9 +61,17 @@ class CommandPostPcScreen(
     private var sourceBoxIndex = 0
     private var pastureScrollIndex = 0
     private var commandMode = CommandPostMode.SOURCE
-    private var rosterFilter = CommandPostRosterFilter.ALL
     private var rosterSort = CommandPostRosterSort.STATUS
+    private var drawerMode = CommandPostDrawerMode.CLOSED
+    private var sourceQuery = ""
+    private var sourceSearchActive = false
+    private var roleFamilyFilter = CommandPostRoleFamilyFilter.ALL
+    private var stateFilter = CommandPostStateFilter.ALL
+    private var assignmentFilter = CommandPostAssignmentFilter.ALL
+    private var availabilityFilter = CommandPostAvailabilityFilter.ALL
+    private var assignedFilter = CommandPostAssignedFilter.ALL
     private var selectedPokemonId: UUID? = null
+    private var selectedModuleIndex: Int? = null
     private var nextCrewRefreshAtMs = 0L
     private var nextSourceRefreshAtMs = 0L
     private var pointerOffsetY = 0
@@ -72,6 +83,7 @@ class CommandPostPcScreen(
     private var slotHits: List<CommandPostStorageSlot.Hit> = emptyList()
     private var crewHits: List<CommandPostPastureScrollList.CrewHit> = emptyList()
     private var modeHits: List<CommandPostModeDrawer.ModeHit> = emptyList()
+    private var drawerHits: List<CommandPostFilterDrawer.Hit> = emptyList()
     private var panelHits: List<PanelHit> = emptyList()
 
     private val renderStates = mutableMapOf<UUID, FloatingState>()
@@ -112,6 +124,7 @@ class CommandPostPcScreen(
         hoveredSource = null
         hoveredCrew = null
         hoveredTooltip = null
+        drawerHits = emptyList()
         panelHits = emptyList()
         renderBackground(context, mouseX, mouseY, delta)
         super.render(context, mouseX, mouseY, delta)
@@ -138,6 +151,7 @@ class CommandPostPcScreen(
             CommandPostMode.POLICY -> drawPolicyPanel(context, localMouseX, localMouseY)
             CommandPostMode.LOGISTICS -> drawLogisticsPanel(context)
         }
+        drawFilterDrawer(context, localMouseX, localMouseY)
         drawPasturePanel(context, members, localMouseX, localMouseY, delta)
         drawInfoBox(context, preview)
         drawRouterSlots(context)
@@ -160,20 +174,28 @@ class CommandPostPcScreen(
         modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
             commandMode = hit.mode
             selectedPokemonId = null
+            selectedModuleIndex = null
+            sourceSearchActive = false
             play(CobblemonSounds.PC_CLICK)
             return true
         }
 
         if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            rosterFilter = CommandPostRosterFilter.entries[(rosterFilter.ordinal + 1) % CommandPostRosterFilter.entries.size]
-            pastureScrollIndex = 0
+            drawerMode = if (drawerMode == CommandPostDrawerMode.FILTERS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.FILTERS
+            sourceSearchActive = false
             play(CobblemonSounds.PC_CLICK)
             return true
         }
 
         if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            rosterSort = CommandPostRosterSort.entries[(rosterSort.ordinal + 1) % CommandPostRosterSort.entries.size]
-            pastureScrollIndex = 0
+            drawerMode = if (drawerMode == CommandPostDrawerMode.OPTIONS) CommandPostDrawerMode.CLOSED else CommandPostDrawerMode.OPTIONS
+            sourceSearchActive = false
+            play(CobblemonSounds.PC_CLICK)
+            return true
+        }
+
+        drawerHits.firstOrNull { hit -> CommandPostFilterDrawer.contains(localMouseX, localMouseY, hit) }?.let { hit ->
+            handleDrawerHit(hit.action)
             play(CobblemonSounds.PC_CLICK)
             return true
         }
@@ -210,7 +232,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 2, hit.top + 11, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE) }?.let { hit ->
+        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.RECALL && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             CobblePalsNetworking.sendRemoveCrewPokemon(handler.routerPos, hit.member.pokemonId)
             play(CobblemonSounds.PC_DROP)
@@ -219,7 +241,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left + 44, hit.top + 3, CommandPostPastureWidget.SLOT_ICON_SIZE, CommandPostPastureWidget.SLOT_ICON_SIZE) }?.let { hit ->
+        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.MODE && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             CobblePalsNetworking.sendCycleCrewMode(handler.routerPos, hit.member.pokemonId)
             play(CobblemonSounds.PC_CLICK)
@@ -227,7 +249,7 @@ class CommandPostPcScreen(
             return true
         }
 
-        crewHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostPastureWidget.SLOT_WIDTH, CommandPostPastureWidget.SLOT_HEIGHT) }?.let { hit ->
+        crewHits.firstOrNull { hit -> hit.action == CommandPostPastureSlot.Action.SELECT && crewHitContains(localMouseX, localMouseY, hit) }?.let { hit ->
             selectedPokemonId = hit.member.pokemonId
             play(CobblemonSounds.PC_CLICK)
             return true
@@ -271,7 +293,7 @@ class CommandPostPcScreen(
         val localMouseX = (mouseX - x).toInt()
         val localMouseY = (mouseY - y).toInt()
         if (CommandPostPastureWidget.listContains(localMouseX, localMouseY)) {
-            val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
+            val members = filteredMembers(CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty())
             val maxScroll = CommandPostPastureWidget.maxScroll(members.size)
             pastureScrollIndex = (pastureScrollIndex - verticalAmount.toInt()).coerceIn(0, maxScroll)
             return true
@@ -281,6 +303,41 @@ class CommandPostPcScreen(
             return true
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
+    }
+
+    override fun charTyped(chr: Char, modifiers: Int): Boolean {
+        if (sourceSearchActive && drawerMode == CommandPostDrawerMode.FILTERS && !chr.isISOControl() && sourceQuery.length < 40) {
+            sourceQuery += chr
+            requestSourceRefresh()
+            return true
+        }
+        return super.charTyped(chr, modifiers)
+    }
+
+    override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        if (sourceSearchActive && drawerMode == CommandPostDrawerMode.FILTERS) {
+            when (keyCode) {
+                GLFW.GLFW_KEY_BACKSPACE -> {
+                    if (sourceQuery.isNotEmpty()) {
+                        sourceQuery = sourceQuery.dropLast(1)
+                        requestSourceRefresh()
+                    }
+                    return true
+                }
+                GLFW.GLFW_KEY_DELETE -> {
+                    if (sourceQuery.isNotEmpty()) {
+                        sourceQuery = ""
+                        requestSourceRefresh()
+                    }
+                    return true
+                }
+                GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_ESCAPE -> {
+                    sourceSearchActive = false
+                    return true
+                }
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers)
     }
 
     private fun drawBase(context: DrawContext) {
@@ -311,15 +368,16 @@ class CommandPostPcScreen(
 
         val hits = mutableListOf<CommandPostStorageSlot.Hit>()
         val slots = box?.slots.orEmpty()
-        slots.forEachIndexed { index, slot ->
+        slots.forEachIndexed { index, rawSlot ->
+            val slot = rawSlot.copy(pokemon = rawSlot.pokemon?.takeIf(::sourceMatchesFilters))
             val left: Int
             val top: Int
             val size: Int
             if (sourceType == CrewSourceType.PARTY) {
-                if (index !in 0..5) return@forEachIndexed
-                left = CommandPostPartyWidget.slotLeft(index)
-                top = CommandPostPartyWidget.slotTop(index)
-                size = CommandPostPartyWidget.SLOT_SIZE
+                val bounds = CommandPostPartySlot.bounds(index) ?: return@forEachIndexed
+                left = bounds.left
+                top = bounds.top
+                size = bounds.size
             } else {
                 val gridIndex = slot.slotIndex
                 if (gridIndex !in 0 until CommandPostStorageWidget.BOX_SLOT_COUNT) return@forEachIndexed
@@ -379,24 +437,60 @@ class CommandPostPcScreen(
     private fun drawModeControls(context: DrawContext, localMouseX: Int, localMouseY: Int) {
         modeHits = CommandPostModeDrawer.drawModeButtons(context, x, y, localMouseX, localMouseY, commandMode)
         CommandPostModeDrawer.drawToolButtons(context, x, y, localMouseX, localMouseY)
-        CommandPostModeDrawer.drawDrawerLabel(context, textRenderer, x, y, rosterFilter, rosterSort)
+        CommandPostModeDrawer.drawDrawerLabel(context, textRenderer, x, y, roleFamilyFilter, stateFilter, rosterSort)
         modeHits.firstOrNull { hit -> contains(localMouseX, localMouseY, hit.left, hit.top, CommandPostModeDrawer.MODE_SIZE, CommandPostModeDrawer.MODE_SIZE) }?.let { hit ->
             hoveredTooltip = HoverTooltip("mode-${hit.mode.name}", listOf(Text.literal(hit.mode.tooltip)))
         }
         if (contains(localMouseX, localMouseY, CommandPostModeDrawer.FILTER_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            hoveredTooltip = HoverTooltip("filter", listOf(Text.literal("Roster filter: ${rosterFilter.label}")))
+            hoveredTooltip = HoverTooltip("filter", listOf(Text.literal("Filters"), Text.literal("${roleFamilyFilter.label} / ${stateFilter.label}")))
         }
         if (contains(localMouseX, localMouseY, CommandPostModeDrawer.OPTIONS_LEFT, CommandPostModeDrawer.TOOL_TOP, CommandPostModeDrawer.TOOL_SIZE, CommandPostModeDrawer.TOOL_SIZE)) {
-            hoveredTooltip = HoverTooltip("sort", listOf(Text.literal("Roster sort: ${rosterSort.label}")))
+            hoveredTooltip = HoverTooltip("sort", listOf(Text.literal("Options"), Text.literal("Sort: ${rosterSort.label}")))
         }
         if (commandMode == CommandPostMode.SOURCE) {
             drawSourceModeButton(context, localMouseX, localMouseY)
         }
     }
 
+    private fun drawFilterDrawer(context: DrawContext, localMouseX: Int, localMouseY: Int) {
+        drawerHits = when (drawerMode) {
+            CommandPostDrawerMode.CLOSED -> emptyList()
+            CommandPostDrawerMode.FILTERS -> CommandPostFilterDrawer.drawFilters(
+                context = context,
+                textRenderer = textRenderer,
+                originX = x,
+                originY = y,
+                localMouseX = localMouseX,
+                localMouseY = localMouseY,
+                query = sourceQuery,
+                searchActive = sourceSearchActive,
+                role = roleFamilyFilter,
+                state = stateFilter,
+                assignment = assignmentFilter,
+                availability = availabilityFilter,
+                assigned = assignedFilter,
+                fit = ::fit
+            )
+            CommandPostDrawerMode.OPTIONS -> CommandPostFilterDrawer.drawOptions(
+                context = context,
+                textRenderer = textRenderer,
+                originX = x,
+                originY = y,
+                localMouseX = localMouseX,
+                localMouseY = localMouseY,
+                sort = rosterSort,
+                fit = ::fit
+            )
+        }
+        drawerHits.firstOrNull { hit -> CommandPostFilterDrawer.contains(localMouseX, localMouseY, hit) }?.let { hit ->
+            hoveredTooltip = HoverTooltip("drawer-${hit.action.name}", drawerTooltip(hit.action))
+        }
+    }
+
     private fun drawJobsPanel(context: DrawContext, localMouseX: Int, localMouseY: Int) {
         drawOperationalFrame(context, "JOBS")
         val views = moduleViews()
+        val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
         if (views.isEmpty()) {
             drawSmallText(context, "Install tag cards", CommandPostStorageWidget.X + 14, CommandPostStorageWidget.Y + 24, 0xFFB8C3C7.toInt(), false)
             slotHits = emptyList()
@@ -407,7 +501,10 @@ class CommandPostPcScreen(
             val top = CommandPostStorageWidget.Y + 20 + row * 19
             val active = handler.moduleActive(view.moduleIndex)
             val assigned = handler.moduleAssigned(view.moduleIndex)
+            val roleMembers = members.filter { it.tagTypeId == view.tagType.id }
+            val blocked = roleMembers.count { it.isBlocked() || it.isFainted || it.isMissing }
             val rowColor = when {
+                blocked > 0 -> 0xFFFF7777.toInt()
                 active -> 0xFF6FEA8A.toInt()
                 assigned -> 0xFFFFD166.toInt()
                 else -> 0xFFEAF4F5.toInt()
@@ -415,9 +512,11 @@ class CommandPostPcScreen(
             context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 15, if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 17)) 0x5522343A else 0x3318242A)
             drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 14, top, rowColor, true)
             drawSmallText(context, TagTypePresentation.familyOf(view.tagType).label, CommandPostStorageWidget.X + 92, top, 0xFFB8C3C7.toInt(), false)
-            drawSmallText(context, if (active) "Active" else if (assigned) "Staffed" else "Open", CommandPostStorageWidget.X + 124, top + 8, rowColor, false)
+            drawSmallText(context, if (active) "Active" else if (assigned) "Staffed" else "Open", CommandPostStorageWidget.X + 124, top, rowColor, false)
+            drawSmallText(context, causeChip(active, assigned, blocked), CommandPostStorageWidget.X + 124, top + 8, rowColor, false)
             hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 156, 17) {
-                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + view.rowIndex)
+                selectedModuleIndex = view.moduleIndex
+                commandMode = CommandPostMode.POLICY
                 true
             }
         }
@@ -434,9 +533,10 @@ class CommandPostPcScreen(
             return
         }
         val hits = mutableListOf<PanelHit>()
-        views.take(5).forEachIndexed { row, view ->
+        views.take(4).forEachIndexed { row, view ->
             val top = CommandPostStorageWidget.Y + 18 + row * 24
-            context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 20, if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 20)) 0x5522343A else 0x3318242A)
+            val selected = selectedModuleIndex == view.moduleIndex
+            context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 20, if (selected) 0x77415661 else if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 20)) 0x5522343A else 0x3318242A)
             drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 13, top, 0xFFEAF4F5.toInt(), true)
             drawSmallText(context, "${humanValue(view.spec.filter.matchMode.name)} ${if (view.spec.filter.whitelist) "Allow" else "Deny"}", CommandPostStorageWidget.X + 13, top + 9, 0xFFB8C3C7.toInt(), false)
             val signalLeft = CommandPostStorageWidget.X + 91
@@ -446,7 +546,7 @@ class CommandPostPcScreen(
             drawMiniChip(context, targetLeft, top + 5, compactValue(view.spec.settings.targetStrategy.id), localMouseX, localMouseY)
             drawMiniChip(context, runLeft, top + 5, if (view.spec.settings.terminateAfterSuccess) "1" else "Loop", localMouseX, localMouseY)
             hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 80, 20) {
-                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + view.rowIndex)
+                selectedModuleIndex = view.moduleIndex
                 true
             }
             hits += PanelHit(signalLeft, top + 5, 20, 10) {
@@ -462,8 +562,33 @@ class CommandPostPcScreen(
                 true
             }
         }
+        drawPolicyContextSheet(context, localMouseX, localMouseY, views.firstOrNull { it.moduleIndex == selectedModuleIndex } ?: views.firstOrNull(), hits)
         panelHits = hits
         slotHits = emptyList()
+    }
+
+    private fun drawPolicyContextSheet(context: DrawContext, localMouseX: Int, localMouseY: Int, view: ModuleView?, hits: MutableList<PanelHit>) {
+        val top = CommandPostStorageWidget.Y + 118
+        context.fill(x + CommandPostStorageWidget.X + 8, y + top, x + CommandPostStorageWidget.X + 164, y + top + 31, 0xAA18242A.toInt())
+        if (view == null) {
+            drawSmallText(context, "No policy", CommandPostStorageWidget.X + 13, top + 11, 0xFF8FA0A8.toInt(), false)
+            return
+        }
+        drawSmallText(context, fit(TagTypePresentation.roleLabel(view.tagType), 70), CommandPostStorageWidget.X + 13, top + 4, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, TagTypePresentation.bindingLabel(view.tagType), CommandPostStorageWidget.X + 13, top + 15, 0xFFB8C3C7.toInt(), false)
+        val editLeft = CommandPostStorageWidget.X + 110
+        drawMiniChip(context, editLeft, top + 10, "Edit", localMouseX, localMouseY)
+        hits += PanelHit(editLeft, top + 10, 20, 10) {
+            client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.ACTION_OPEN_POLICY_ROW_BASE + view.rowIndex)
+            true
+        }
+    }
+
+    private fun causeChip(active: Boolean, assigned: Boolean, blocked: Int): String = when {
+        blocked > 0 -> "Blocked"
+        active -> "Working"
+        assigned -> "Ready"
+        else -> "Needs pal"
     }
 
     private fun drawLogisticsPanel(context: DrawContext) {
@@ -471,8 +596,12 @@ class CommandPostPcScreen(
         val storageSlots = handler.slots.drop(RouterScreenHandler.STORAGE_SCREEN_SLOT_START).take(RouterBlockEntity.STORAGE_SLOT_COUNT)
         val usedSlots = storageSlots.count { it.hasStack() }
         val itemCount = storageSlots.sumOf { it.stack.count }
-        val moduleCount = moduleViews().size
-        val logisticsCount = moduleViews().count { TagTypePresentation.familyOf(it.tagType) == com.cobblepalsworld.tag.TagRoleFamily.Logistics }
+        val views = moduleViews()
+        val moduleCount = views.size
+        val logisticsViews = views.filter { TagTypePresentation.familyOf(it.tagType) == com.cobblepalsworld.tag.TagRoleFamily.Logistics }
+        val logisticsCount = logisticsViews.size
+        val starved = logisticsViews.count { !handler.moduleAssigned(it.moduleIndex) }
+        val backedUp = if (usedSlots >= RouterBlockEntity.STORAGE_SLOT_COUNT * 2 / 3) logisticsViews.count { it.tagType == TagType.PULLER || it.tagType == TagType.VACUUM } else 0
         val pressure = when {
             usedSlots >= RouterBlockEntity.STORAGE_SLOT_COUNT -> "Full"
             usedSlots >= RouterBlockEntity.STORAGE_SLOT_COUNT * 2 / 3 -> "High"
@@ -483,12 +612,15 @@ class CommandPostPcScreen(
         drawSmallText(context, "$usedSlots/${RouterBlockEntity.STORAGE_SLOT_COUNT} slots", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 24, 0xFFDDE7EA.toInt(), false)
         drawSmallText(context, "$itemCount items", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 40, 0xFFB8C3C7.toInt(), false)
         drawSmallText(context, "Pressure $pressure", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 40, if (pressure == "Full") 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
-        drawSmallText(context, "Role cards", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 60, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$moduleCount installed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 60, 0xFFDDE7EA.toInt(), false)
-        drawSmallText(context, "Logistics", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 76, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "$logisticsCount routes", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 76, 0xFFDDE7EA.toInt(), false)
-        drawSmallText(context, "Upgrade slots", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 96, 0xFFEAF4F5.toInt(), true)
-        drawSmallText(context, "Use lower-left sockets", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 108, 0xFFB8C3C7.toInt(), false)
+        drawSmallText(context, "Role cards", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 58, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$moduleCount installed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 58, 0xFFDDE7EA.toInt(), false)
+        drawSmallText(context, "Routes", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 74, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$logisticsCount logistics", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 74, 0xFFDDE7EA.toInt(), false)
+        drawSmallText(context, "Starved", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 90, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, "$starved unstaffed", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 90, if (starved > 0) 0xFFFFD166.toInt() else 0xFFBFE7C4.toInt(), false)
+        drawSmallText(context, "Backlog", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 106, 0xFFEAF4F5.toInt(), true)
+        drawSmallText(context, if (backedUp > 0) "$backedUp intake high" else "Flow clear", CommandPostStorageWidget.X + 86, CommandPostStorageWidget.Y + 106, if (backedUp > 0) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt(), false)
+        drawSmallText(context, if (usedSlots == 0) "Senders wait for buffer" else if (pressure == "Full") "Pullers may stall" else "Items can move", CommandPostStorageWidget.X + 13, CommandPostStorageWidget.Y + 126, 0xFFB8C3C7.toInt(), false)
         panelHits = emptyList()
         slotHits = emptyList()
     }
@@ -502,6 +634,60 @@ class CommandPostPcScreen(
         val hovered = contains(localMouseX, localMouseY, left, top, 20, 10)
         context.fill(x + left, y + top, x + left + 20, y + top + 10, if (hovered) 0xAA31444C.toInt() else 0x88233238.toInt())
         drawSmallText(context, fit(value, 18), left + 2, top + 2, 0xFFEAF4F5.toInt(), false)
+    }
+
+    private fun handleDrawerHit(action: CommandPostFilterDrawer.Action) {
+        when (action) {
+            CommandPostFilterDrawer.Action.SEARCH -> {
+                sourceSearchActive = true
+                drawerMode = CommandPostDrawerMode.FILTERS
+            }
+            CommandPostFilterDrawer.Action.ROLE -> {
+                sourceSearchActive = false
+                roleFamilyFilter = roleFamilyFilter.next()
+                pastureScrollIndex = 0
+            }
+            CommandPostFilterDrawer.Action.STATE -> {
+                sourceSearchActive = false
+                stateFilter = stateFilter.next()
+                pastureScrollIndex = 0
+            }
+            CommandPostFilterDrawer.Action.ASSIGNMENT -> {
+                sourceSearchActive = false
+                assignmentFilter = assignmentFilter.next()
+                pastureScrollIndex = 0
+            }
+            CommandPostFilterDrawer.Action.AVAILABILITY -> {
+                sourceSearchActive = false
+                availabilityFilter = availabilityFilter.next()
+                pastureScrollIndex = 0
+            }
+            CommandPostFilterDrawer.Action.ASSIGNED -> {
+                sourceSearchActive = false
+                assignedFilter = assignedFilter.next()
+                pastureScrollIndex = 0
+            }
+            CommandPostFilterDrawer.Action.SORT -> {
+                sourceSearchActive = false
+                rosterSort = rosterSort.next()
+                pastureScrollIndex = 0
+            }
+        }
+    }
+
+    private fun drawerTooltip(action: CommandPostFilterDrawer.Action): List<Text> = when (action) {
+        CommandPostFilterDrawer.Action.SEARCH -> listOf(Text.literal("Search: ${sourceQuery.ifBlank { "all" }}"))
+        CommandPostFilterDrawer.Action.ROLE -> listOf(Text.literal("Role family: ${roleFamilyFilter.label}"))
+        CommandPostFilterDrawer.Action.STATE -> listOf(Text.literal("State: ${stateFilter.label}"))
+        CommandPostFilterDrawer.Action.ASSIGNMENT -> listOf(Text.literal("Assignment: ${assignmentFilter.label}"))
+        CommandPostFilterDrawer.Action.AVAILABILITY -> listOf(Text.literal("Availability: ${availabilityFilter.label}"))
+        CommandPostFilterDrawer.Action.ASSIGNED -> listOf(Text.literal("Source: ${assignedFilter.label}"))
+        CommandPostFilterDrawer.Action.SORT -> listOf(Text.literal("Sort: ${rosterSort.label}"))
+    }
+
+    private inline fun <reified T : Enum<T>> T.next(): T {
+        val values = enumValues<T>()
+        return values[(ordinal + 1) % values.size]
     }
 
     private fun drawSourceModeButton(context: DrawContext, localMouseX: Int, localMouseY: Int) {
@@ -591,25 +777,106 @@ class CommandPostPcScreen(
     }
 
     private fun requestSourceRefresh() {
-        CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos, sourceType, sourceBoxIndex, "")
+        CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos, sourceType, sourceBoxIndex, sourceQuery)
     }
 
     private fun filteredMembers(members: List<CommandPostCrewMemberSnapshot>): List<CommandPostCrewMemberSnapshot> {
         val filtered = members.filter { member ->
-            when (rosterFilter) {
-                CommandPostRosterFilter.ALL -> true
-                CommandPostRosterFilter.READY -> member.isReady()
-                CommandPostRosterFilter.ACTIVE -> member.isActive()
-                CommandPostRosterFilter.BLOCKED -> member.isBlocked()
-                CommandPostRosterFilter.CARGO -> member.carriedItemCount > 0
-                CommandPostRosterFilter.NEEDS_HELP -> member.isMissing || member.isFainted || member.isBlocked() || member.tagTypeId == null
-            }
+            memberMatchesQuery(member) &&
+                memberMatchesRole(member) &&
+                memberMatchesState(member) &&
+                memberMatchesAssignment(member) &&
+                memberMatchesAvailability(member) &&
+                assignedFilter != CommandPostAssignedFilter.UNASSIGNED
         }
         return when (rosterSort) {
             CommandPostRosterSort.STATUS -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName })
             CommandPostRosterSort.ROLE -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.tagTypeId ?: "" }.thenBy { it.displayName })
+            CommandPostRosterSort.FAMILY -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { familyLabel(it.tagTypeId) }.thenBy { it.displayName })
+            CommandPostRosterSort.ASSIGNMENT -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.assignmentLabel() }.thenBy { it.displayName })
             CommandPostRosterSort.SOURCE -> filtered.sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sourceType }.thenBy { it.boxIndex }.thenBy { it.slotIndex })
         }
+    }
+
+    private fun sourceMatchesFilters(pokemon: CrewSourcePokemonSnapshot): Boolean {
+        return sourceMatchesRole(pokemon) && sourceMatchesState(pokemon) && sourceMatchesAvailability(pokemon) && sourceMatchesAssigned(pokemon)
+    }
+
+    private fun sourceMatchesRole(pokemon: CrewSourcePokemonSnapshot): Boolean {
+        val family = pokemon.tagTypeId?.let(TagType::fromId)?.let(TagTypePresentation::familyOf)
+        return roleFamilyFilter.family == null || family == roleFamilyFilter.family
+    }
+
+    private fun sourceMatchesState(pokemon: CrewSourcePokemonSnapshot): Boolean = when (stateFilter) {
+        CommandPostStateFilter.ALL -> true
+        CommandPostStateFilter.READY -> pokemon.isAvailable && !pokemon.isFainted
+        CommandPostStateFilter.ACTIVE -> pokemon.workStatus.contains("work", ignoreCase = true) || pokemon.workStatus.contains("active", ignoreCase = true)
+        CommandPostStateFilter.BLOCKED -> !pokemon.isAvailable && !pokemon.isFainted && !pokemon.isCrewMember
+        CommandPostStateFilter.WAITING -> pokemon.workStatus.contains("await", ignoreCase = true) || pokemon.workStatus.contains("cooldown", ignoreCase = true)
+        CommandPostStateFilter.STANDBY -> pokemon.workStatus.contains("standby", ignoreCase = true)
+        CommandPostStateFilter.FAINTED -> pokemon.isFainted
+        CommandPostStateFilter.MISSING -> false
+        CommandPostStateFilter.NO_ROLE -> pokemon.tagTypeId == null
+        CommandPostStateFilter.CARGO -> pokemon.cargoSummary.isNotBlank()
+    }
+
+    private fun sourceMatchesAvailability(pokemon: CrewSourcePokemonSnapshot): Boolean = when (availabilityFilter) {
+        CommandPostAvailabilityFilter.ALL -> true
+        CommandPostAvailabilityFilter.AVAILABLE -> pokemon.isAvailable
+        CommandPostAvailabilityFilter.UNAVAILABLE -> !pokemon.isAvailable
+    }
+
+    private fun sourceMatchesAssigned(pokemon: CrewSourcePokemonSnapshot): Boolean = when (assignedFilter) {
+        CommandPostAssignedFilter.ALL -> true
+        CommandPostAssignedFilter.ASSIGNED -> pokemon.isCrewMember
+        CommandPostAssignedFilter.UNASSIGNED -> !pokemon.isCrewMember
+    }
+
+    private fun memberMatchesQuery(member: CommandPostCrewMemberSnapshot): Boolean {
+        val query = sourceQuery.trim().lowercase(Locale.ROOT)
+        if (query.isBlank()) return true
+        return member.displayName.lowercase(Locale.ROOT).contains(query) ||
+            member.species.lowercase(Locale.ROOT).contains(query) ||
+            member.sourceLabel().lowercase(Locale.ROOT).contains(query) ||
+            member.statusLabel().lowercase(Locale.ROOT).contains(query) ||
+            member.assignmentLabel().lowercase(Locale.ROOT).contains(query) ||
+            member.tagTypeId?.lowercase(Locale.ROOT)?.contains(query) == true
+    }
+
+    private fun memberMatchesRole(member: CommandPostCrewMemberSnapshot): Boolean {
+        val family = member.tagTypeId?.let(TagType::fromId)?.let(TagTypePresentation::familyOf)
+        return roleFamilyFilter.family == null || family == roleFamilyFilter.family
+    }
+
+    private fun memberMatchesState(member: CommandPostCrewMemberSnapshot): Boolean = when (stateFilter) {
+        CommandPostStateFilter.ALL -> true
+        CommandPostStateFilter.READY -> member.isReady()
+        CommandPostStateFilter.ACTIVE -> member.isActive()
+        CommandPostStateFilter.BLOCKED -> member.isBlocked()
+        CommandPostStateFilter.WAITING -> member.statusReason()?.kind == WorkerStatusKind.WAITING
+        CommandPostStateFilter.STANDBY -> member.statusReason()?.kind == WorkerStatusKind.STANDBY
+        CommandPostStateFilter.FAINTED -> member.isFainted
+        CommandPostStateFilter.MISSING -> member.isMissing
+        CommandPostStateFilter.NO_ROLE -> member.tagTypeId == null
+        CommandPostStateFilter.CARGO -> member.carriedItemCount > 0
+    }
+
+    private fun memberMatchesAssignment(member: CommandPostCrewMemberSnapshot): Boolean = when (assignmentFilter) {
+        CommandPostAssignmentFilter.ALL -> true
+        CommandPostAssignmentFilter.GENERAL -> member.assignmentMode() == WorkerAssignmentMode.GENERAL && member.allowFallback
+        CommandPostAssignmentFilter.PREFERRED -> member.assignmentMode() == WorkerAssignmentMode.PREFERRED
+        CommandPostAssignmentFilter.RESERVED -> member.assignmentMode() == WorkerAssignmentMode.RESERVED
+        CommandPostAssignmentFilter.STRICT -> !member.allowFallback
+    }
+
+    private fun memberMatchesAvailability(member: CommandPostCrewMemberSnapshot): Boolean = when (availabilityFilter) {
+        CommandPostAvailabilityFilter.ALL -> true
+        CommandPostAvailabilityFilter.AVAILABLE -> !member.isMissing && !member.isFainted && !member.isBlocked() && member.tagTypeId != null
+        CommandPostAvailabilityFilter.UNAVAILABLE -> member.isMissing || member.isFainted || member.isBlocked() || member.tagTypeId == null
+    }
+
+    private fun familyLabel(tagId: String?): String {
+        return tagId?.let(TagType::fromId)?.let(TagTypePresentation::familyOf)?.label ?: "None"
     }
 
     private fun detailLines(preview: CommandPostPokemonRenderView?): List<CommandPostInfoPanel.DetailLine> {
@@ -619,25 +886,30 @@ class CommandPostPcScreen(
             "female" in preview.aspects -> " F"
             else -> ""
         }
-        val base = CommandPostInfoPanel.DetailLine("Lv.${preview.level} ${friendlySpecies(preview.species)}$gender")
-        val status = when (preview) {
-            is SourcePokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.source.statusLabel(), if (preview.source.isAvailable) 0xFFBFE7C4.toInt() else 0xFFFFD166.toInt())
-            is CrewPokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.member.statusLabel(), if (preview.member.isBlocked() || preview.member.isFainted || preview.member.isMissing) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt())
-            else -> CommandPostInfoPanel.DetailLine(if (preview.isFainted) "Fainted" else "Ready")
+        val lines = mutableListOf(CommandPostInfoPanel.DetailLine("Lv.${preview.level} ${friendlySpecies(preview.species)}$gender"))
+        when (preview) {
+            is SourcePokemonRenderView -> {
+                val statusColor = if (preview.source.isAvailable) 0xFFBFE7C4.toInt() else 0xFFFFD166.toInt()
+                lines += CommandPostInfoPanel.DetailLine(preview.source.statusLabel(), statusColor, preview.source.isAvailable)
+                lines += CommandPostInfoPanel.DetailLine(preview.source.sourceLabel(), 0xFFB8C3C7.toInt())
+                lines += preview.source.tagTypeId?.let { tagRoleLine(it) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
+                lines += CommandPostInfoPanel.DetailLine(if (preview.source.isCrewMember) "Assigned" else "Unassigned", if (preview.source.isCrewMember) 0xFFFFD166.toInt() else 0xFFBFE7C4.toInt())
+                lines += CommandPostInfoPanel.DetailLine(preview.source.cargoSummary.ifBlank { if (preview.source.isFainted) "Fainted" else "No cargo" }, if (preview.source.isFainted) 0xFFFF7777.toInt() else 0xFF8FA0A8.toInt())
+            }
+            is CrewPokemonRenderView -> {
+                val member = preview.member
+                val statusColor = if (member.isBlocked() || member.isFainted || member.isMissing) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt()
+                lines += CommandPostInfoPanel.DetailLine(member.statusLabel(), statusColor, member.isReady())
+                lines += CommandPostInfoPanel.DetailLine(member.sourceLabel(), 0xFFB8C3C7.toInt())
+                lines += member.tagTypeId?.let { tagRoleLine(it) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
+                lines += CommandPostInfoPanel.DetailLine(member.assignmentLabel(), 0xFFEAF4F5.toInt())
+                lines += CommandPostInfoPanel.DetailLine(member.cargoSummary.ifBlank { member.statusDetailOrFallback() }, if (member.carriedItemCount > 0) 0xFFFFD166.toInt() else 0xFF8FA0A8.toInt())
+            }
+            else -> {
+                lines += CommandPostInfoPanel.DetailLine(if (preview.isFainted) "Fainted" else "Ready")
+            }
         }
-        val source = when (preview) {
-            is SourcePokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.source.sourceLabel(), 0xFFB8C3C7.toInt())
-            is CrewPokemonRenderView -> CommandPostInfoPanel.DetailLine(preview.member.sourceLabel(), 0xFFB8C3C7.toInt())
-            else -> CommandPostInfoPanel.DetailLine("Selected", 0xFFB8C3C7.toInt())
-        }
-        val role = when (preview) {
-            is SourcePokemonRenderView -> preview.source.tagTypeId?.let { tagRoleLine(it) }
-                ?: CommandPostInfoPanel.DetailLine(preview.source.cargoSummary.ifBlank { "Crew candidate" }, 0xFF8FA0A8.toInt())
-            is CrewPokemonRenderView -> preview.member.tagTypeId?.let { tagRoleLine(it) }
-                ?: CommandPostInfoPanel.DetailLine(preview.member.assignmentLabel(), 0xFF8FA0A8.toInt())
-            else -> CommandPostInfoPanel.DetailLine("Ready", 0xFF8FA0A8.toInt())
-        }
-        return listOf(base, status, source, role)
+        return lines
     }
 
     private fun tagRoleLine(tagId: String): CommandPostInfoPanel.DetailLine {
@@ -749,6 +1021,10 @@ class CommandPostPcScreen(
 
     private fun contains(mouseX: Int, mouseY: Int, left: Int, top: Int, width: Int, height: Int): Boolean {
         return mouseX >= left && mouseX < left + width && mouseY >= top && mouseY < top + height
+    }
+
+    private fun crewHitContains(mouseX: Int, mouseY: Int, hit: CommandPostPastureScrollList.CrewHit): Boolean {
+        return CommandPostPastureSlot.contains(mouseX, mouseY, CommandPostPastureSlot.Hit(hit.member, hit.left, hit.top, hit.action))
     }
 
     companion object {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.31
+
+- Finished the remaining concrete Command Post Cobblemon UI fidelity items: dedicated party slot helper, pasture row widget, recall button widget, richer stats-style selected Pokemon info, and real bottom filter/options drawers.
+- Added source and crew filtering for search text, role family, worker state, assignment mode, availability, and assigned/unassigned status while preserving paged Party/PC source requests.
+- Added in-shell Jobs, Policy, and Logistics polish: jobs-first health rows with cause chips, contextual policy side sheets, compact module summaries, and buffer/route health without returning to a dashboard-style tab strip.
+- Kept the gameplay pass scoped to existing systems: Activator remains narrowed by default and existing scan/cache paths are documented; Lookout, Scout, and Fisher stay removed because adding them would reintroduce new tags.
+- Updated the audit notes with completed, blocked, and validation-status entries for this pass.
+
 ## 0.2.30
 
 - Removed the unintended Fisher, Scout, and Lookout tag roles, including their behavior classes, recipes, item models, language keys, config defaults, and module tag entries.
