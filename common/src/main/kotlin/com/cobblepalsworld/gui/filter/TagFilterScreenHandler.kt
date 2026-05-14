@@ -1,6 +1,5 @@
 package com.cobblepalsworld.gui.filter
 
-import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagType
@@ -9,6 +8,7 @@ import com.cobblepalsworld.tag.TargetStrategy
 import com.cobblepalsworld.tag.RedstoneControlMode
 import com.cobblepalsworld.tag.filter.FilterMatchMode
 import com.cobblepalsworld.tag.filter.TagFilter
+import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.inventory.SimpleInventory
@@ -35,13 +35,12 @@ class TagFilterScreenHandler : ScreenHandler {
 
     companion object {
         private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
-        private const val DATA_SIZE = 11
     }
 
     // Client constructor — used by ScreenHandlerType factory
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(DATA_SIZE)
+        this.filterData = ArrayPropertyDelegate(8)
         this.itemSlot = -1
         this.trackedInventory = null
         this.trackedSlotIndex = -1
@@ -53,7 +52,7 @@ class TagFilterScreenHandler : ScreenHandler {
     // Server constructor — used when opening menu from TagItem.use()
     constructor(syncId: Int, playerInventory: PlayerInventory, hand: Hand) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(DATA_SIZE)
+        this.filterData = ArrayPropertyDelegate(8)
         this.itemSlot = if (hand == Hand.MAIN_HAND) playerInventory.selectedSlot else 40
         this.trackedInventory = playerInventory
         this.trackedSlotIndex = itemSlot
@@ -65,7 +64,7 @@ class TagFilterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory, trackedInventory: net.minecraft.inventory.Inventory, trackedSlotIndex: Int) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(DATA_SIZE)
+        this.filterData = ArrayPropertyDelegate(8)
         this.itemSlot = -1
         this.trackedInventory = trackedInventory
         this.trackedSlotIndex = trackedSlotIndex
@@ -76,62 +75,36 @@ class TagFilterScreenHandler : ScreenHandler {
     }
 
     private fun loadTrackedTag(stack: ItemStack, playerInventory: PlayerInventory) {
-        resetLoadedState()
         if (stack.item is TagItem) {
-            val tagItem = stack.item as TagItem
+            val registries = playerInventory.player.world.registryManager
             trackedTagId = TagItem.ensureTrackingId(stack)
             trackedRevision = TagItem.getRevision(stack)
-            filterData.set(7, tagItem.tagType.ordinal)
-
-            try {
-                val registries = playerInventory.player.world.registryManager
-                val spec = TagItem.getSpec(stack, registries)
-                val filter = spec?.filter ?: TagFilter.EMPTY
-                val settings = spec?.settings ?: TagSettings.EMPTY
-
-                this.matchTags = filter.matchTags
-                this.matchModIds = filter.matchModIds
-                filterData.set(0, if (filter.whitelist) 1 else 0)
-                filterData.set(1, if (filter.matchNbt) 1 else 0)
-                filterData.set(2, filter.matchMode.ordinal)
-                filterData.set(3, settings.targetStrategy.ordinal)
-                filterData.set(4, settings.redstoneMode.ordinal)
-                filterData.set(5, if (settings.terminateAfterSuccess) 1 else 0)
-                filterData.set(6, settings.regulatorAmount)
-                filterData.set(8, settings.extraTargets.size)
-                filterData.set(9, filter.matchTags.size)
-                filterData.set(10, filter.matchModIds.size)
-                if (tagItem.tagType.usesFilter) {
-                    for ((i, item) in filter.items.withIndex()) {
-                        if (i < TagFilter.MAX_FILTER_SLOTS) filterInventory.setStack(i, item.copy())
-                    }
+            val spec = TagItem.getSpec(stack, registries)
+            val filter = spec?.filter ?: TagFilter.EMPTY
+            val settings = spec?.settings ?: TagSettings.EMPTY
+            val tagType = (stack.item as TagItem).tagType
+            this.matchTags = filter.matchTags
+            this.matchModIds = filter.matchModIds
+            filterData.set(0, if (filter.whitelist) 1 else 0)
+            filterData.set(1, if (filter.matchNbt) 1 else 0)
+            filterData.set(2, filter.matchMode.ordinal)
+            filterData.set(3, settings.targetStrategy.ordinal)
+            filterData.set(4, settings.redstoneMode.ordinal)
+            filterData.set(5, if (settings.terminateAfterSuccess) 1 else 0)
+            filterData.set(6, settings.regulatorAmount)
+            filterData.set(7, tagType.ordinal)
+            if (tagType.usesFilter) {
+                for ((i, item) in filter.items.withIndex()) {
+                    if (i < TagFilter.MAX_FILTER_SLOTS) filterInventory.setStack(i, item.copy())
                 }
-            } catch (exception: Exception) {
-                CobblePalsWorld.LOGGER.warn("Failed to load tag editor data for {}. Using safe defaults.", tagItem.tagType.id, exception)
             }
         } else {
+            trackedTagId = null
+            trackedRevision = 0L
+            this.matchTags = emptyList()
+            this.matchModIds = emptyList()
+            filterData.set(6, 64)
             filterData.set(7, -1)
-        }
-    }
-
-    private fun resetLoadedState() {
-        trackedTagId = null
-        trackedRevision = 0L
-        matchTags = emptyList()
-        matchModIds = emptyList()
-        filterData.set(0, 1)
-        filterData.set(1, 0)
-        filterData.set(2, FilterMatchMode.ANY.ordinal)
-        filterData.set(3, TargetStrategy.ROUND_ROBIN.ordinal)
-        filterData.set(4, RedstoneControlMode.ALWAYS.ordinal)
-        filterData.set(5, 0)
-        filterData.set(6, 64)
-        filterData.set(7, -1)
-        filterData.set(8, 0)
-        filterData.set(9, 0)
-        filterData.set(10, 0)
-        for (index in 0 until TagFilter.MAX_FILTER_SLOTS) {
-            filterInventory.setStack(index, ItemStack.EMPTY)
         }
     }
 
@@ -164,11 +137,12 @@ class TagFilterScreenHandler : ScreenHandler {
     val terminateAfterSuccess: Boolean get() = filterData.get(5) != 0
     val regulatorAmount: Int get() = filterData.get(6).coerceIn(1, 64)
     val tagType: TagType? get() = TagType.entries.getOrNull(filterData.get(7))
-    val extraTargetCount: Int get() = filterData.get(8)
     val usesFilter: Boolean get() = tagType?.usesFilter != false
+    val extraTargetCount: Int get() = 0
     val filterItemCount: Int get() = (0 until TagFilter.MAX_FILTER_SLOTS).count { !filterInventory.getStack(it).isEmpty }
-    val matchTagCount: Int get() = filterData.get(9)
-    val matchModIdCount: Int get() = filterData.get(10)
+    val matchTagCount: Int get() = matchTags.size
+    val matchModIdCount: Int get() = matchModIds.size
+    val activeFilterGroupCount: Int get() = listOf(filterItemCount > 0, matchTagCount > 0, matchModIdCount > 0).count { it }
 
     private val protectedScreenSlotIndex: Int
         get() = when (itemSlot) {
@@ -273,6 +247,7 @@ class TagFilterScreenHandler : ScreenHandler {
                     terminateAfterSuccess = terminateAfterSuccess
                 )
                 TagItem.setSpec(stack, spec.copy(filter = filter, settings = settings), player.world.registryManager)
+                (trackedInventory as? RouterBlockEntity)?.markModuleSlotChanged(trackedSlotIndex)
                 trackedInventory.markDirty()
             }
         }

@@ -34,20 +34,20 @@ class RouterScreenHandler : ScreenHandler {
     private val routerData: PropertyDelegate
 
     companion object {
-        const val BACKGROUND_WIDTH = 248
+        const val BACKGROUND_WIDTH = 300
         const val BACKGROUND_HEIGHT = 414
         const val MODULE_COLUMNS = 3
         const val MODULE_ROWS = 3
         const val MODULE_START_X = 20
-        const val MODULE_START_Y = 60
-        const val BOOST_START_X = 80
-        const val BOOST_START_Y = 150
+        const val MODULE_START_Y = 78
+        const val BOOST_START_X = 82
+        const val BOOST_START_Y = 144
         const val STORAGE_COLUMNS = 9
         const val STORAGE_ROWS = 3
-        const val STORAGE_START_X = 16
-        const val STORAGE_START_Y = 260
-        const val PLAYER_INV_X = 16
-        const val PLAYER_INV_Y = 330
+        const val STORAGE_START_X = 69
+        const val STORAGE_START_Y = 220
+        const val PLAYER_INV_X = 69
+        const val PLAYER_INV_Y = 312
         const val MODULE_SCREEN_SLOT_COUNT = RouterBlockEntity.MODULE_SLOT_COUNT
         const val UPGRADE_SCREEN_SLOT_START = MODULE_SCREEN_SLOT_COUNT
         const val STORAGE_SCREEN_SLOT_START = UPGRADE_SCREEN_SLOT_START + RouterBlockEntity.UPGRADE_SLOT_COUNT
@@ -79,13 +79,13 @@ class RouterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
         this.routerInventory = SimpleInventory(RouterBlockEntity.TOTAL_SLOTS)
-        this.routerData = ArrayPropertyDelegate(7)
+        this.routerData = ArrayPropertyDelegate(25)
         setupSlots(playerInventory)
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory, routerInventory: Inventory, routerData: PropertyDelegate) : super(MenuTypes.ROUTER.get(), syncId) {
         checkSize(routerInventory, RouterBlockEntity.TOTAL_SLOTS)
-        checkDataCount(routerData, 7)
+        checkDataCount(routerData, 25)
         this.routerInventory = routerInventory
         this.routerData = routerData
         setupSlots(playerInventory)
@@ -97,6 +97,16 @@ class RouterScreenHandler : ScreenHandler {
     val activeCount: Int get() = routerData.get(3)
     val linkedPasturePos: BlockPos?
         get() = if (linked) BlockPos(routerData.get(4), routerData.get(5), routerData.get(6)) else null
+
+    fun moduleAssigned(moduleIndex: Int): Boolean {
+        if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
+        return routerData.get(7 + moduleIndex) != 0
+    }
+
+    fun moduleActive(moduleIndex: Int): Boolean {
+        if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
+        return routerData.get(16 + moduleIndex) != 0
+    }
 
     private fun setupSlots(playerInventory: PlayerInventory) {
         addProperties(routerData)
@@ -253,7 +263,7 @@ class RouterScreenHandler : ScreenHandler {
     }
 
     private fun mutatePolicyRow(player: PlayerEntity, rowIndex: Int, transform: (TagSpec) -> TagSpec): Boolean {
-        val moduleIndex = groupedPolicyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
+        val moduleIndex = policyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
         val inventorySlot = RouterBlockEntity.MODULE_SLOT_START + moduleIndex
         val stack = routerInventory.getStack(inventorySlot)
         val tagItem = stack.item as? TagItem ?: return false
@@ -261,6 +271,7 @@ class RouterScreenHandler : ScreenHandler {
         val original = TagItem.getSpec(stack, registries) ?: TagSpec(type = tagItem.tagType)
         val updated = transform(original)
         TagItem.setSpec(stack, updated, registries)
+        (routerInventory as? RouterBlockEntity)?.markModuleSlotChanged(inventorySlot)
         routerInventory.markDirty()
         markAssignmentChange(player)
         return true
@@ -303,7 +314,7 @@ class RouterScreenHandler : ScreenHandler {
     }
 
     private fun openPolicyRow(player: PlayerEntity, rowIndex: Int): Boolean {
-        val targetModuleIndex = groupedPolicyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
+        val targetModuleIndex = policyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
         return openRoleEditor(player, RouterBlockEntity.MODULE_SLOT_START + targetModuleIndex)
     }
 
@@ -322,17 +333,14 @@ class RouterScreenHandler : ScreenHandler {
         return true
     }
 
-    private fun groupedPolicyModules(): List<PolicyModuleTarget> {
+    private fun policyModules(): List<PolicyModuleTarget> {
         return (0 until RouterBlockEntity.MODULE_SLOT_COUNT)
             .mapNotNull { moduleIndex ->
                 val stack = routerInventory.getStack(RouterBlockEntity.MODULE_SLOT_START + moduleIndex)
                 val tagItem = stack.item as? TagItem ?: return@mapNotNull null
-                moduleIndex to tagItem.tagType
+                PolicyModuleTarget(tagItem.tagType, moduleIndex)
             }
-            .groupBy({ it.second }, { it.first })
-            .entries
-            .sortedWith(compareByDescending<Map.Entry<TagType, List<Int>>> { it.value.size }.thenBy { TagTypePresentation.roleLabel(it.key) })
-            .map { (tagType, moduleIndices) -> PolicyModuleTarget(tagType, moduleIndices.first()) }
+            .sortedBy { it.moduleIndex }
     }
 
     private data class PolicyModuleTarget(

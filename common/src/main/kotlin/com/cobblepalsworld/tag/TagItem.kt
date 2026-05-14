@@ -420,7 +420,6 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
         type: TooltipType
     ) {
         tooltip.add(Text.literal(tagType.description).formatted(Formatting.BLUE))
-        tooltip.add(Text.literal("Role: ${TagTypePresentation.roleLabel(tagType)} • ${TagTypePresentation.familyOf(tagType).label}").formatted(Formatting.DARK_AQUA))
 
         val registries = context.registryLookup ?: return
         if (tagType.usesFilter) {
@@ -471,7 +470,16 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
                 tooltip.add(Text.literal("Bound Box: ${area.min.x}, ${area.min.y}, ${area.min.z}").formatted(Formatting.GREEN))
                 tooltip.add(Text.literal("to ${area.max.x}, ${area.max.y}, ${area.max.z} (${area.width()}x${area.height()}x${area.depth()})").formatted(Formatting.GREEN))
             } else if (bound != null) {
-                val label = TagTypePresentation.bindingLabel(tagType)
+                val label = when (tagType.bindingMode) {
+                    BindingMode.CONTAINER -> "Bound Container"
+                    BindingMode.POSITION -> when (tagType) {
+                        TagType.BREAKER -> "Bound Block"
+                        TagType.ACTIVATOR -> "Bound Target"
+                        else -> "Bound Position"
+                    }
+                    BindingMode.AREA -> "Bound Box"
+                    BindingMode.NONE -> "Bound"
+                }
                 tooltip.add(Text.literal("$label: ${bound.x}, ${bound.y}, ${bound.z}").formatted(Formatting.GREEN))
             } else if (pending != null) {
                 tooltip.add(Text.literal("Area Start: ${pending.x}, ${pending.y}, ${pending.z}").formatted(Formatting.YELLOW))
@@ -485,7 +493,7 @@ class TagItem(val tagType: TagType, settings: Settings, val isCanonicalItem: Boo
             tooltip.add(Text.literal("Extra Targets: ${settings.extraTargets.size}").formatted(Formatting.AQUA))
         }
 
-        tooltip.add(Text.literal("Command Post: hover this card and press R to edit").formatted(Formatting.DARK_GRAY))
+        tooltip.add(Text.literal("Command Post: hover + R to edit").formatted(Formatting.DARK_GRAY))
     }
 
     private fun humanValue(value: String): String =

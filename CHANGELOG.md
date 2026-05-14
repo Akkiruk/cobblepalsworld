@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.5
+
+- Reworked the Command Post Roles view so every installed role card is its own policy line, making duplicate or multi-card setups editable and readable without collapsing them by role type.
+- Added shared policy analysis for empty allow filters, overly strict ALL-mode filters, shared item filters, and duplicate targets so weak filter setups surface directly in Command Post labels and tooltips.
+- Made role-card and filter edits invalidate the affected module immediately, so Command Post assignments and policy changes refresh on the next router tick instead of waiting behind the dispatch cooldown.
+
+## 0.2.4
+
+- Made Home the basic work surface by showing the player inventory there, so role cards can be inserted into the Command Post without switching to Buffer first.
+- Cleaned up Command Post wording and status labels so role cards, crew state, boosts, and attention rows use shorter, clearer language.
+- Fixed remaining Command Post text collisions by moving Crew controls down, widening the Roles detail column, and forcing action chips to stay inside their allotted space.
+
+## 0.2.3
+
+- Rebuilt the Command Post into a wider, quieter master-detail interface with compact tabs, persistent role slots, readable crew status, and separate Crew, Roles, and Buffer work surfaces.
+- Reworked the pal detail, role policy, and pasture overview screens onto the same restrained visual system so backgrounds, buttons, slots, and status text now feel consistent instead of stitched together.
+- Expanded cramped inventory layouts and removed striped filler, dense instructional copy, and overlapping drawer behavior so controls stay close to the thing they modify.
+
 ## 0.2.2
 
 - Split the Command Post into a real five-surface shell with a dedicated Jobs board, a filterable and paged Crew roster, and in-shell drawers for pal detail and quick role-policy tuning instead of forcing every drill-in into detached screens.

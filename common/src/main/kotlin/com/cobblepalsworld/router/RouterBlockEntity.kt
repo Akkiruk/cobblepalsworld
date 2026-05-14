@@ -4,6 +4,8 @@ import com.cobblemon.mod.common.block.entity.PokemonPastureBlockEntity
 import com.cobblepalsworld.augment.AugmentItem
 import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
+import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.gui.router.RouterScreenHandler
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.pasture.TagAssignmentManager
@@ -70,13 +72,22 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                 4 -> linkedPasturePos?.x ?: 0
                 5 -> linkedPasturePos?.y ?: 0
                 6 -> linkedPasturePos?.z ?: 0
+                in 7 until 7 + MODULE_SLOT_COUNT -> {
+                    val moduleIndex = index - 7
+                    if (assignedWorkers[moduleIndex] != null) 1 else 0
+                }
+                in 16 until 16 + MODULE_SLOT_COUNT -> {
+                    val moduleIndex = index - 16
+                    val pokemonId = assignedWorkers[moduleIndex]
+                    if (pokemonId != null && StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
+                }
                 else -> 0
             }
         }
 
         override fun set(index: Int, value: Int) {}
 
-        override fun size(): Int = 7
+        override fun size(): Int = 25
     }
 
     var cooldownTicks: Int = 0
@@ -251,6 +262,14 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         }
     }
 
+    fun markModuleSlotChanged(slot: Int) {
+        moduleIndexForSlot(slot)?.let { moduleIndex ->
+            clearModuleRuntime(moduleIndex)
+            cooldownTicks = 0
+            markDirty()
+        }
+    }
+
     fun dispatchCursorStart(rosterSize: Int): Int {
         if (rosterSize <= 0) return 0
         return dispatchCursor % rosterSize
@@ -419,8 +438,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     override fun removeStack(slot: Int, amount: Int): ItemStack {
         val removed = inventory.removeStack(slot, amount)
         if (!removed.isEmpty) {
-            moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
-            markDirty()
+            markModuleSlotChanged(slot)
         }
         return removed
     }
@@ -428,8 +446,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     override fun removeStack(slot: Int): ItemStack {
         val removed = inventory.removeStack(slot)
         if (!removed.isEmpty) {
-            moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
-            markDirty()
+            markModuleSlotChanged(slot)
         }
         return removed
     }
@@ -440,8 +457,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         if (!normalized.isEmpty && normalized.count > normalized.maxCount) {
             normalized.count = normalized.maxCount
         }
-        moduleIndexForSlot(slot)?.let(::clearModuleRuntime)
-        markDirty()
+        if (moduleIndexForSlot(slot) != null) {
+            markModuleSlotChanged(slot)
+        } else {
+            markDirty()
+        }
     }
 
     override fun canPlayerUse(player: PlayerEntity): Boolean {
