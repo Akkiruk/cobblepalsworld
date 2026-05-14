@@ -525,7 +525,7 @@ object CobblePalsNetworking {
                 TagExecutionEngine.cleanup(pokemonId, world, controllerPos)
                 TagAssignmentManager.removeIfControlledBy(pokemonId, dimensionId, controllerPos)
                 router.removeAssignedWorker(pokemonId)
-                CommandPostCrewLifecycle.recall(world, removed, player.uuid)
+                CommandPostCrewLifecycle.releaseFromCommandPost(world, controllerPos, removed, player.uuid)
             }
             removed != null
         }

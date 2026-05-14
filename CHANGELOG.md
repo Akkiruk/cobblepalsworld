@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.38
+
+- Removing Pokemon from the Command Post menu now immediately hard-cleans their loaded worker entities, including duplicate/orphan PokemonEntity instances with the same Pokemon UUID around the post.
+- Fixed empty Command Post rosters leaving previously sent-out workers in the world because removal relied on Cobblemon's single tracked entity reference and animated recall path.
+
 ## 0.2.37
 
 - Fixed Command Post workers being immediately sent back out after `/kill @e`, which made entity cleanup commands keep finding the same worker entities again.
