@@ -1,5 +1,7 @@
 package com.cobblepalsworld.gui.router
 
+import com.cobblemon.mod.common.client.CobblemonClient
+import com.cobblemon.mod.common.client.gui.pc.PCGUI
 import com.cobblepalsworld.gui.CobblePalsUiTheme
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
@@ -10,6 +12,7 @@ import com.cobblepalsworld.gui.crew.CrewSourceSlotSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourceType
+import com.cobblepalsworld.integration.cobblemon.CommandPostPCGUIConfiguration
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
@@ -288,6 +291,24 @@ class RouterScreen(
 
     private fun requestCrewSourceRefresh() {
         CobblePalsNetworking.sendCrewSourceRefresh(handler.routerPos)
+    }
+
+    private fun openCobblemonCrewPc() {
+        val client = client ?: return
+        val playerId = client.player?.uuid
+        val pc = playerId?.let { CobblemonClient.storage.pcStores[it] } ?: CobblemonClient.storage.pcStores.values.firstOrNull()
+        if (pc == null) {
+            client.player?.sendMessage(Text.literal("Cobblemon PC storage is still syncing. Reopen this screen in a moment."), false)
+            return
+        }
+        client.setScreen(
+            PCGUI(
+                pc = pc,
+                party = CobblemonClient.storage.party,
+                configuration = CommandPostPCGUIConfiguration(handler.routerPos),
+                openOnBox = CobblemonClient.lastPcBoxViewed
+            )
+        )
     }
 
     private fun currentNativeCrewSnapshot() = CommandPostCrewSnapshotCache.get(handler.routerPos)
@@ -713,8 +734,9 @@ class RouterScreen(
         val sources = currentCrewSources()
         fun count(type: CrewSourceType) = sources.firstOrNull { it.sourceType == type }?.entries?.size ?: 0
         return listOf(
-            TextChipButton("source-party", SOURCE_LEFT, CREW_CHIP_TOP, 56, "Party", count(CrewSourceType.PARTY).toString(), CobblePalsUiTheme.ACCENT_CREW, crewSourceType == CrewSourceType.PARTY, listOf(Text.literal("Party Pokemon"))),
-            TextChipButton("source-pc", SOURCE_LEFT + 60, CREW_CHIP_TOP, 52, "PC", count(CrewSourceType.PC).toString(), CobblePalsUiTheme.ACCENT_BUFFER, crewSourceType == CrewSourceType.PC, listOf(Text.literal("PC Pokemon")))
+            TextChipButton("source-party", SOURCE_LEFT, CREW_CHIP_TOP, 42, "Party", count(CrewSourceType.PARTY).toString(), CobblePalsUiTheme.ACCENT_CREW, crewSourceType == CrewSourceType.PARTY, listOf(Text.literal("Party Pokemon"))),
+            TextChipButton("source-pc", SOURCE_LEFT + 46, CREW_CHIP_TOP, 34, "PC", count(CrewSourceType.PC).toString(), CobblePalsUiTheme.ACCENT_BUFFER, crewSourceType == CrewSourceType.PC, listOf(Text.literal("PC Pokemon"))),
+            TextChipButton("source-open-pc", SOURCE_LEFT + 84, CREW_CHIP_TOP, 44, "", "Open", CobblePalsUiTheme.ACCENT_POLICY, true, listOf(Text.literal("Open Cobblemon PC"), Text.literal("Use the real Cobblemon storage UI to assign crew.")))
         )
     }
 
@@ -1268,6 +1290,10 @@ class RouterScreen(
                 }
 
                 sourceTypeButtons().firstOrNull { contains(localMouseX, localMouseY, it.left, it.top, it.width, CHIP_HEIGHT) }?.let { chip ->
+                    if (chip.id == "source-open-pc") {
+                        openCobblemonCrewPc()
+                        return true
+                    }
                     crewSourceType = if (chip.id == "source-party") CrewSourceType.PARTY else CrewSourceType.PC
                     crewSourcePageIndex = 0
                     selectedSourcePokemonId = null

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.23
+
+- Added a Command Post crew assignment path that opens Cobblemon's real PC storage UI instead of relying only on the recreated Crew tab source grid.
+- Added an MPL-noticed Cobblemon-derived PC GUI configuration that routes selected Party/PC Pokemon into CobblePals Command Post crew assignment.
+- Kept the existing Command Post crew roster controls available for mode, fallback, return-home, and removal after Pokemon are assigned.
+
 ## 0.2.22
 
 - Changed Command Post crew assignment from Party so selected Pokemon are moved out of the active Party into the owner's PC before the Command Post lease is created.
