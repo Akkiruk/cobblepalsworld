@@ -8,6 +8,10 @@ data class CobblePalsConfig(
 ) {
     data class GeneralConfig(
         val tickInterval: Int = 5,
+        /** Full-speed worker ticking radius around a pasture. */
+        val nearbyPlayerRange: Int = 48,
+        /** Additional multiplier applied to pasture ticks when nobody is nearby. */
+        val distantTickMultiplier: Int = 4,
         val idleSearchRetryTicks: Int = 20,
         val maxWorkersPerPasture: Int = 6,
         val inventoryBstDivisor: Int = 100,
@@ -24,6 +28,8 @@ data class CobblePalsConfig(
     ) {
         fun validated() = GeneralConfig(
             tickInterval = tickInterval.coerceAtLeast(1),
+            nearbyPlayerRange = nearbyPlayerRange.coerceAtLeast(8),
+            distantTickMultiplier = distantTickMultiplier.coerceAtLeast(1),
             idleSearchRetryTicks = idleSearchRetryTicks.coerceAtLeast(tickInterval.coerceAtLeast(1) * 4),
             maxWorkersPerPasture = maxWorkersPerPasture.coerceAtLeast(1),
             inventoryBstDivisor = inventoryBstDivisor.coerceAtLeast(1),

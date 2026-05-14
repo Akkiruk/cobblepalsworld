@@ -25,7 +25,13 @@ object CobblePalsWorldClient {
         }
 
         CobblePalsNetworking.registerClient { snapshot ->
-            MinecraftClient.getInstance().setScreen(PastureManagerScreen(snapshot))
+            val client = MinecraftClient.getInstance()
+            val currentScreen = client.currentScreen
+            if (currentScreen is PastureManagerScreen && currentScreen.appliesTo(snapshot.pasturePos)) {
+                currentScreen.updateSnapshot(snapshot)
+            } else {
+                client.setScreen(PastureManagerScreen(snapshot))
+            }
         }
     }
 }

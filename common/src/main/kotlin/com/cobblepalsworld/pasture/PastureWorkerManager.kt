@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 private data class PastureKey(val dimension: RegistryKey<World>, val pos: BlockPos)
 
 object PastureWorkerManager {
-    private val tickInterval get() = ConfigManager.config.general.tickInterval
+    private val baseTickInterval get() = ConfigManager.config.general.tickInterval
 
     // Track previously-tethered UUIDs per pasture for recall cleanup
     private val previousTethered = ConcurrentHashMap<PastureKey, MutableSet<UUID>>()
@@ -43,8 +43,9 @@ object PastureWorkerManager {
             InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }
         }
 
-        // Stagger pasture ticks — offset by position hash
-        if ((world.time + (pos.hashCode().toLong() and 0x7FFFFFFF)) % tickInterval != 0L) return
+        // Stagger pasture ticks — offset by position hash, with slower cadence for distant pastures.
+        val pastureTickInterval = effectiveTickInterval(serverWorld, pos)
+        if ((world.time + (pos.hashCode().toLong() and 0x7FFFFFFF)) % pastureTickInterval != 0L) return
 
         val tethered = pasture.tetheredPokemon
 
@@ -116,6 +117,24 @@ object PastureWorkerManager {
 
     private const val WANDER_RADIUS = 4
     private const val WANDER_INTERVAL = 80L // attempt wander every ~4 seconds
+
+    private fun effectiveTickInterval(world: ServerWorld, pos: BlockPos): Long {
+        val general = ConfigManager.config.general
+        if (general.distantTickMultiplier <= 1) {
+            return baseTickInterval.toLong()
+        }
+
+        val rangeSq = general.nearbyPlayerRange.toDouble() * general.nearbyPlayerRange.toDouble()
+        val centerX = pos.x + 0.5
+        val centerY = pos.y + 0.5
+        val centerZ = pos.z + 0.5
+        val hasNearbyPlayer = world.players.any { player ->
+            !player.isSpectator && player.squaredDistanceTo(centerX, centerY, centerZ) <= rangeSq
+        }
+
+        val multiplier = if (hasNearbyPlayer) 1 else general.distantTickMultiplier
+        return (baseTickInterval * multiplier).toLong().coerceAtLeast(1L)
+    }
 
     private fun tickIdleWander(world: World, entity: PokemonEntity, pasturePos: BlockPos) {
         if (world.time % WANDER_INTERVAL != 0L) return

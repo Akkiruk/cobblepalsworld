@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.31
+
+- Reworked the pasture manager into a live status board: rows now refresh in place, sort active workers to the top, and expose real worker phase, cooldown, cargo, and Command Post linkage instead of a stale one-shot snapshot.
+- Added proper tag and cargo icons plus clearer row summaries so it is much easier to read what each pal is assigned to, where it is heading, and whether it is actively carrying items.
+- Added nearby-player pasture throttling controls so distant pastures stay on the same authoritative worker system while ticking more slowly when nobody is around to watch the work.
+
 ## 0.1.30
 
 - Removed the dormant controller-native execution branch entirely so Command Post jobs now have one worker-led runtime instead of a half-dead second scheduler and UI state model.

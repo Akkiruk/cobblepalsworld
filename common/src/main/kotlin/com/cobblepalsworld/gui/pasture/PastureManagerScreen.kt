@@ -1,34 +1,40 @@
 package com.cobblepalsworld.gui.pasture
 
-import com.cobblemon.mod.common.api.gui.blitk
 import com.cobblemon.mod.common.client.CobblemonResources
 import com.cobblemon.mod.common.client.gui.drawProfilePokemon
 import com.cobblemon.mod.common.client.render.drawScaledText
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState
-import com.cobblemon.mod.common.entity.PoseType
-import com.cobblemon.mod.common.util.cobblemonResource
+import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.gui.UiGlyph
 import com.cobblepalsworld.gui.UiIconButtons
 import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.tag.TagRegistry
+import com.cobblepalsworld.tag.TagType
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.Screen
+import net.minecraft.item.ItemStack
+import net.minecraft.item.Items
+import net.minecraft.registry.Registries
 import net.minecraft.text.MutableText
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
+import net.minecraft.util.math.BlockPos
 import org.joml.Quaternionf
-import org.joml.Vector3f
+import java.util.Locale
+import java.util.UUID
 
-class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.literal("CobblePals Manager")) {
+class PastureManagerScreen(private var snapshot: PastureSnapshot) : Screen(Text.literal("CobblePals Manager")) {
 
     companion object {
-        private const val PANEL_WIDTH = 280
-        private const val PANEL_HEIGHT = 200
-        private const val ENTRY_HEIGHT = 38
-        private const val HEADER_HEIGHT = 30
+        private const val PANEL_WIDTH = 284
+        private const val PANEL_HEIGHT = 208
+        private const val ENTRY_HEIGHT = 40
+        private const val HEADER_HEIGHT = 34
         private const val SCROLL_BAR_WIDTH = 5
         private const val PORTRAIT_SIZE = 28
         private const val HOME_BTN_WIDTH = 12
         private const val HOME_BTN_HEIGHT = 10
+        private const val REFRESH_INTERVAL_TICKS = 20
 
         // Cobblemon dark teal/green palette
         private const val BG_OUTER = 0xE0102428      // very dark teal border
@@ -48,20 +54,44 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
         private const val ITEMS_COLOR = 0xFFB74D
         private const val TAG_COLOR = 0x4ADE80
         private const val NO_TAG_COLOR = 0x4A5568
-
-        private val PORTRAIT_BG = cobblemonResource("textures/gui/pc/portrait_background.png")
     }
 
     private var scrollOffset = 0
-    private val visibleEntries get() = (PANEL_HEIGHT - HEADER_HEIGHT) / ENTRY_HEIGHT
+    private val visibleEntries get() = maxOf(1, (PANEL_HEIGHT - HEADER_HEIGHT) / ENTRY_HEIGHT)
     private var panelLeft = 0
     private var panelTop = 0
-    private val portraitStates = mutableMapOf<Int, FloatingState>()
+    private var refreshTicks = 0
+    private val portraitStates = mutableMapOf<UUID, FloatingState>()
 
     override fun init() {
         super.init()
         panelLeft = (width - PANEL_WIDTH) / 2
         panelTop = (height - PANEL_HEIGHT) / 2
+    }
+
+    override fun tick() {
+        super.tick()
+        refreshTicks++
+        if (refreshTicks >= REFRESH_INTERVAL_TICKS) {
+            refreshTicks = 0
+            CobblePalsNetworking.sendOpenRequest(snapshot.pasturePos)
+        }
+    }
+
+    fun appliesTo(pasturePos: BlockPos): Boolean = snapshot.pasturePos == pasturePos
+
+    fun updateSnapshot(snapshot: PastureSnapshot) {
+        val samePasture = this.snapshot.pasturePos == snapshot.pasturePos
+        this.snapshot = snapshot
+        if (!samePasture) {
+            scrollOffset = 0
+            portraitStates.clear()
+        }
+
+        val maxScroll = maxOf(0, snapshot.pals.size - visibleEntries)
+        scrollOffset = scrollOffset.coerceIn(0, maxScroll)
+        portraitStates.keys.retainAll(snapshot.pals.mapTo(mutableSetOf()) { it.pokemonId })
+        refreshTicks = 0
     }
 
     override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
@@ -92,16 +122,43 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
             colour = ACCENT
         )
 
-        // Subtitle info
         val pos = snapshot.pasturePos
-        val workerCount = snapshot.pals.count { it.tagTypeId != null }
-        val subText = "${snapshot.ownerName}'s Pasture  \u2022  ${pos.x}, ${pos.y}, ${pos.z}  \u2022  $workerCount/${snapshot.maxWorkers} working"
+        val assignedCount = snapshot.pals.count { it.tagTypeId != null }
+        val activeCount = snapshot.pals.count { it.isActive() }
+        val cargoCount = snapshot.pals.count { it.hasCargo() }
+        val ecoCount = snapshot.pals.count { it.isEcoMode }
+        val subText = "${snapshot.ownerName}'s Pasture  \u2022  ${pos.x}, ${pos.y}, ${pos.z}"
         drawScaledText(
             context = context,
             text = Text.literal(subText) as MutableText,
             x = pL + PANEL_WIDTH / 2,
             y = pT + 17,
             scale = 0.85F,
+            centered = true,
+            shadow = true,
+            colour = TEXT_DIM
+        )
+
+        val statusText = buildString {
+            append("Assigned ")
+            append(assignedCount)
+            append("/")
+            append(snapshot.maxWorkers)
+            append("  \u2022  Active ")
+            append(activeCount)
+            append("  \u2022  Cargo ")
+            append(cargoCount)
+            if (ecoCount > 0) {
+                append("  \u2022  Eco ")
+                append(ecoCount)
+            }
+        }
+        drawScaledText(
+            context = context,
+            text = Text.literal(statusText) as MutableText,
+            x = pL + PANEL_WIDTH / 2,
+            y = pT + 25,
+            scale = 0.72F,
             centered = true,
             shadow = true,
             colour = TEXT_DIM
@@ -147,6 +204,9 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                 else -> ROW_ODD.toInt()
             }
             context.fill(pL, ey, pL + PANEL_WIDTH - SCROLL_BAR_WIDTH - 2, ey + ENTRY_HEIGHT, rowBg)
+            if (pal.isActive()) {
+                context.fill(pL, ey, pL + 3, ey + ENTRY_HEIGHT, statusColor(pal))
+            }
 
             // Bottom row divider
             context.fill(pL + 4, ey + ENTRY_HEIGHT - 1, pL + PANEL_WIDTH - SCROLL_BAR_WIDTH - 6, ey + ENTRY_HEIGHT, DIVIDER.toInt())
@@ -163,7 +223,7 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
             context.fill(portraitX, portraitY + PORTRAIT_SIZE - 1, portraitX + PORTRAIT_SIZE, portraitY + PORTRAIT_SIZE, DIVIDER.toInt())
 
             // Render Pokemon 3D portrait
-            renderPokemonPortrait(context, pal, i, portraitX, portraitY, delta)
+            renderPokemonPortrait(context, pal, portraitX, portraitY, delta)
 
             // Name + Level
             val nameX = pL + 38
@@ -179,7 +239,7 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
             )
             drawScaledText(
                 context = context,
-                text = Text.literal("Lv.${pal.level}") as MutableText,
+                text = Text.literal("Lv.${pal.level}  \u2022  ${speciesLabel(pal)}") as MutableText,
                 x = nameX,
                 y = ey + 17,
                 scale = 0.75F,
@@ -196,6 +256,16 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                     shadow = true,
                     colour = TEXT_FAINTED
                 )
+            } else if (pal.isManagedByCommandPost) {
+                drawScaledText(
+                    context = context,
+                    text = Text.literal("Command Post linked") as MutableText,
+                    x = nameX,
+                    y = ey + 26,
+                    scale = 0.65F,
+                    shadow = true,
+                    colour = BINDING_COLOR
+                )
             }
 
             // ── Column divider ──
@@ -203,11 +273,15 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
 
             // ── Column 2: Tag + Filter + Augment (100..190) ──
             val tagX = pL + 104
+            tagStack(pal)?.let { stack: ItemStack ->
+                context.drawItem(stack, tagX, ey + 4)
+            }
+            val tagTextX = tagX + 18
             if (pal.tagTypeId != null) {
                 drawScaledText(
                     context = context,
                     text = Text.literal(pal.tagTypeId.uppercase()).styled { it.withBold(true) } as MutableText,
-                    x = tagX,
+                    x = tagTextX,
                     y = ey + 5,
                     scale = 0.85F,
                     shadow = true,
@@ -217,7 +291,7 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                 drawScaledText(
                     context = context,
                     text = Text.literal("No Tag") as MutableText,
-                    x = tagX,
+                    x = tagTextX,
                     y = ey + 5,
                     scale = 0.85F,
                     shadow = true,
@@ -225,29 +299,18 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                 )
             }
 
-            // Filter summary
-            if (pal.filterSummary.isNotEmpty() && pal.filterSummary != "No filter") {
-                drawScaledText(
-                    context = context,
-                    text = Text.literal("\u25B8 ${pal.filterSummary}") as MutableText,
-                    x = tagX,
-                    y = ey + 16,
-                    scale = 0.7F,
-                    shadow = true,
-                    colour = TEXT_DIM
-                )
-            }
+            drawStatusChip(context, pal, tagX, ey + 17)
 
-            // Augment summary
-            if (pal.augmentSummary.isNotEmpty()) {
+            val summaryLine = compactSummary(pal)
+            if (summaryLine.isNotEmpty()) {
                 drawScaledText(
                     context = context,
-                    text = Text.literal("\u2726 ${pal.augmentSummary}") as MutableText,
+                    text = Text.literal(summaryLine) as MutableText,
                     x = tagX,
-                    y = ey + 26,
-                    scale = 0.7F,
+                    y = ey + 28,
+                    scale = 0.68F,
                     shadow = true,
-                    colour = AUGMENT_COLOR
+                    colour = if (pal.augmentSummary.isNotEmpty()) AUGMENT_COLOR else TEXT_DIM
                 )
             }
 
@@ -256,42 +319,41 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
 
             // ── Column 3: Binding + Items (190..end) ──
             val detailX = pL + 198
-            if (pal.boundPos != null) {
-                val bp = pal.boundPos
-                drawScaledText(
-                    context = context,
-                    text = Text.literal("\u2316 ${bp.x}, ${bp.y}, ${bp.z}") as MutableText,
-                    x = detailX,
-                    y = ey + 5,
-                    scale = 0.75F,
-                    shadow = true,
-                    colour = BINDING_COLOR
-                )
-            }
+            drawScaledText(
+                context = context,
+                text = Text.literal(targetLine(pal)) as MutableText,
+                x = detailX,
+                y = ey + 5,
+                scale = 0.72F,
+                shadow = true,
+                colour = BINDING_COLOR
+            )
 
-            if (pal.carriedItemDescs.isNotEmpty()) {
-                val itemLine = pal.carriedItemDescs.take(2).joinToString(", ")
-                val truncated = if (itemLine.length > 14) itemLine.take(13) + "\u2026" else itemLine
+            val cargoStack = cargoStack(pal)
+            cargoStack?.let { stack: ItemStack ->
+                context.drawItem(stack, detailX, ey + 15)
+            }
+            drawScaledText(
+                context = context,
+                text = Text.literal(cargoLine(pal)) as MutableText,
+                x = detailX + if (cargoStack != null) 18 else 0,
+                y = ey + 18,
+                scale = 0.7F,
+                shadow = true,
+                colour = if (pal.hasCargo()) ITEMS_COLOR else TEXT_DIM
+            )
+
+            val timingLine = timingLine(pal)
+            if (timingLine.isNotEmpty()) {
                 drawScaledText(
                     context = context,
-                    text = Text.literal(truncated) as MutableText,
+                    text = Text.literal(timingLine) as MutableText,
                     x = detailX,
-                    y = if (pal.boundPos != null) ey + 16 else ey + 5,
-                    scale = 0.7F,
+                    y = ey + 29,
+                    scale = 0.65F,
                     shadow = true,
-                    colour = ITEMS_COLOR
+                    colour = TEXT_DIM
                 )
-                if (pal.carriedItemDescs.size > 2) {
-                    drawScaledText(
-                        context = context,
-                        text = Text.literal("+${pal.carriedItemDescs.size - 2} more") as MutableText,
-                        x = detailX,
-                        y = if (pal.boundPos != null) ey + 26 else ey + 16,
-                        scale = 0.65F,
-                        shadow = true,
-                        colour = TEXT_DIM
-                    )
-                }
             }
 
             // ── Home button (bottom-right of row) ──
@@ -329,8 +391,8 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
         }
     }
 
-    private fun renderPokemonPortrait(context: DrawContext, pal: PalSnapshot, index: Int, px: Int, py: Int, delta: Float) {
-        val state = portraitStates.getOrPut(index) { FloatingState() }
+    private fun renderPokemonPortrait(context: DrawContext, pal: PalSnapshot, px: Int, py: Int, delta: Float) {
+        val state = portraitStates.getOrPut(pal.pokemonId) { FloatingState() }
         try {
             val speciesId = Identifier.of(pal.species)
             val matrixStack = context.matrices
@@ -428,8 +490,129 @@ class PastureManagerScreen(private val snapshot: PastureSnapshot) : Screen(Text.
                     Text.literal("Returns this pal to its pasture anchor.")
                 )
             }
+
+            val rowRight = panelLeft + PANEL_WIDTH - SCROLL_BAR_WIDTH - 2
+            if (mouseX >= panelLeft && mouseX < rowRight && mouseY >= ey && mouseY < ey + ENTRY_HEIGHT) {
+                val pal = snapshot.pals[i]
+                return buildList {
+                    add(Text.literal("${pal.displayName} \u2022 ${pal.statusLabel()}"))
+                    add(Text.literal("Species: ${speciesLabel(pal)} \u2022 Lv.${pal.level}"))
+                    add(Text.literal("Tag: ${pal.tagTypeId?.uppercase() ?: "none"}"))
+                    pal.boundPos?.let { add(Text.literal("Binding: ${formatPos(it)}")) }
+                    pal.activeTargetPos?.let { add(Text.literal("Target: ${formatPos(it)}")) }
+                    if (pal.hasCargo()) {
+                        add(Text.literal("Cargo: ${pal.carriedItemCount} items across ${pal.carriedSlotCount} slots"))
+                    }
+                    if (pal.isManagedByCommandPost) {
+                        add(Text.literal("Managed by linked Command Post"))
+                    }
+                    if (pal.filterSummary != "No filter") {
+                        add(Text.literal("Filter: ${pal.filterSummary}"))
+                    }
+                    if (pal.augmentSummary.isNotBlank()) {
+                        add(Text.literal("Augments: ${pal.augmentSummary}"))
+                    }
+                }
+            }
         }
 
         return null
     }
+
+    private fun statusColor(pal: PalSnapshot): Int = when {
+        pal.isFainted -> TEXT_FAINTED
+        pal.tagTypeId == null -> NO_TAG_COLOR
+        pal.workerPhase() == WorkerPhase.WORKING -> ACCENT
+        pal.workerPhase() == WorkerPhase.NAVIGATING -> BINDING_COLOR
+        pal.workerPhase() == WorkerPhase.ARRIVING -> ITEMS_COLOR
+        pal.workerPhase() == WorkerPhase.DEPOSITING -> 0xF59E0B.toInt()
+        pal.isEcoMode -> 0x8AA3AD
+        pal.cooldownTicksRemaining > 0 || pal.searchDelayTicksRemaining > 0 -> 0xD8C060.toInt()
+        else -> TEXT_DIM
+    }
+
+    private fun drawStatusChip(context: DrawContext, pal: PalSnapshot, x: Int, y: Int) {
+        val label = pal.statusLabel()
+        val color = statusColor(pal)
+        val chipWidth = textRenderer.getWidth(label) + 10
+        context.fill(x, y, x + chipWidth, y + 10, withAlpha(color, 0x55))
+        drawScaledText(
+            context = context,
+            text = Text.literal(label) as MutableText,
+            x = x + 4,
+            y = y + 1,
+            scale = 0.65F,
+            shadow = false,
+            colour = color
+        )
+    }
+
+    private fun compactSummary(pal: PalSnapshot): String {
+        val parts = buildList {
+            if (pal.filterSummary != "No filter") add(pal.filterSummary)
+            if (pal.augmentSummary.isNotBlank()) add(pal.augmentSummary)
+        }
+        return truncate(parts.joinToString(" \u2022 "), 28)
+    }
+
+    private fun targetLine(pal: PalSnapshot): String = when {
+        pal.activeTargetPos != null && pal.isActive() -> "Target ${formatPos(pal.activeTargetPos)}"
+        pal.boundPos != null -> "Bind ${formatPos(pal.boundPos)}"
+        pal.tagTypeId != null -> "No binding"
+        else -> "No work assigned"
+    }
+
+    private fun cargoLine(pal: PalSnapshot): String {
+        if (!pal.hasCargo()) return "No cargo"
+        val summary = if (pal.carriedItemDescs.isNotEmpty()) pal.carriedItemDescs.first() else "${pal.carriedItemCount} items"
+        return truncate(summary, 18)
+    }
+
+    private fun timingLine(pal: PalSnapshot): String {
+        val parts = mutableListOf<String>()
+        if (pal.cooldownTicksRemaining > 0) {
+            parts += "Ready ${formatTicks(pal.cooldownTicksRemaining)}"
+        } else if (pal.searchDelayTicksRemaining > 0) {
+            parts += "Scan ${formatTicks(pal.searchDelayTicksRemaining)}"
+        }
+        if (pal.isEcoMode) parts += "Eco"
+        if (pal.isManagedByCommandPost && parts.isEmpty()) parts += "Command Post"
+        return truncate(parts.joinToString(" \u2022 "), 22)
+    }
+
+    private fun tagStack(pal: PalSnapshot): ItemStack? {
+        val typeId = pal.tagTypeId ?: return null
+        val tagType = TagType.fromId(typeId) ?: return null
+        val item = TagRegistry.getItem(tagType) ?: return null
+        return ItemStack(item)
+    }
+
+    private fun cargoStack(pal: PalSnapshot): ItemStack? {
+        val itemId = pal.primaryCarriedItemId ?: return null
+        val identifier = runCatching { Identifier.of(itemId) }.getOrNull() ?: return null
+        val item = Registries.ITEM.get(identifier)
+        if (item == Items.AIR) return null
+        return ItemStack(item)
+    }
+
+    private fun speciesLabel(pal: PalSnapshot): String {
+        val rawName = runCatching { Identifier.of(pal.species).path }.getOrElse { pal.species.substringAfterLast(':') }
+        return rawName
+            .split('_')
+            .joinToString(" ") { part -> part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
+    }
+
+    private fun formatPos(pos: BlockPos): String = "${pos.x}, ${pos.y}, ${pos.z}"
+
+    private fun formatTicks(ticks: Int): String {
+        val seconds = ticks / 20.0
+        return String.format(Locale.ROOT, "%.1fs", seconds)
+    }
+
+    private fun truncate(value: String, maxChars: Int): String {
+        if (value.length <= maxChars) return value
+        return value.take(maxChars - 1) + "\u2026"
+    }
+
+    private fun withAlpha(color: Int, alpha: Int): Int = ((alpha and 0xFF) shl 24) or (color and 0x00FFFFFF)
 }
