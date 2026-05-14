@@ -15,6 +15,18 @@ class WorkerState(val pokemonId: UUID) {
     var lastSeenTick: Long = 0L
     var nextTargetSearchTick: Long = 0L
 
+    var navigationDestination: BlockPos? = null
+    var navigationTravelTarget: BlockPos? = null
+    var navigationPurpose: String = ""
+    var navigationStartedTick: Long = 0L
+    var navigationLastProgressTick: Long = 0L
+    var navigationLastX: Double = Double.NaN
+    var navigationLastY: Double = Double.NaN
+    var navigationLastZ: Double = Double.NaN
+    var navigationRecoveryStage: Int = 0
+    var navigationRecoveryCooldownUntil: Long = 0L
+    var navigationFailedAttempts: Int = 0
+
     // --- Eco mode (skip full work scans after a worker has been idle for a while) ---
     /** Ticks since this worker last did useful work. Reset on any successful action. */
     var idleTicks: Int = 0
@@ -66,6 +78,7 @@ class WorkerState(val pokemonId: UUID) {
         idleTicks = 0
         ecoMode = false
         ecoSkipCounter = 0
+        resetNavigationSession()
     }
 
     fun markDidWork() {
@@ -85,5 +98,19 @@ class WorkerState(val pokemonId: UUID) {
         cachedMaxItems = -1
         cachedContainerPos = null
         cachedSourceContainerPos = null
+    }
+
+    fun resetNavigationSession() {
+        navigationDestination = null
+        navigationTravelTarget = null
+        navigationPurpose = ""
+        navigationStartedTick = 0L
+        navigationLastProgressTick = 0L
+        navigationLastX = Double.NaN
+        navigationLastY = Double.NaN
+        navigationLastZ = Double.NaN
+        navigationRecoveryStage = 0
+        navigationRecoveryCooldownUntil = 0L
+        navigationFailedAttempts = 0
     }
 }

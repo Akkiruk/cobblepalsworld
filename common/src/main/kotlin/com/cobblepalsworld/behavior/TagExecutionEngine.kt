@@ -21,6 +21,8 @@ import com.cobblepalsworld.navigation.ContainerFinder
 import com.cobblepalsworld.navigation.NavigationBudget
 import com.cobblepalsworld.navigation.NavigationAttempt
 import com.cobblepalsworld.navigation.NavigationHelper
+import com.cobblepalsworld.navigation.MovementPurpose
+import com.cobblepalsworld.navigation.WorkerNavigationManager
 import com.cobblepalsworld.pasture.PastureWorkerManager
 import com.cobblepalsworld.pasture.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
@@ -180,6 +182,7 @@ object TagExecutionEngine {
     fun resetRuntimeState() {
         StateManager.clear()
         ClaimManager.clear()
+        WorkerNavigationManager.clearFailureCache()
         BreakerBehavior.clearAllPastureOrigins()
         GuardianBehavior.clearAllRuntimeState()
         SenderBehavior.clearAllRuntimeState()
@@ -264,7 +267,13 @@ object TagExecutionEngine {
             state.setStatus(WorkerStatusReason.COOLDOWN, "Recovering before the next assignment")
             // While on cooldown, drift back toward pasture if far away
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
+                applyNavigationStatus(
+                    state = state,
+                    attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
+                    activeReason = WorkerStatusReason.COOLDOWN,
+                    activeDetail = "Returning near the pasture while cooling down",
+                    failedDetail = "Could not path back toward the pasture"
+                )
             }
             return
         }
@@ -279,7 +288,13 @@ object TagExecutionEngine {
                 }
             )
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
+                applyNavigationStatus(
+                    state = state,
+                    attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
+                    activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.SEARCH_DELAY,
+                    activeDetail = "Returning near the pasture before the next scan",
+                    failedDetail = "Could not path back toward the pasture"
+                )
             }
             return
         }
@@ -306,7 +321,13 @@ object TagExecutionEngine {
             )
             // No work found — stay idle (eco mode will kick in via tick counter)
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
-                NavigationHelper.navigateTo(entity, origin, state, navigationBudget)
+                applyNavigationStatus(
+                    state = state,
+                    attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
+                    activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.NO_TARGET,
+                    activeDetail = "Returning near the pasture while idle",
+                    failedDetail = "Could not path back toward the pasture"
+                )
             }
             return
         }
@@ -321,13 +342,21 @@ object TagExecutionEngine {
 
         ClaimManager.claim(target, pokemon.uuid, world)
         state.targetPos = target
+        val attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget, MovementPurpose.WORK_TARGET)
         applyNavigationStatus(
             state = state,
-            attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget),
+            attempt = attempt,
             activeReason = WorkerStatusReason.NAVIGATING,
             activeDetail = "Moving to the selected job target",
             failedDetail = "Could not find a path to the selected target"
         )
+        if (attempt == NavigationAttempt.UNREACHABLE) {
+            ClaimManager.release(target, world)
+            resetToIdle(state)
+            state.nextTargetSearchTick = world.time + behavior.idleRetryTicks(tag, state)
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target is currently unreachable; choosing another job later")
+            return
+        }
         state.phase = WorkerPhase.NAVIGATING
     }
 
@@ -347,19 +376,26 @@ object TagExecutionEngine {
         }
 
         if (NavigationHelper.isAtPosition(entity, target, behavior.arrivalTolerance(tag, state))) {
-            NavigationHelper.stopNavigation(entity)
+            NavigationHelper.stopNavigation(entity, state)
             state.arrivalTick = world.time
             state.phase = WorkerPhase.ARRIVING
             state.setStatus(WorkerStatusReason.ARRIVING, "Settling into position before starting work")
             WorkVisualHandler.onArrival(world, entity, target, tag.type)
         } else {
+            val attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget, MovementPurpose.WORK_TARGET)
             applyNavigationStatus(
                 state = state,
-                attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget),
+                attempt = attempt,
                 activeReason = WorkerStatusReason.NAVIGATING,
                 activeDetail = "Closing in on the current target",
                 failedDetail = "Pathfinding to the target failed; retrying"
             )
+            if (attempt == NavigationAttempt.UNREACHABLE) {
+                ClaimManager.release(target, world)
+                resetToIdle(state)
+                state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+                state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target stayed unreachable after recovery attempts")
+            }
         }
     }
 
@@ -417,13 +453,21 @@ object TagExecutionEngine {
                 ClaimManager.release(target, world)
                 state.targetPos = result.target
                 ClaimManager.claim(result.target, pokemon.uuid, world)
+                val attempt = NavigationHelper.navigateTo(entity, result.target, state, navigationBudget, MovementPurpose.WORK_TARGET)
                 applyNavigationStatus(
                     state = state,
-                    attempt = NavigationHelper.navigateTo(entity, result.target, state, navigationBudget),
+                    attempt = attempt,
                     activeReason = WorkerStatusReason.NAVIGATING,
                     activeDetail = "Repositioning to a follow-up target",
                     failedDetail = "Could not path to the follow-up target"
                 )
+                if (attempt == NavigationAttempt.UNREACHABLE) {
+                    ClaimManager.release(result.target, world)
+                    resetToIdle(state)
+                    state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
+                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was unreachable")
+                    return
+                }
                 state.phase = WorkerPhase.NAVIGATING
             }
             is WorkResult.Repeat -> {
@@ -514,7 +558,7 @@ object TagExecutionEngine {
 
         val depositPos = state.depositPos!!
         if (NavigationHelper.isAtPosition(entity, depositPos)) {
-            NavigationHelper.stopNavigation(entity)
+            NavigationHelper.stopNavigation(entity, state)
             if (tag.augments.isRegulator()) {
                 ContainerFinder.depositRegulated(world, depositPos, inventory, tag)
             } else {
@@ -526,13 +570,21 @@ object TagExecutionEngine {
             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
             state.setStatus(WorkerStatusReason.COOLDOWN, "Cargo delivered; waiting before the next assignment")
         } else {
+            val attempt = NavigationHelper.navigateTo(entity, depositPos, state, navigationBudget, MovementPurpose.DEPOSIT)
             applyNavigationStatus(
                 state = state,
-                attempt = NavigationHelper.navigateTo(entity, depositPos, state, navigationBudget),
+                attempt = attempt,
                 activeReason = WorkerStatusReason.DEPOSITING,
                 activeDetail = "Returning carried cargo to deposit it",
                 failedDetail = "Could not path back to a deposit target"
             )
+            if (attempt == NavigationAttempt.UNREACHABLE) {
+                state.depositPos = null
+                if (state.cachedContainerPos == depositPos) {
+                    state.cachedContainerPos = null
+                }
+                state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was unreachable; looking for another")
+            }
         }
     }
 
@@ -575,6 +627,9 @@ object TagExecutionEngine {
         when (attempt) {
             NavigationAttempt.STARTED, NavigationAttempt.THROTTLED -> state.setStatus(activeReason, activeDetail)
             NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "Waiting for an open pasture pathing slot")
+            NavigationAttempt.RECOVERING -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Trying to hop or clear a stuck movement state")
+            NavigationAttempt.RESCUED -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Reseated to a nearby safe spot after getting stuck")
+            NavigationAttempt.UNREACHABLE -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
             NavigationAttempt.FAILED -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
         }
     }

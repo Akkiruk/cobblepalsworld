@@ -82,6 +82,7 @@ data class PalSnapshot(
         statusReason() == WorkerStatusReason.RESERVED_DUTY -> "Held in reserve until you release it back into general labor."
         statusReason() == WorkerStatusReason.ROLE_LOCKED -> "A restricted worker is currently holding this role."
         statusReason() == WorkerStatusReason.PATH_BUDGET -> "Queued behind the pasture pathing budget before it can move."
+        statusReason() == WorkerStatusReason.MOVEMENT_RECOVERY -> "Trying to hop forward or reseat to a nearby safe spot."
         statusDetail.isNotBlank() -> statusDetail
         statusReason() == WorkerStatusReason.READY -> "Ready to look for a new assignment."
         hasCargo() -> "Holding cargo and ready to return it."

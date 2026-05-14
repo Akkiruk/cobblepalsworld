@@ -37,6 +37,7 @@ object WorkVisualHandler {
         val particle = when (reason) {
             WorkerStatusReason.REDSTONE_OFF -> ParticleTypes.ELECTRIC_SPARK
             WorkerStatusReason.NO_DEPOSIT -> ParticleTypes.ANGRY_VILLAGER
+            WorkerStatusReason.MOVEMENT_RECOVERY -> ParticleTypes.CLOUD
             WorkerStatusReason.PATHING_STALLED -> ParticleTypes.SMOKE
             WorkerStatusReason.TAG_DISABLED -> ParticleTypes.LARGE_SMOKE
             else -> ParticleTypes.SMOKE

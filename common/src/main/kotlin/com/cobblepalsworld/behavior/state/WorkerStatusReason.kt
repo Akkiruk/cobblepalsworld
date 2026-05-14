@@ -20,6 +20,7 @@ enum class WorkerStatusReason(val label: String, val kind: WorkerStatusKind) {
     NO_TARGET("No Work", WorkerStatusKind.WAITING),
     TARGET_BUSY("Contested", WorkerStatusKind.WAITING),
     PATH_BUDGET("Queued", WorkerStatusKind.WAITING),
+    MOVEMENT_RECOVERY("Recovering", WorkerStatusKind.ACTIVE),
     REDSTONE_OFF("Redstone", WorkerStatusKind.BLOCKED),
     TAG_DISABLED("Disabled", WorkerStatusKind.BLOCKED),
     PATHING_STALLED("Pathing", WorkerStatusKind.BLOCKED),

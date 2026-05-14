@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8
+
+- Reworked worker movement through centralized navigation sessions with safe stand-position resolution, per-worker stuck tracking, and cached unreachable destinations.
+- Added forward-hop recovery for stuck workers, so pals try to move and jump through common pasture-block lips before escalating to stronger recovery.
+- Added bounded phase-reseat recovery that moves a stuck pal only to a nearby validated safe spot, then retries normal pathing or fails cleanly instead of standing forever.
+
 ## 0.2.7
 
 - Cleaned up the Command Post Roles tab into a clearer card-list and detail flow, with roomier rows and a non-overlapping selected-role summary.
