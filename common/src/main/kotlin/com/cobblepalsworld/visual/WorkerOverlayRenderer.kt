@@ -8,17 +8,21 @@ import com.cobblepalsworld.tag.TagRegistry
 import com.cobblepalsworld.tag.TagType
 import com.mojang.blaze3d.systems.RenderSystem
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.render.BufferRenderer
+import net.minecraft.client.render.GameRenderer
 import net.minecraft.client.font.TextRenderer
 import net.minecraft.client.render.LightmapTextureManager
 import net.minecraft.client.render.OverlayTexture
+import net.minecraft.client.render.Tessellator
+import net.minecraft.client.render.VertexFormat
 import net.minecraft.client.render.VertexConsumerProvider
+import net.minecraft.client.render.VertexFormats
 import net.minecraft.client.util.math.MatrixStack
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items
 import net.minecraft.registry.Registries
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Box
 import kotlin.math.sin
 
 object WorkerOverlayRenderer {
@@ -72,7 +76,6 @@ object WorkerOverlayRenderer {
             }
 
             val bob = sin((world.time + entity.id) * 0.18).toDouble() * 0.045
-            renderHalo(matrices, entity.boundingBox, entry.snapshot, bob)
             renderIcons(
                 client = client,
                 matrices = matrices,
@@ -92,33 +95,6 @@ object WorkerOverlayRenderer {
         RenderSystem.disableBlend()
     }
 
-    private fun renderHalo(
-        matrices: MatrixStack,
-        entityBox: Box,
-        snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
-        bob: Double
-    ) {
-        val color = haloColor(snapshot)
-        val centerX = (entityBox.minX + entityBox.maxX) / 2.0
-        val centerZ = (entityBox.minZ + entityBox.maxZ) / 2.0
-        val haloY = entityBox.maxY + 0.18 + bob
-        val haloBox = Box(
-            centerX - 0.23,
-            haloY,
-            centerZ - 0.23,
-            centerX + 0.23,
-            haloY + 0.18,
-            centerZ + 0.23
-        )
-
-        val matrix = matrices.peek().positionMatrix
-        val r = color shr 16 and 0xFF
-        val g = color shr 8 and 0xFF
-        val b = color and 0xFF
-        TagHighlightRenderer.drawFill(matrix, haloBox, r, g, b, if (snapshot.hasCargo()) 74 else 52)
-        TagHighlightRenderer.drawOutline(matrix, haloBox, r, g, b, 210)
-    }
-
     private fun renderIcons(
         client: MinecraftClient,
         matrices: MatrixStack,
@@ -130,6 +106,7 @@ object WorkerOverlayRenderer {
         seed: Int
     ) {
         resolveTagStack(snapshot.tagTypeId)?.let { tagStack ->
+            drawIconBacking(client, matrices, snapshot, x, y, z)
             renderFloatingStack(client, matrices, vertexConsumers, tagStack, x, y, z, 0.45f, seed)
         }
 
@@ -145,6 +122,41 @@ object WorkerOverlayRenderer {
                 drawCount(client, matrices, vertexConsumers, snapshot.carriedItemCount.toString(), x, y - 0.51, z)
             }
         }
+    }
+
+    private fun drawIconBacking(
+        client: MinecraftClient,
+        matrices: MatrixStack,
+        snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
+        x: Double,
+        y: Double,
+        z: Double
+    ) {
+        val color = haloColor(snapshot)
+        val r = color shr 16 and 0xFF
+        val g = color shr 8 and 0xFF
+        val b = color and 0xFF
+        val alpha = if (snapshot.hasCargo()) 166 else 138
+        val size = 0.44f
+        val inset = 0.35f
+        matrices.push()
+        matrices.translate(x, y, z)
+        matrices.multiply(client.entityRenderDispatcher.rotation)
+        val matrix = matrices.peek().positionMatrix
+        val buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR)
+        buffer.vertex(matrix, -size, -size, 0.08f).color(10, 16, 21, 210)
+        buffer.vertex(matrix, -size, size, 0.08f).color(10, 16, 21, 210)
+        buffer.vertex(matrix, size, size, 0.08f).color(10, 16, 21, 210)
+        buffer.vertex(matrix, size, -size, 0.08f).color(10, 16, 21, 210)
+        buffer.vertex(matrix, -inset, inset, 0.09f).color(r, g, b, alpha)
+        buffer.vertex(matrix, inset, inset, 0.09f).color(r, g, b, alpha)
+        buffer.vertex(matrix, inset, -inset, 0.09f).color(r, g, b, alpha)
+        buffer.vertex(matrix, -inset, -inset, 0.09f).color(r, g, b, alpha)
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram)
+        RenderSystem.depthMask(false)
+        BufferRenderer.drawWithGlobalProgram(buffer.end())
+        RenderSystem.depthMask(true)
+        matrices.pop()
     }
 
     private fun renderFloatingStack(

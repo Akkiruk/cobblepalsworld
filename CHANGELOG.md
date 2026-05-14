@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- Replaced the in-world worker status cube with a compact status-colored backing behind the role icon, keeping worker state readable without hiding cargo or work items.
+
 ## 0.2.8
 
 - Reworked worker movement through centralized navigation sessions with safe stand-position resolution, per-worker stuck tracking, and cached unreachable destinations.
