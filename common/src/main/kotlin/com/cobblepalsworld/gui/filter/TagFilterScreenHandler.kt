@@ -34,13 +34,22 @@ class TagFilterScreenHandler : ScreenHandler {
     private var trackedRevision: Long = 0L
 
     companion object {
+        const val ACTION_TOGGLE_WHITELIST = 0
+        const val ACTION_TOGGLE_NBT = 1
+        const val ACTION_CYCLE_MATCH = 2
+        const val ACTION_CYCLE_TARGET = 3
+        const val ACTION_CYCLE_REDSTONE = 4
+        const val ACTION_TOGGLE_RUN = 6
+        const val ACTION_REGULATOR_DOWN = 7
+        const val ACTION_REGULATOR_UP = 8
+
         private val REGULATOR_PRESETS = intArrayOf(1, 4, 8, 16, 32, 64)
     }
 
     // Client constructor — used by ScreenHandlerType factory
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(8)
+        this.filterData = ArrayPropertyDelegate(9)
         this.itemSlot = -1
         this.trackedInventory = null
         this.trackedSlotIndex = -1
@@ -52,7 +61,7 @@ class TagFilterScreenHandler : ScreenHandler {
     // Server constructor — used when opening menu from TagItem.use()
     constructor(syncId: Int, playerInventory: PlayerInventory, hand: Hand) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(8)
+        this.filterData = ArrayPropertyDelegate(9)
         this.itemSlot = if (hand == Hand.MAIN_HAND) playerInventory.selectedSlot else 40
         this.trackedInventory = playerInventory
         this.trackedSlotIndex = itemSlot
@@ -64,7 +73,7 @@ class TagFilterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory, trackedInventory: net.minecraft.inventory.Inventory, trackedSlotIndex: Int) : super(MenuTypes.TAG_FILTER.get(), syncId) {
         this.filterInventory = SimpleInventory(TagFilter.MAX_FILTER_SLOTS)
-        this.filterData = ArrayPropertyDelegate(8)
+        this.filterData = ArrayPropertyDelegate(9)
         this.itemSlot = -1
         this.trackedInventory = trackedInventory
         this.trackedSlotIndex = trackedSlotIndex
@@ -93,6 +102,7 @@ class TagFilterScreenHandler : ScreenHandler {
             filterData.set(5, if (settings.terminateAfterSuccess) 1 else 0)
             filterData.set(6, settings.regulatorAmount)
             filterData.set(7, tagType.ordinal)
+            filterData.set(8, settings.extraTargets.size)
             if (tagType.usesFilter) {
                 for ((i, item) in filter.items.withIndex()) {
                     if (i < TagFilter.MAX_FILTER_SLOTS) filterInventory.setStack(i, item.copy())
@@ -105,6 +115,7 @@ class TagFilterScreenHandler : ScreenHandler {
             this.matchModIds = emptyList()
             filterData.set(6, 64)
             filterData.set(7, -1)
+            filterData.set(8, 0)
         }
     }
 
@@ -138,7 +149,7 @@ class TagFilterScreenHandler : ScreenHandler {
     val regulatorAmount: Int get() = filterData.get(6).coerceIn(1, 64)
     val tagType: TagType? get() = TagType.entries.getOrNull(filterData.get(7))
     val usesFilter: Boolean get() = tagType?.usesFilter != false
-    val extraTargetCount: Int get() = 0
+    val extraTargetCount: Int get() = filterData.get(8).coerceAtLeast(0)
     val filterItemCount: Int get() = (0 until TagFilter.MAX_FILTER_SLOTS).count { !filterInventory.getStack(it).isEmpty }
     val matchTagCount: Int get() = matchTags.size
     val matchModIdCount: Int get() = matchModIds.size
@@ -170,15 +181,16 @@ class TagFilterScreenHandler : ScreenHandler {
     }
 
     override fun onButtonClick(player: PlayerEntity, id: Int): Boolean {
+        val currentTagType = tagType
         when (id) {
-            0 -> filterData.set(0, if (filterData.get(0) == 0) 1 else 0)
-            1 -> filterData.set(1, if (filterData.get(1) == 0) 1 else 0)
-            2 -> filterData.set(2, (filterData.get(2) + 1) % FilterMatchMode.entries.size)
-            3 -> filterData.set(3, (filterData.get(3) + 1) % TargetStrategy.entries.size)
-            4 -> filterData.set(4, (filterData.get(4) + 1) % RedstoneControlMode.entries.size)
-            6 -> filterData.set(5, if (filterData.get(5) == 0) 1 else 0)
-            7 -> stepRegulator(-1)
-            8 -> stepRegulator(1)
+            ACTION_TOGGLE_WHITELIST -> if (usesFilter) filterData.set(0, if (filterData.get(0) == 0) 1 else 0) else return false
+            ACTION_TOGGLE_NBT -> if (usesFilter) filterData.set(1, if (filterData.get(1) == 0) 1 else 0) else return false
+            ACTION_CYCLE_MATCH -> if (usesFilter) filterData.set(2, (filterData.get(2) + 1) % FilterMatchMode.entries.size) else return false
+            ACTION_CYCLE_TARGET -> if (currentTagType?.supportsTargetList == true) filterData.set(3, (filterData.get(3) + 1) % TargetStrategy.entries.size) else return false
+            ACTION_CYCLE_REDSTONE -> filterData.set(4, (filterData.get(4) + 1) % RedstoneControlMode.entries.size)
+            ACTION_TOGGLE_RUN -> if (currentTagType?.supportsTargetList == true) filterData.set(5, if (filterData.get(5) == 0) 1 else 0) else return false
+            ACTION_REGULATOR_DOWN -> if (currentTagType?.supportsTargetList == true) stepRegulator(-1) else return false
+            ACTION_REGULATOR_UP -> if (currentTagType?.supportsTargetList == true) stepRegulator(1) else return false
             else -> return false
         }
         return true

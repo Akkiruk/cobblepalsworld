@@ -103,6 +103,7 @@ class PokemonTagScreen(
     }
 
     override fun drawBackground(context: DrawContext, delta: Float, mouseX: Int, mouseY: Int) {
+        applySlotLayout()
         val localMouseX = mouseX - x
         val localMouseY = mouseY - y
 
@@ -113,17 +114,17 @@ class PokemonTagScreen(
         CobblemonUiChrome.drawPasturePanel(context, x, y)
         CobblemonUiChrome.drawBackButton(context, x, y, localMouseX, localMouseY, BACK_LEFT, BACK_TOP)
 
-        drawSlotFrame(context, TAG_SLOT_X, TAG_SLOT_Y, 0.72F)
+        drawSlotWell(context, TAG_SLOT_X, TAG_SLOT_Y, true)
         for (index in 0 until PokemonTagScreenHandler.AUGMENT_SLOT_COUNT) {
-            drawSlotFrame(context, AUGMENT_SLOT_X + index * 18, AUGMENT_SLOT_Y, 0.58F)
+            drawSlotWell(context, AUGMENT_SLOT_X + index * 18, AUGMENT_SLOT_Y, true)
         }
         for (row in 0..2) {
-            for (col in 0..2) drawSlotFrame(context, DISPLAY_SLOT_X + col * 18, DISPLAY_SLOT_Y + row * 18, 0.52F)
+            for (col in 0..2) drawSlotWell(context, DISPLAY_SLOT_X + col * 18, DISPLAY_SLOT_Y + row * 18, false)
         }
         for (row in 0..2) {
-            for (col in 0..8) drawSlotFrame(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + row * 18, 0.45F)
+            for (col in 0..8) drawSlotWell(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + row * 18, false)
         }
-        for (col in 0..8) drawSlotFrame(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + 58, 0.45F)
+        for (col in 0..8) drawSlotWell(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + 58, false)
     }
 
     override fun drawForeground(context: DrawContext, mouseX: Int, mouseY: Int) {
@@ -232,8 +233,12 @@ class PokemonTagScreen(
         return null
     }
 
-    private fun drawSlotFrame(context: DrawContext, localX: Int, localY: Int, alpha: Float) {
-        CobblemonUiChrome.drawSlotFrame(context, x, y, localX, localY, alpha)
+    private fun drawSlotWell(context: DrawContext, localX: Int, localY: Int, accent: Boolean) {
+        val border = if (accent) 0xFF718A94.toInt() else 0xFF54626A.toInt()
+        val fill = if (accent) 0xFF20343D.toInt() else 0xFF1D2B33.toInt()
+        context.fill(x + localX - 1, y + localY - 1, x + localX + 17, y + localY + 17, border)
+        context.fill(x + localX, y + localY, x + localX + 16, y + localY + 16, fill)
+        context.fill(x + localX + 1, y + localY + 1, x + localX + 15, y + localY + 2, 0x553D5966)
     }
 
     private fun text(context: DrawContext, value: String, localX: Int, localY: Int, color: Int, shadow: Boolean, scale: Float = CobblemonUiChrome.TEXTURE_SCALE) {

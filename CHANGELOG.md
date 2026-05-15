@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.42
+
+- Hardened the tag role-policy editor so filter slots refresh after synced tag data arrives, no-filter roles hide ghost slots reliably, and unsupported button actions are ignored server-side.
+- Reworked target-list controls so filter, signal, target, run, regulator, and hint controls no longer overlap on distributor-style tags.
+- Replaced the remaining oversized translucent tag-tool slot overlays with compact wells on the pal detail screen.
+
 ## 0.2.41
 
 - Fixed role-policy screens for Vacuum and other tag cards drawing text/buttons far outside the intended panels by removing double-applied GUI offsets.
