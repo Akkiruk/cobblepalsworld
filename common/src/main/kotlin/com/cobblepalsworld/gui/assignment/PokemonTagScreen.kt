@@ -155,11 +155,11 @@ class PokemonTagScreen(
         text(context, if (handler.isEcoMode) "Eco pacing active" else "Normal pacing", 276, 59, if (handler.isEcoMode) CobblemonUiChrome.ACCENT_GOLD else CobblemonUiChrome.TEXT_MUTED, false)
 
         textureButtons().forEach { button ->
-            CobblemonUiChrome.drawButton(context, x, y, CobblemonUiChrome.TextureButton(button.left, button.top, button.width, button.height, button.texture, button.scaled), localMouseX, localMouseY)
+            CobblemonUiChrome.drawButton(context, 0, 0, CobblemonUiChrome.TextureButton(button.left, button.top, button.width, button.height, button.texture, button.scaled), localMouseX, localMouseY)
         }
         panelButtons().forEach { button ->
             val hovered = CobblemonUiChrome.contains(localMouseX, localMouseY, button.left, button.top, button.width, PANEL_BUTTON_HEIGHT)
-            CobblemonUiChrome.drawInfoButton(context, x, y, button.left, button.top, button.width, hovered, button.active)
+            CobblemonUiChrome.drawInfoButton(context, 0, 0, button.left, button.top, button.width, hovered, button.active)
             text(context, button.label, button.left + 5, button.top + 5, CobblemonUiChrome.TEXT_LIGHT, true)
             text(context, fit(button.value, 60, 0.5F), button.left + 5, button.top + 13, CobblemonUiChrome.TEXT_LIGHT, true)
         }
@@ -237,7 +237,7 @@ class PokemonTagScreen(
     }
 
     private fun text(context: DrawContext, value: String, localX: Int, localY: Int, color: Int, shadow: Boolean, scale: Float = CobblemonUiChrome.TEXTURE_SCALE) {
-        CobblemonUiChrome.drawSmallText(context, textRenderer, value, x + localX, y + localY, color, shadow, scale)
+        CobblemonUiChrome.drawSmallText(context, textRenderer, value, localX, localY, color, shadow, scale)
     }
 
     private fun statusColor(statusReason: WorkerStatusReason): Int = when (statusReason.kind) {

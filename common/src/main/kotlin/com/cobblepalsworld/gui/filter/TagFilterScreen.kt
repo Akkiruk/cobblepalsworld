@@ -41,10 +41,12 @@ class TagFilterScreen(
     companion object {
         private const val BACKGROUND_WIDTH = CobblemonUiChrome.BASE_WIDTH
         private const val BACKGROUND_HEIGHT = CobblemonUiChrome.BASE_HEIGHT
-        private const val FILTER_SLOT_X = 22
-        private const val FILTER_SLOT_Y = 56
+        private const val FILTER_SLOT_X = 99
+        private const val FILTER_SLOT_Y = 50
         private const val PLAYER_SLOT_X = 91
-        private const val PLAYER_SLOT_Y = 91
+        private const val PLAYER_SLOT_Y = 108
+        private const val HIDDEN_SLOT_X = -10_000
+        private const val HIDDEN_SLOT_Y = -10_000
         private const val PANEL_BUTTON_X = 274
         private const val PANEL_BUTTON_WIDTH = 70
         private const val PANEL_BUTTON_HEIGHT = 17
@@ -66,7 +68,11 @@ class TagFilterScreen(
     private fun applySlotLayout() {
         for (row in 0..2) {
             for (col in 0..2) {
-                setSlotPosition(row * 3 + col, FILTER_SLOT_X + col * 18, FILTER_SLOT_Y + row * 18)
+                if (handler.usesFilter) {
+                    setSlotPosition(row * 3 + col, FILTER_SLOT_X + col * 18, FILTER_SLOT_Y + row * 18)
+                } else {
+                    setSlotPosition(row * 3 + col, HIDDEN_SLOT_X, HIDDEN_SLOT_Y)
+                }
             }
         }
         val playerStart = 9
@@ -92,21 +98,20 @@ class TagFilterScreen(
         val localMouseY = mouseY - y
 
         CobblemonUiChrome.drawPcBase(context, x, y)
-        CobblemonUiChrome.drawPortraitPanel(context, x, y)
-        CobblemonUiChrome.drawInfoBox(context, x, y)
         CobblemonUiChrome.drawStorageScreen(context, x, y)
         CobblemonUiChrome.drawPasturePanel(context, x, y)
         CobblemonUiChrome.drawBackButton(context, x, y, localMouseX, localMouseY, BACK_LEFT, BACK_TOP)
 
+        drawEditorSurface(context)
         if (handler.usesFilter) {
             for (row in 0..2) {
-                for (col in 0..2) drawSlotFrame(context, FILTER_SLOT_X + col * 18, FILTER_SLOT_Y + row * 18, 0.62F)
+                for (col in 0..2) drawSlotWell(context, FILTER_SLOT_X + col * 18, FILTER_SLOT_Y + row * 18, true)
             }
         }
         for (row in 0..2) {
-            for (col in 0..8) drawSlotFrame(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + row * 18, 0.45F)
+            for (col in 0..8) drawSlotWell(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + row * 18, false)
         }
-        for (col in 0..8) drawSlotFrame(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + 58, 0.45F)
+        for (col in 0..8) drawSlotWell(context, PLAYER_SLOT_X + col * 18, PLAYER_SLOT_Y + 58, false)
     }
 
     override fun drawForeground(context: DrawContext, mouseX: Int, mouseY: Int) {
@@ -116,31 +121,31 @@ class TagFilterScreen(
         val roleLabel = tagType?.let { TagTypePresentation.roleLabel(it) } ?: "Role Policy"
         val familyLabel = tagType?.let { TagTypePresentation.familyOf(it).label } ?: "General"
 
-        text(context, "ROLE POLICY", 16, 16, CobblemonUiChrome.TEXT_LIGHT, true, 0.7F)
-        text(context, fit(roleLabel, 112, 0.5F), 88, 17, CobblemonUiChrome.TEXT_LIGHT, true)
-        text(context, if (handler.usesFilter) "FILTER" else "NO FILTER", 278, 16, CobblemonUiChrome.TEXT_LIGHT, true)
-        text(context, familyLabel, 18, 35, CobblemonUiChrome.TEXT_DARK, false)
-        text(context, "BAG", 94, 80, CobblemonUiChrome.TEXT_LIGHT, true)
+        text(context, "ROLE POLICY", 108, 16, CobblemonUiChrome.TEXT_LIGHT, true, 0.7F)
+        text(context, fit(roleLabel, 72, 0.5F), 161, 43, CobblemonUiChrome.TEXT_LIGHT, true)
+        text(context, fit(familyLabel, 72, 0.5F), 161, 54, CobblemonUiChrome.TEXT_MUTED, false)
+        text(context, if (handler.usesFilter) "FILTER" else "BEHAVIOR ONLY", 100, 40, CobblemonUiChrome.TEXT_LIGHT, true)
+        text(context, "BAG", 94, 99, CobblemonUiChrome.TEXT_LIGHT, true)
         text(context, "BEHAVIOR", 276, 33, CobblemonUiChrome.TEXT_DARK, false)
 
         if (handler.usesFilter) {
-            text(context, fit(summaryLineOne(), 112, 0.5F), 14, 136, CobblemonUiChrome.TEXT_DARK, false)
-            text(context, fit(summaryLineTwo(), 112, 0.5F), 14, 149, CobblemonUiChrome.TEXT_MUTED, false)
-            text(context, fit(filterWarning() ?: "Ready", 112, 0.5F), 14, 162, if (filterWarning() == null) CobblemonUiChrome.ACCENT_GREEN else CobblemonUiChrome.ACCENT_GOLD, false)
+            text(context, fit(summaryLineOne(), 78, 0.5F), 161, 68, CobblemonUiChrome.TEXT_LIGHT, false)
+            text(context, fit(summaryLineTwo(), 78, 0.5F), 161, 79, CobblemonUiChrome.TEXT_MUTED, false)
+            text(context, fit(filterWarning() ?: "Ready", 78, 0.5F), 161, 90, if (filterWarning() == null) CobblemonUiChrome.ACCENT_GREEN else CobblemonUiChrome.ACCENT_GOLD, false)
         } else {
-            text(context, "Filter slots disabled", 14, 136, CobblemonUiChrome.TEXT_MUTED, false)
-            text(context, "Behavior still applies", 14, 149, CobblemonUiChrome.TEXT_FAINT, false)
+            text(context, "No item filter", 161, 68, CobblemonUiChrome.TEXT_MUTED, false)
+            text(context, "Behavior still applies", 161, 79, CobblemonUiChrome.TEXT_FAINT, false)
         }
-        text(context, fit(summaryLineThree(), 112, 0.5F), 14, 175, CobblemonUiChrome.ACCENT_BLUE, false)
+        text(context, fit(summaryLineThree(), 78, 0.5F), 161, 101, CobblemonUiChrome.ACCENT_BLUE, false)
 
         panelButtons().forEach { button ->
             val hovered = CobblemonUiChrome.contains(localMouseX, localMouseY, button.left, button.top, button.width, PANEL_BUTTON_HEIGHT)
-            CobblemonUiChrome.drawInfoButton(context, x, y, button.left, button.top, button.width, hovered, button.active)
+            CobblemonUiChrome.drawInfoButton(context, 0, 0, button.left, button.top, button.width, hovered, button.active)
             text(context, button.label, button.left + 5, button.top + 5, CobblemonUiChrome.TEXT_LIGHT, true)
             text(context, fit(button.value, 60, 0.5F), button.left + 5, button.top + 13, CobblemonUiChrome.TEXT_LIGHT, true)
         }
         textureButtons().forEach { button ->
-            CobblemonUiChrome.drawButton(context, x, y, CobblemonUiChrome.TextureButton(button.left, button.top, button.width, button.height, button.texture, button.scaled), localMouseX, localMouseY)
+            CobblemonUiChrome.drawButton(context, 0, 0, CobblemonUiChrome.TextureButton(button.left, button.top, button.width, button.height, button.texture, button.scaled), localMouseX, localMouseY)
         }
         text(context, fit(editHint(), 118, 0.5F), 276, 166, CobblemonUiChrome.TEXT_FAINT, false)
     }
@@ -212,12 +217,25 @@ class TagFilterScreen(
         return null
     }
 
-    private fun drawSlotFrame(context: DrawContext, localX: Int, localY: Int, alpha: Float) {
-        CobblemonUiChrome.drawSlotFrame(context, x, y, localX, localY, alpha)
+    private fun drawEditorSurface(context: DrawContext) {
+        context.fill(x + 96, y + 37, x + 246, y + 104, 0xB8202E35.toInt())
+        context.fill(x + 96, y + 37, x + 246, y + 38, 0xFF657B86.toInt())
+        context.fill(x + 96, y + 103, x + 246, y + 104, 0xFF162027.toInt())
+        context.fill(x + 96, y + 37, x + 97, y + 104, 0xFF657B86.toInt())
+        context.fill(x + 245, y + 37, x + 246, y + 104, 0xFF162027.toInt())
+        context.fill(x + 160, y + 42, x + 241, y + 97, 0x6618242A)
+    }
+
+    private fun drawSlotWell(context: DrawContext, localX: Int, localY: Int, accent: Boolean) {
+        val border = if (accent) 0xFF718A94.toInt() else 0xFF54626A.toInt()
+        val fill = if (accent) 0xFF20343D.toInt() else 0xFF1D2B33.toInt()
+        context.fill(x + localX - 1, y + localY - 1, x + localX + 17, y + localY + 17, border)
+        context.fill(x + localX, y + localY, x + localX + 16, y + localY + 16, fill)
+        context.fill(x + localX + 1, y + localY + 1, x + localX + 15, y + localY + 2, 0x553D5966)
     }
 
     private fun text(context: DrawContext, value: String, localX: Int, localY: Int, color: Int, shadow: Boolean, scale: Float = CobblemonUiChrome.TEXTURE_SCALE) {
-        CobblemonUiChrome.drawSmallText(context, textRenderer, value, x + localX, y + localY, color, shadow, scale)
+        CobblemonUiChrome.drawSmallText(context, textRenderer, value, localX, localY, color, shadow, scale)
     }
 
     private fun summaryLineOne(): String {

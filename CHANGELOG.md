@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.41
+
+- Fixed role-policy screens for Vacuum and other tag cards drawing text/buttons far outside the intended panels by removing double-applied GUI offsets.
+- Reworked the role-policy filter editor into the central PC screen with compact non-overlapping filter and bag slot wells.
+
 ## 0.2.40
 
 - Redrew the Command Post Jobs tag-card area as a single framed well with non-overlapping slot wells, removing the stacked translucent Cobblemon slot overlays.
