@@ -42,15 +42,6 @@ enum class TagType(
         workParticle = ParticleTypes.EXPLOSION,
         workSound = SoundEvents.BLOCK_STONE_BREAK
     ),
-    GUARDIAN(
-        id = "guardian",
-        description = "Attacks hostile mobs near the Command Post",
-        usesFilter = false,
-        color = Formatting.DARK_RED,
-        arrivalParticle = ParticleTypes.ANGRY_VILLAGER,
-        workParticle = ParticleTypes.CRIT,
-        workSound = SoundEvents.ENTITY_PLAYER_ATTACK_STRONG
-    ),
 
     // --- Gathering ---
     HARVESTER(
@@ -127,16 +118,6 @@ enum class TagType(
         arrivalParticle = ParticleTypes.WAX_ON,
         workParticle = ParticleTypes.WAX_ON,
         workSound = SoundEvents.BLOCK_DISPENSER_DISPENSE
-    ),
-    SHEPHERD(
-        id = "shepherd",
-        bindingMode = BindingMode.POSITION,
-        description = "Feeds and breeds animals near a bound pen using food from the Command Post buffer",
-        usesFilter = false,
-        color = Formatting.WHITE,
-        arrivalParticle = ParticleTypes.HEART,
-        workParticle = ParticleTypes.HEART,
-        workSound = SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP
     ),
     ;
 

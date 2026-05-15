@@ -4,7 +4,6 @@ import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
-import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.registry.RegistryKey
@@ -12,22 +11,13 @@ import net.minecraft.registry.RegistryKeys
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.Identifier
-import net.minecraft.util.math.Box
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Vec3d
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 object CommandPostCrewLifecycle {
     private const val HOME_DISTANCE_BLOCKS = 96.0
     private const val HOME_DISTANCE_SQUARED = HOME_DISTANCE_BLOCKS * HOME_DISTANCE_BLOCKS
-    private const val RECALL_SETTLE_TICKS = 40L
-    private const val KILLED_RESPAWN_COOLDOWN_TICKS = 20L * 30L
-    private const val REMOVAL_SWEEP_RANGE_BLOCKS = 512.0
-    private const val MAX_RUNTIME_ENTRIES = 256
-
-    private val recallPendingUntil = ConcurrentHashMap<UUID, Long>()
-    private val respawnSuppressedUntil = ConcurrentHashMap<UUID, Long>()
 
     fun resolvePokemon(world: ServerWorld, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null): Pokemon? {
         val ownerUuid = if (member.ownerUuid.leastSignificantBits == 0L && member.ownerUuid.mostSignificantBits == 0L) {
@@ -42,18 +32,7 @@ object CommandPostCrewLifecycle {
     }
 
     fun ensureEntity(world: ServerWorld, anchor: BlockPos, pokemon: Pokemon): PokemonEntity? {
-        val now = world.time
-        if (isRespawnSuppressed(pokemon.uuid, now)) return null
-
         val current = pokemon.entity
-        if (current != null && !isUsableEntity(current)) {
-            pokemon.recall()
-            recallPendingUntil[pokemon.uuid] = now + RECALL_SETTLE_TICKS
-            return null
-        }
-
-        if (isRecallPending(pokemon.uuid, now)) return null
-
         if (current != null && current.world === world && current.blockPos.getSquaredDistance(anchor) <= HOME_DISTANCE_SQUARED) {
             return current
         }
@@ -64,8 +43,6 @@ object CommandPostCrewLifecycle {
 
         if (current != null) {
             pokemon.tryRecallWithAnimation()
-            recallPendingUntil[pokemon.uuid] = now + RECALL_SETTLE_TICKS
-            return null
         }
 
         val spawnPos = SafePositionResolver.standNear(world, anchor.up(), anchor) ?: anchor.up()
@@ -78,44 +55,11 @@ object CommandPostCrewLifecycle {
         }
     }
 
-    fun handleWorkerDeath(entity: PokemonEntity) {
-        val pokemonId = entity.pokemon.uuid
-        if (CommandPostCrewManager.bindingFor(pokemonId) == null) return
-        val world = entity.world as? ServerWorld ?: return
-
-        respawnSuppressedUntil[pokemonId] = world.time + KILLED_RESPAWN_COOLDOWN_TICKS
-        trimRuntimeMap(respawnSuppressedUntil)
-        recallPendingUntil.remove(pokemonId)
-        TagExecutionEngine.cleanupRuntimeOnly(pokemonId)
-    }
-
     fun recall(world: ServerWorld, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null) {
         val pokemon = resolvePokemon(world, member, fallbackOwnerUuid) ?: return
         if (pokemon.entity != null) {
             pokemon.tryRecallWithAnimation()
         }
-    }
-
-    fun releaseFromCommandPost(world: ServerWorld, anchor: BlockPos, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null) {
-        releaseFromCommandPost(world, anchor, member.pokemonId, resolvePokemon(world, member, fallbackOwnerUuid))
-    }
-
-    fun releaseFromCommandPost(world: ServerWorld, anchor: BlockPos, pokemonId: UUID, pokemon: Pokemon? = null) {
-        recallPendingUntil.remove(pokemonId)
-        respawnSuppressedUntil.remove(pokemonId)
-        pokemon?.recall()
-        discardLoadedEntities(world, anchor, pokemonId)
-    }
-
-    fun releaseMembersFromCommandPost(world: ServerWorld, anchor: BlockPos, members: Collection<CommandPostCrewMember>, fallbackOwnerUuid: UUID? = null) {
-        if (members.isEmpty()) return
-        val pokemonIds = members.mapTo(mutableSetOf()) { member ->
-            recallPendingUntil.remove(member.pokemonId)
-            respawnSuppressedUntil.remove(member.pokemonId)
-            resolvePokemon(world, member, fallbackOwnerUuid)?.recall()
-            member.pokemonId
-        }
-        discardLoadedEntities(world, anchor, pokemonIds)
     }
 
     fun recallAll(server: MinecraftServer) {
@@ -128,16 +72,25 @@ object CommandPostCrewLifecycle {
         }
     }
 
-    fun clearRuntimeState() {
-        recallPendingUntil.clear()
-        respawnSuppressedUntil.clear()
+    fun handleWorkerDeath(entity: PokemonEntity) {
     }
 
-    fun pruneRuntimeState(currentTime: Long) {
-        recallPendingUntil.entries.removeIf { (_, until) -> currentTime >= until }
-        respawnSuppressedUntil.entries.removeIf { (_, until) -> currentTime >= until }
-        trimRuntimeMap(recallPendingUntil)
-        trimRuntimeMap(respawnSuppressedUntil)
+    fun clearRuntimeState() {
+    }
+
+    fun releaseFromCommandPost(world: ServerWorld, anchor: BlockPos, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null) {
+        recall(world, member, fallbackOwnerUuid)
+    }
+
+    fun releaseMembersFromCommandPost(
+        world: ServerWorld,
+        anchor: BlockPos,
+        members: Iterable<CommandPostCrewMember>,
+        fallbackOwnerUuid: UUID? = null
+    ) {
+        members.forEach { member ->
+            releaseFromCommandPost(world, anchor, member, fallbackOwnerUuid)
+        }
     }
 
     fun returnHome(world: ServerWorld, anchor: BlockPos, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null): PokemonEntity? {
@@ -159,46 +112,5 @@ object CommandPostCrewLifecycle {
         entity.navigation.stop()
         entity.setVelocity(0.0, 0.0, 0.0)
         return entity
-    }
-
-    private fun discardLoadedEntities(world: ServerWorld, anchor: BlockPos, pokemonId: UUID) {
-        discardLoadedEntities(world, anchor, setOf(pokemonId))
-    }
-
-    private fun discardLoadedEntities(world: ServerWorld, anchor: BlockPos, pokemonIds: Set<UUID>) {
-        if (pokemonIds.isEmpty()) return
-        val sweepBox = Box(anchor).expand(REMOVAL_SWEEP_RANGE_BLOCKS)
-        world.getEntitiesByClass(PokemonEntity::class.java, sweepBox) { entity ->
-            entity.pokemon.uuid in pokemonIds
-        }.forEach { entity ->
-            entity.navigation.stop()
-            entity.setVelocity(0.0, 0.0, 0.0)
-            entity.discard()
-        }
-    }
-
-    private fun isRespawnSuppressed(pokemonId: UUID, now: Long): Boolean {
-        val until = respawnSuppressedUntil[pokemonId] ?: return false
-        if (now < until) return true
-        respawnSuppressedUntil.remove(pokemonId, until)
-        return false
-    }
-
-    private fun isRecallPending(pokemonId: UUID, now: Long): Boolean {
-        val until = recallPendingUntil[pokemonId] ?: return false
-        if (now < until) return true
-        recallPendingUntil.remove(pokemonId, until)
-        return false
-    }
-
-    private fun isUsableEntity(entity: PokemonEntity): Boolean {
-        return entity.isAlive && !entity.isRemoved
-    }
-
-    private fun trimRuntimeMap(map: ConcurrentHashMap<UUID, Long>) {
-        while (map.size > MAX_RUNTIME_ENTRIES) {
-            val oldest = map.entries.minByOrNull { it.value } ?: return
-            map.remove(oldest.key, oldest.value)
-        }
     }
 }

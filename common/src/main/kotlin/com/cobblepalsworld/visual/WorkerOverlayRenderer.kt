@@ -334,9 +334,7 @@ object WorkerOverlayRenderer {
         return when (TagType.fromId(snapshot.tagTypeId)) {
             TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM -> 0x56CF7A
             TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> 0x33C7C4
-            TagType.GUARDIAN -> 0xE57373.toInt()
             TagType.ACTIVATOR -> 0xF3C969
-            TagType.SHEPHERD -> 0xF5A6C8.toInt()
             null -> phaseColor(snapshot.phase(), snapshot.hasCargo())
         }
     }

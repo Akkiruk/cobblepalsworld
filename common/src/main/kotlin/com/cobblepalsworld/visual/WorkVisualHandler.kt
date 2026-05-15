@@ -73,8 +73,8 @@ object WorkVisualHandler {
     }
 
     private fun completionAccentParticle(tagType: TagType): ParticleEffect = when (tagType) {
-        TagType.BREAKER, TagType.GUARDIAN -> ParticleTypes.CRIT
-        TagType.HARVESTER, TagType.SHEPHERD -> ParticleTypes.HAPPY_VILLAGER
+        TagType.BREAKER -> ParticleTypes.CRIT
+        TagType.HARVESTER -> ParticleTypes.HAPPY_VILLAGER
         TagType.VACUUM, TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> ParticleTypes.ENCHANT
         TagType.ACTIVATOR -> ParticleTypes.WAX_ON
     }

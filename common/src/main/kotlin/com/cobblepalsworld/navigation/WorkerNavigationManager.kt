@@ -14,9 +14,8 @@ object WorkerNavigationManager {
     private const val MIN_PROGRESS_DISTANCE_SQ = 0.04
     private const val MAX_FAILED_ATTEMPTS = 6
     private const val FAILURE_CACHE_TICKS = 20L * 15L
-    private const val MAX_FAILURE_CACHE_ENTRIES = 512
 
-    private val failedDestinations = linkedMapOf<FailureKey, Long>()
+    private val failedDestinations = mutableMapOf<FailureKey, Long>()
 
     fun navigateTo(
         entity: PokemonEntity,
@@ -37,14 +36,14 @@ object WorkerNavigationManager {
 
         val travelTarget = SafePositionResolver.standNear(world, immutableDestination, entity.blockPos)
             ?: run {
-                rememberFailure(failureKey, now)
+                failedDestinations[failureKey] = now + FAILURE_CACHE_TICKS
                 return NavigationAttempt.UNREACHABLE
             }
         ensureSession(entity, immutableDestination, travelTarget, state, purpose)
 
         recoveryAttempt(entity, immutableDestination, travelTarget, state, purpose)?.let { attempt ->
             if (attempt == NavigationAttempt.UNREACHABLE) {
-                rememberFailure(failureKey, now)
+                failedDestinations[failureKey] = now + FAILURE_CACHE_TICKS
             }
             return attempt
         }
@@ -200,20 +199,10 @@ object WorkerNavigationManager {
     private fun registerFailure(state: WorkerState, key: FailureKey, now: Long): NavigationAttempt {
         state.navigationFailedAttempts++
         if (state.navigationFailedAttempts >= MAX_FAILED_ATTEMPTS) {
-            rememberFailure(key, now)
+            failedDestinations[key] = now + FAILURE_CACHE_TICKS
             return NavigationAttempt.UNREACHABLE
         }
         return NavigationAttempt.FAILED
-    }
-
-    private fun rememberFailure(key: FailureKey, now: Long) {
-        failedDestinations.remove(key)
-        failedDestinations[key] = now + FAILURE_CACHE_TICKS
-        pruneFailureCache(now)
-        while (failedDestinations.size > MAX_FAILURE_CACHE_ENTRIES) {
-            val firstKey = failedDestinations.keys.firstOrNull() ?: return
-            failedDestinations.remove(firstKey)
-        }
     }
 
     private fun normalizedSpeed(entity: PokemonEntity): Double {

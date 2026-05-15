@@ -1,6 +1,5 @@
 {
   "item.cobblepalsworld.breaker_tag": "Breaker Tag",
-  "item.cobblepalsworld.guardian_tag": "Guardian Tag",
   "item.cobblepalsworld.harvester_tag": "Harvester Tag",
   "item.cobblepalsworld.vacuum_tag": "Vacuum Tag",
   "item.cobblepalsworld.sender_tag": "Sender Tag",
@@ -9,7 +8,6 @@
   "item.cobblepalsworld.dropper_tag": "Dropper Tag",
   "item.cobblepalsworld.void_tag": "Void Tag",
   "item.cobblepalsworld.activator_tag": "Activator Tag",
-  "item.cobblepalsworld.shepherd_tag": "Shepherd Tag",
   "item.cobblepalsworld.speed_augment": "Speed Augment",
   "item.cobblepalsworld.stack_augment": "Stack Augment",
   "item.cobblepalsworld.range_augment": "Range Augment",

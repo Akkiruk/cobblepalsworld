@@ -44,7 +44,6 @@ object CobblePalsWorld {
 
     private fun registerBehaviors() {
         TagBehaviorRegistry.register(BreakerBehavior)
-        TagBehaviorRegistry.register(GuardianBehavior)
         TagBehaviorRegistry.register(HarvesterBehavior)
         TagBehaviorRegistry.register(VacuumBehavior)
         TagBehaviorRegistry.register(SenderBehavior)
@@ -53,7 +52,6 @@ object CobblePalsWorld {
         TagBehaviorRegistry.register(DropperBehavior)
         TagBehaviorRegistry.register(VoidBehavior)
         TagBehaviorRegistry.register(ActivatorBehavior)
-        TagBehaviorRegistry.register(ShepherdBehavior)
     }
 
     private fun registerInteractions() {

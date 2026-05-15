@@ -19,9 +19,7 @@ internal enum class CommandPostRoleFamilyFilter(val label: String, val family: T
     ALL("All", null),
     GATHERING("Gather", TagRoleFamily.Gathering),
     LOGISTICS("Logi", TagRoleFamily.Logistics),
-    DEFENSE("Guard", TagRoleFamily.Defense),
-    INTERACTION("Use", TagRoleFamily.Interaction),
-    CARE("Care", TagRoleFamily.Care)
+    INTERACTION("Use", TagRoleFamily.Interaction)
 }
 
 internal enum class CommandPostStateFilter(val label: String) {

@@ -5,9 +5,7 @@ import java.util.Locale
 enum class TagRoleFamily(val label: String) {
     Gathering("Gather"),
     Logistics("Logistics"),
-    Defense("Defense"),
-    Interaction("Interact"),
-    Care("Care")
+    Interaction("Interact")
 }
 
 object TagTypePresentation {
@@ -22,9 +20,7 @@ object TagTypePresentation {
         return when (tagType) {
             TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM -> TagRoleFamily.Gathering
             TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> TagRoleFamily.Logistics
-            TagType.GUARDIAN -> TagRoleFamily.Defense
             TagType.ACTIVATOR -> TagRoleFamily.Interaction
-            TagType.SHEPHERD -> TagRoleFamily.Care
         }
     }
 

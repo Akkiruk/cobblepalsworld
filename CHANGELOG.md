@@ -1,37 +1,9 @@
 # Changelog
 
-## 0.2.42
+## 0.2.43
 
-- Hardened the tag role-policy editor so filter slots refresh after synced tag data arrives, no-filter roles hide ghost slots reliably, and unsupported button actions are ignored server-side.
-- Reworked target-list controls so filter, signal, target, run, regulator, and hint controls no longer overlap on distributor-style tags.
-- Replaced the remaining oversized translucent tag-tool slot overlays with compact wells on the pal detail screen.
-
-## 0.2.41
-
-- Fixed role-policy screens for Vacuum and other tag cards drawing text/buttons far outside the intended panels by removing double-applied GUI offsets.
-- Reworked the role-policy filter editor into the central PC screen with compact non-overlapping filter and bag slot wells.
-
-## 0.2.40
-
-- Redrew the Command Post Jobs tag-card area as a single framed well with non-overlapping slot wells, removing the stacked translucent Cobblemon slot overlays.
-
-## 0.2.39
-
-- Reduced repeated no-result container scans by caching source-container misses, so roles like dropper/void/activator/shepherd do not rescan large work ranges every retry when no matching container exists.
-- Batched Command Post release entity sweeps when a post is broken or cleared, avoiding one large Pokemon-entity search per removed worker.
-- Added runtime pruning/bounds for Command Post recall suppression, navigation failure cache, and shepherd breeding memory to prevent long-session UUID state growth.
-- Included Command Post lifecycle runtime maps in `/cobblepals reset runtime` and `/cobblepals reset all`.
-
-## 0.2.38
-
-- Removing Pokemon from the Command Post menu now immediately hard-cleans their loaded worker entities, including duplicate/orphan PokemonEntity instances with the same Pokemon UUID around the post.
-- Fixed empty Command Post rosters leaving previously sent-out workers in the world because removal relied on Cobblemon's single tracked entity reference and animated recall path.
-
-## 0.2.37
-
-- Fixed Command Post workers being immediately sent back out after `/kill @e`, which made entity cleanup commands keep finding the same worker entities again.
-- Command Post recall now waits for Cobblemon's recall animation/state cleanup before sending a worker out again, preventing recall-and-resend overlap from leaving extra Pokemon entities around.
-- Added short runtime suppression after a Command Post worker entity dies so admin cleanup and accidental worker deaths settle cleanly before the post resumes dispatch.
+- Removed the Guardian and Shepherd tags entirely from CobblePals World, including their behaviors, config defaults, recipes, language entries, module tag list entries, and item models.
+- Old saved Guardian and Shepherd assignments now fall out cleanly on load because unknown tag IDs are already skipped by the assignment loader.
 
 ## 0.2.36
 

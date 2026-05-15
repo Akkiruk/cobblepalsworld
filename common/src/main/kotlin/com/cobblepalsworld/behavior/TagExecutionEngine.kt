@@ -11,9 +11,7 @@ import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
 import com.cobblepalsworld.behavior.behaviors.DistributorBehavior
-import com.cobblepalsworld.behavior.behaviors.GuardianBehavior
 import com.cobblepalsworld.behavior.behaviors.SenderBehavior
-import com.cobblepalsworld.behavior.behaviors.ShepherdBehavior
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
@@ -184,10 +182,8 @@ object TagExecutionEngine {
         ClaimManager.releaseAll(pokemonId)
         StateManager.remove(pokemonId)
         BreakerBehavior.clearWorksiteOrigin(pokemonId)
-        GuardianBehavior.cleanup(pokemonId)
         SenderBehavior.cleanup(pokemonId)
         DistributorBehavior.cleanup(pokemonId)
-        ShepherdBehavior.cleanup(pokemonId)
     }
 
     fun pruneStaleRuntime(currentTime: Long, staleAfterTicks: Long) {
@@ -201,10 +197,8 @@ object TagExecutionEngine {
         ClaimManager.clear()
         WorkerNavigationManager.clearFailureCache()
         BreakerBehavior.clearAllWorksiteOrigins()
-        GuardianBehavior.clearAllRuntimeState()
         SenderBehavior.clearAllRuntimeState()
         DistributorBehavior.clearAllRuntimeState()
-        ShepherdBehavior.clearAllRuntimeState()
     }
 
     private fun recoverCarriedInventory(pokemonId: java.util.UUID, world: World, pos: BlockPos, inventory: PokemonInventory) {

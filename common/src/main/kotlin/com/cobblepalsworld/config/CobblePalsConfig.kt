@@ -67,7 +67,6 @@ data class CobblePalsConfig(
     companion object {
         val TAG_DEFAULTS = mapOf(
             "breaker" to TagConfig(enabled = true, range = 8),
-            "guardian" to TagConfig(enabled = true, range = 12),
             "harvester" to TagConfig(enabled = true, range = 8),
             "vacuum" to TagConfig(enabled = true, range = 8),
             "sender" to TagConfig(enabled = true, range = 32),
@@ -75,8 +74,7 @@ data class CobblePalsConfig(
             "distributor" to TagConfig(enabled = true, range = 32, maxItemsPerTrip = 16),
             "dropper" to TagConfig(enabled = true, range = 32, maxItemsPerTrip = 16),
             "void" to TagConfig(enabled = true, range = 32, maxItemsPerTrip = 16),
-            "activator" to TagConfig(enabled = true, range = 8),
-            "shepherd" to TagConfig(enabled = true, range = 12)
+            "activator" to TagConfig(enabled = true, range = 8)
         )
 
         fun withDefaults(): CobblePalsConfig {
