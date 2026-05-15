@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.40
+
+- Redrew the Command Post Jobs tag-card area as a single framed well with non-overlapping slot wells, removing the stacked translucent Cobblemon slot overlays.
+
 ## 0.2.39
 
 - Reduced repeated no-result container scans by caching source-container misses, so roles like dropper/void/activator/shepherd do not rescan large work ranges every retry when no matching container exists.

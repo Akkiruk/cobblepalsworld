@@ -620,12 +620,9 @@ class CommandPostPcScreen(
         drawSmallText(context, "Tag cards", JOBS_MODULE_LEFT, JOBS_MODULE_TOP - 10, 0xFFEAF4F5.toInt(), true)
         drawSmallText(context, "Augments", JOBS_UPGRADE_LEFT, JOBS_UPGRADE_TOP - 10, 0xFFEAF4F5.toInt(), true)
         drawSmallText(context, "Bag", CENTER_INV_LEFT, JOBS_PLAYER_TOP - 9, 0xFFEAF4F5.toInt(), true)
-        drawSlotFrames(context, 0 until RouterBlockEntity.MODULE_SLOT_COUNT, SlotFrameStyle.COBBLEMON)
+        drawTagCardWell(context, views.isEmpty())
         drawSlotFrames(context, RouterScreenHandler.UPGRADE_SCREEN_SLOT_START until RouterScreenHandler.STORAGE_SCREEN_SLOT_START, SlotFrameStyle.COMPACT)
         drawSlotFrames(context, RouterScreenHandler.COMMAND_SLOT_COUNT until handler.slots.size, SlotFrameStyle.COMPACT)
-        if (views.isEmpty()) {
-            drawSmallText(context, "Drop tags here", JOBS_MODULE_LEFT + 2, JOBS_MODULE_TOP + 60, 0xFFB8C3C7.toInt(), false)
-        }
         views.forEach { view ->
             val slot = handler.slots.getOrNull(view.moduleIndex) ?: return@forEach
             val active = handler.moduleActive(view.moduleIndex)
@@ -651,6 +648,33 @@ class CommandPostPcScreen(
         }
         panelHits = emptyList()
         slotHits = emptyList()
+    }
+
+    private fun drawTagCardWell(context: DrawContext, empty: Boolean) {
+        val left = x + JOBS_TAG_WELL_LEFT
+        val top = y + JOBS_TAG_WELL_TOP
+        val right = left + JOBS_TAG_WELL_WIDTH
+        val bottom = top + JOBS_TAG_WELL_HEIGHT
+        context.fill(left, top, right, bottom, 0xE6223038.toInt())
+        context.fill(left, top, right, top + 1, 0xFF6F8792.toInt())
+        context.fill(left, bottom - 1, right, bottom, 0xFF172027.toInt())
+        context.fill(left, top, left + 1, bottom, 0xFF6F8792.toInt())
+        context.fill(right - 1, top, right, bottom, 0xFF172027.toInt())
+        context.fill(left + 2, top + 2, right - 2, top + 11, 0x663D5360)
+
+        (0 until RouterBlockEntity.MODULE_SLOT_COUNT).forEach { slotIndex ->
+            val slot = handler.slots.getOrNull(slotIndex) ?: return@forEach
+            if (slot.x == HIDDEN_SLOT_X && slot.y == HIDDEN_SLOT_Y) return@forEach
+            context.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xFF54626A.toInt())
+            context.fill(x + slot.x, y + slot.y, x + slot.x + 16, y + slot.y + 16, 0xFF1D2B33.toInt())
+            context.fill(x + slot.x + 1, y + slot.y + 1, x + slot.x + 15, y + slot.y + 2, 0x553D5966)
+        }
+
+        if (empty) {
+            val hint = "Drop tag cards"
+            val hintWidth = (textRenderer.getWidth(hint) * CommandPostPcShell.TEXTURE_SCALE).toInt()
+            drawSmallText(context, hint, JOBS_TAG_WELL_LEFT + (JOBS_TAG_WELL_WIDTH - hintWidth) / 2, JOBS_TAG_WELL_TOP + JOBS_TAG_WELL_HEIGHT - 10, 0xFFB8C3C7.toInt(), false)
+        }
     }
 
     private fun drawPolicyPanel(context: DrawContext, localMouseX: Int, localMouseY: Int) {
@@ -1284,6 +1308,10 @@ class CommandPostPcScreen(
         private const val SOURCE_BUTTON_SIZE = 8
 
         private const val CENTER_INV_LEFT = 91
+        private const val JOBS_TAG_WELL_LEFT = 97
+        private const val JOBS_TAG_WELL_TOP = 37
+        private const val JOBS_TAG_WELL_WIDTH = 60
+        private const val JOBS_TAG_WELL_HEIGHT = 61
         private const val JOBS_MODULE_LEFT = 101
         private const val JOBS_MODULE_TOP = 42
         private const val JOBS_UPGRADE_LEFT = 165
