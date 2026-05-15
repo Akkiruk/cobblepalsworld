@@ -36,15 +36,18 @@ object ShepherdBehavior : TagBehavior {
     override fun idleRetryTicks(tag: TagInstance, state: WorkerState): Long = 40L
 
     private const val FEED_RANGE = 3.0
+    private const val RECENTLY_FED_TICKS = 6000L
+    private const val MAX_RECENTLY_FED_ENTRIES = 512
 
     // Track which animals we've recently fed to avoid feeding the same one twice
-    private val recentlyFed = mutableMapOf<UUID, Long>()
+    private val recentlyFed = ConcurrentHashMap<UUID, Long>()
     private val trackedAnimals = ConcurrentHashMap<UUID, UUID>()
 
     override fun findTarget(
         world: World, origin: BlockPos, entity: PokemonEntity,
         tag: TagInstance, state: WorkerState
     ): BlockPos? {
+        pruneRecentlyFed(world.time)
         val pokemonInv = InventoryManager.get(entity.pokemon.uuid)
         val hasFood = pokemonInv != null && (0 until pokemonInv.size()).any {
             !pokemonInv.getStack(it).isEmpty && isBreedingFood(pokemonInv.getStack(it))
@@ -97,6 +100,7 @@ object ShepherdBehavior : TagBehavior {
 
             animal.lovePlayer(null)
             recentlyFed[animal.uuid] = world.time
+            pruneRecentlyFed(world.time)
             trackedAnimals.remove(entity.pokemon.uuid)
             stack.decrement(1)
             if (stack.isEmpty) pokemonInv.setStack(slot, ItemStack.EMPTY)
@@ -117,9 +121,6 @@ object ShepherdBehavior : TagBehavior {
 
     fun cleanup(pokemonId: UUID) {
         trackedAnimals.remove(pokemonId)
-        // Clean old entries periodically
-        val cutoff = recentlyFed.values.minOrNull()?.let { it + 6000 } ?: return
-        recentlyFed.entries.removeIf { it.value < cutoff }
     }
 
     fun clearAllRuntimeState() {
@@ -148,7 +149,15 @@ object ShepherdBehavior : TagBehavior {
         if (animal.breedingAge > 0) return false
         // Don't re-feed animals we recently fed
         val lastFed = recentlyFed[animal.uuid] ?: return true
-        return world.time - lastFed > 6000 // 5 minutes cooldown
+        return world.time - lastFed > RECENTLY_FED_TICKS
+    }
+
+    private fun pruneRecentlyFed(currentTime: Long) {
+        recentlyFed.entries.removeIf { (_, fedAt) -> currentTime - fedAt > RECENTLY_FED_TICKS }
+        while (recentlyFed.size > MAX_RECENTLY_FED_ENTRIES) {
+            val oldest = recentlyFed.entries.minByOrNull { it.value } ?: return
+            recentlyFed.remove(oldest.key, oldest.value)
+        }
     }
 
     private fun resolveTrackedAnimal(world: World, pokemonId: UUID, center: BlockPos, range: Int): AnimalEntity? {

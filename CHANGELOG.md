@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.39
+
+- Reduced repeated no-result container scans by caching source-container misses, so roles like dropper/void/activator/shepherd do not rescan large work ranges every retry when no matching container exists.
+- Batched Command Post release entity sweeps when a post is broken or cleared, avoiding one large Pokemon-entity search per removed worker.
+- Added runtime pruning/bounds for Command Post recall suppression, navigation failure cache, and shepherd breeding memory to prevent long-session UUID state growth.
+- Included Command Post lifecycle runtime maps in `/cobblepals reset runtime` and `/cobblepals reset all`.
+
 ## 0.2.38
 
 - Removing Pokemon from the Command Post menu now immediately hard-cleans their loaded worker entities, including duplicate/orphan PokemonEntity instances with the same Pokemon UUID around the post.

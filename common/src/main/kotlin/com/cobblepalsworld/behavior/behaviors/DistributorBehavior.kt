@@ -18,6 +18,7 @@ import net.minecraft.item.ItemStack
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Round-robin distributes items from the Command Post buffer into multiple target containers.
@@ -28,7 +29,7 @@ object DistributorBehavior : TagBehavior {
     override val handlesOwnInventory = true
 
     // Track round-robin index per Pokémon
-    private val roundRobinIndex = mutableMapOf<UUID, Int>()
+    private val roundRobinIndex = ConcurrentHashMap<UUID, Int>()
     private const val FALLBACK_TARGET_SCAN_LIMIT = 64
 
     private fun sourceContainerPos(tag: TagInstance): BlockPos? = tag.controllerPos

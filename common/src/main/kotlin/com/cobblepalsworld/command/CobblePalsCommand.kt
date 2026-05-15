@@ -2,6 +2,7 @@ package com.cobblepalsworld.command
 
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.assignment.TagAssignmentManager
@@ -44,6 +45,7 @@ object CobblePalsCommand {
 
     private fun runResetRuntime(ctx: CommandContext<ServerCommandSource>): Int {
         TagExecutionEngine.resetRuntimeState()
+        CommandPostCrewLifecycle.clearRuntimeState()
         ServerScaleRuntime.clearTransient()
         markAllWorldsDirty(ctx.source)
         ctx.source.sendFeedback({ success("Cleared CobblePals runtime state and claims.") }, true)
@@ -63,6 +65,7 @@ object CobblePalsCommand {
         val droppedStacks = spillInventoriesAtSource(ctx.source)
         TagAssignmentManager.clear()
         TagExecutionEngine.resetRuntimeState()
+        CommandPostCrewLifecycle.clearRuntimeState()
         ServerScaleRuntime.clearTransient()
         markAllWorldsDirty(ctx.source)
         ctx.source.sendFeedback({

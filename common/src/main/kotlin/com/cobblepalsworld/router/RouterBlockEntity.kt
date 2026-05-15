@@ -307,8 +307,8 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                 changed = true
             }
         }
+        CommandPostCrewLifecycle.releaseMembersFromCommandPost(world, cleanupPos, nativeCrew, ownerUuid)
         nativeCrew.forEach { member ->
-            CommandPostCrewLifecycle.releaseFromCommandPost(world, cleanupPos, member, ownerUuid)
             com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(member.pokemonId, world, cleanupPos)
             TagAssignmentManager.removeIfControlledBy(member.pokemonId, dimensionId, pos)
             if (CommandPostCrewManager.remove(member.pokemonId, dimensionId, pos) != null) {

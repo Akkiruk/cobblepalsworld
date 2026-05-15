@@ -48,10 +48,14 @@ class WorkerState(val pokemonId: UUID) {
     var cachedContainerPos: BlockPos? = null
     /** World time when cachedContainerPos was found. */
     var containerCacheTime: Long = 0L
+    /** World time when a deposit container search last failed. */
+    var containerMissCacheTime: Long = 0L
     /** Last known source/search container position for behaviors that repeatedly restock. */
     var cachedSourceContainerPos: BlockPos? = null
     /** World time when cachedSourceContainerPos was found. */
     var sourceContainerCacheTime: Long = 0L
+    /** World time when a source/search container lookup last failed. */
+    var sourceContainerMissCacheTime: Long = 0L
 
     // --- Last-match slot (avoid scanning from slot 0 every time) ---
     /** Last slot index where a matching item was found in the source container. */
@@ -98,6 +102,8 @@ class WorkerState(val pokemonId: UUID) {
         cachedMaxItems = -1
         cachedContainerPos = null
         cachedSourceContainerPos = null
+        containerMissCacheTime = 0L
+        sourceContainerMissCacheTime = 0L
     }
 
     fun resetNavigationSession() {

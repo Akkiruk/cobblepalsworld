@@ -2,6 +2,7 @@ package com.cobblepalsworld.runtime
 
 import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.config.ConfigManager
+import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationBudget
@@ -39,6 +40,7 @@ object ServerScaleRuntime {
 
         CobblePalsSaveData.markDirty(server)
         TagExecutionEngine.pruneStaleRuntime(world.time, STALE_ENTRY_TTL)
+        CommandPostCrewLifecycle.pruneRuntimeState(world.time)
         ClaimManager.pruneStale(world.time, STALE_ENTRY_TTL)
         WorkerNavigationManager.pruneFailureCache(world.time)
         InventoryManager.pruneStale { pokemonId, _ -> TagAssignmentManager.has(pokemonId) }

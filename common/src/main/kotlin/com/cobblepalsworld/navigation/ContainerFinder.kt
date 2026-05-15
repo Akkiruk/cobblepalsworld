@@ -147,12 +147,20 @@ object ContainerFinder {
             }
         }
 
+        if (cachedPos == null && state.sourceContainerMissCacheTime > 0L && world.time - state.sourceContainerMissCacheTime < cacheTtl) {
+            return null
+        }
+
         val foundPos = findControllerFirstMatching(world, origin, tag, range, exclude, predicate)
         if (foundPos != null) {
             state.cachedSourceContainerPos = foundPos
             state.sourceContainerCacheTime = world.time
+            state.sourceContainerMissCacheTime = 0L
         } else if (cachedPos != null && world.time - state.sourceContainerCacheTime >= cacheTtl) {
             state.cachedSourceContainerPos = null
+            state.sourceContainerMissCacheTime = world.time
+        } else if (cachedPos == null) {
+            state.sourceContainerMissCacheTime = world.time
         }
         return foundPos
     }
