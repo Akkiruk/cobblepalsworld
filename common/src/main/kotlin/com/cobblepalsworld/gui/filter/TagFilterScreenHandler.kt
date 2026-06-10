@@ -228,7 +228,7 @@ class TagFilterScreenHandler : ScreenHandler {
             if (!stack.isEmpty && stack.item is TagItem) {
                 if (trackedTagId != null && TagItem.getTrackingId(stack) != trackedTagId) {
                     player.sendMessage(
-                        Text.literal("That tag moved while the editor was open. Reopen it to edit the current stack.")
+                        Text.translatable("message.cobblepalsworld.tag_moved")
                             .formatted(Formatting.YELLOW),
                         true
                     )
@@ -236,7 +236,7 @@ class TagFilterScreenHandler : ScreenHandler {
                 }
                 if (TagItem.getRevision(stack) != trackedRevision) {
                     player.sendMessage(
-                        Text.literal("That tag changed while the editor was open. Reopen it to edit the latest version.")
+                        Text.translatable("message.cobblepalsworld.tag_changed")
                             .formatted(Formatting.YELLOW),
                         true
                     )

@@ -270,7 +270,7 @@ class CommandPostPcScreen(
                 y + CommandPostFilterDrawer.SEARCH_TOP + 1,
                 CommandPostFilterDrawer.SEARCH_WIDTH - 6,
                 CommandPostFilterDrawer.SEARCH_HEIGHT + 2,
-                Text.literal("Search")
+                Text.translatable("gui.cobblepalsworld.search")
             ).apply {
                 setMaxLength(40)
                 setDrawsBackground(false)
@@ -531,7 +531,7 @@ class CommandPostPcScreen(
         CommandPostPastureWidget.drawScrollOverlay(context, x, y)
         CommandPostPastureWidget.drawControls(context, textRenderer, x, y, members.size, maxWorkers, localMouseX, localMouseY)
         if (CommandPostPastureWidget.recallContains(localMouseX, localMouseY)) {
-            hoveredTooltip = HoverTooltip("recall", listOf(Text.literal("Recall all Command Post Pokemon")))
+            hoveredTooltip = HoverTooltip("recall", listOf(Text.translatable("gui.cobblepalsworld.recall_all")))
         }
     }
 
@@ -568,13 +568,13 @@ class CommandPostPcScreen(
             hoveredTooltip = HoverTooltip("mode-${mode.name}", listOf(Text.literal(mode.tooltip)))
         }
         if (filterButton?.isHovered == true) {
-            hoveredTooltip = HoverTooltip("filter", listOf(Text.literal("Filters"), Text.literal("${roleFamilyFilter.label} / ${stateFilter.label}")))
+            hoveredTooltip = HoverTooltip("filter", listOf(Text.translatable("gui.cobblepalsworld.filters"), Text.literal("${roleFamilyFilter.label} / ${stateFilter.label}")))
         }
         if (optionsButton?.isHovered == true) {
-            hoveredTooltip = HoverTooltip("sort", listOf(Text.literal("Options"), Text.literal("Sort: ${rosterSort.label}")))
+            hoveredTooltip = HoverTooltip("sort", listOf(Text.translatable("gui.cobblepalsworld.options"), Text.translatable("gui.cobblepalsworld.sort", rosterSort.label)))
         }
         if (sourceToggleButton?.visible == true && sourceToggleButton?.isHovered == true) {
-            hoveredTooltip = HoverTooltip("source-toggle", listOf(Text.literal(if (sourceType == CrewSourceType.PC) "Show Party" else "Show PC")))
+            hoveredTooltip = HoverTooltip("source-toggle", listOf(Text.translatable(if (sourceType == CrewSourceType.PC) "gui.cobblepalsworld.show_party" else "gui.cobblepalsworld.show_pc")))
         }
     }
 
@@ -835,13 +835,13 @@ class CommandPostPcScreen(
     }
 
     private fun drawerTooltip(action: CommandPostFilterDrawer.Action): List<Text> = when (action) {
-        CommandPostFilterDrawer.Action.SEARCH -> listOf(Text.literal("Search: ${sourceQuery.ifBlank { "all" }}"))
-        CommandPostFilterDrawer.Action.ROLE -> listOf(Text.literal("Role family: ${roleFamilyFilter.label}"))
-        CommandPostFilterDrawer.Action.STATE -> listOf(Text.literal("State: ${stateFilter.label}"))
-        CommandPostFilterDrawer.Action.ASSIGNMENT -> listOf(Text.literal("Assignment: ${assignmentFilter.label}"))
-        CommandPostFilterDrawer.Action.AVAILABILITY -> listOf(Text.literal("Availability: ${availabilityFilter.label}"))
-        CommandPostFilterDrawer.Action.ASSIGNED -> listOf(Text.literal("Source: ${assignedFilter.label}"))
-        CommandPostFilterDrawer.Action.SORT -> listOf(Text.literal("Sort: ${rosterSort.label}"))
+        CommandPostFilterDrawer.Action.SEARCH -> listOf(Text.translatable("gui.cobblepalsworld.search_value", sourceQuery.ifBlank { "all" }))
+        CommandPostFilterDrawer.Action.ROLE -> listOf(Text.translatable("gui.cobblepalsworld.role_family", roleFamilyFilter.label))
+        CommandPostFilterDrawer.Action.STATE -> listOf(Text.translatable("gui.cobblepalsworld.state", stateFilter.label))
+        CommandPostFilterDrawer.Action.ASSIGNMENT -> listOf(Text.translatable("gui.cobblepalsworld.assignment", assignmentFilter.label))
+        CommandPostFilterDrawer.Action.AVAILABILITY -> listOf(Text.translatable("gui.cobblepalsworld.availability", availabilityFilter.label))
+        CommandPostFilterDrawer.Action.ASSIGNED -> listOf(Text.translatable("gui.cobblepalsworld.source", assignedFilter.label))
+        CommandPostFilterDrawer.Action.SORT -> listOf(Text.translatable("gui.cobblepalsworld.sort", rosterSort.label))
     }
 
     private inline fun <reified T : Enum<T>> T.next(): T {
@@ -1240,7 +1240,7 @@ class CommandPostPcScreen(
 
     private fun sourceTooltip(pokemon: CrewSourcePokemonSnapshot): List<Text> = buildList {
         add(Text.literal(pokemon.displayName))
-        add(Text.literal("Lv.${pokemon.level} ${friendlySpecies(pokemon.species)}"))
+        add(Text.translatable("gui.cobblepalsworld.level_species", pokemon.level, friendlySpecies(pokemon.species)))
         add(Text.literal(pokemon.sourceLabel()))
         add(Text.literal(pokemon.statusLabel()))
         if (pokemon.cargoSummary.isNotBlank()) add(Text.literal(pokemon.cargoSummary))
@@ -1248,7 +1248,7 @@ class CommandPostPcScreen(
 
     private fun crewTooltip(member: CommandPostCrewMemberSnapshot): List<Text> = buildList {
         add(Text.literal(member.displayName))
-        add(Text.literal("Lv.${member.level} ${friendlySpecies(member.species)}"))
+        add(Text.translatable("gui.cobblepalsworld.level_species", member.level, friendlySpecies(member.species)))
         add(Text.literal(member.sourceLabel()))
         add(Text.literal(member.statusLabel()))
         add(Text.literal(member.statusDetailOrFallback()))

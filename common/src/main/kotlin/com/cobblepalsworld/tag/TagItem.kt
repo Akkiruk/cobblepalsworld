@@ -294,14 +294,14 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                     if (start == null) {
                         setPendingAreaStart(stack, pos)
                         player.sendMessage(
-                            Text.literal("First corner set at ${pos.x}, ${pos.y}, ${pos.z}. Sneak-use a second corner.").formatted(Formatting.YELLOW),
+                            Text.translatable("message.cobblepalsworld.area_first_corner", pos.x, pos.y, pos.z).formatted(Formatting.YELLOW),
                             true
                         )
                     } else {
                         val area = BoundArea.of(start, pos)
                         setBoundArea(stack, area)
                         player.sendMessage(
-                            Text.literal("Bound area: ${area.width()}x${area.height()}x${area.depth()}").formatted(Formatting.GREEN),
+                            Text.translatable("message.cobblepalsworld.area_bound", area.width(), area.height(), area.depth()).formatted(Formatting.GREEN),
                             true
                         )
                     }
@@ -314,14 +314,14 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         setSettings(stack, settings.copy(extraTargets = filteredTargets))
                     }
                     player.sendMessage(
-                        Text.literal("Bound to ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
+                        Text.translatable("message.cobblepalsworld.bound_position", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                         true
                     )
                 }
                 BindingMode.CONTAINER -> {
                     if (!ContainerFinder.isContainer(world, pos)) {
                         player.sendMessage(
-                            Text.literal("This tag must bind to a container!").formatted(Formatting.RED),
+                            Text.translatable("message.cobblepalsworld.must_bind_container").formatted(Formatting.RED),
                             true
                         )
                         return ActionResult.FAIL
@@ -335,14 +335,14 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                             updatedTargets.removeAt(existingIndex)
                             setSettings(stack, settings.copy(extraTargets = updatedTargets))
                             player.sendMessage(
-                                Text.literal("Removed extra target at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.YELLOW),
+                                Text.translatable("message.cobblepalsworld.extra_target_removed", pos.x, pos.y, pos.z).formatted(Formatting.YELLOW),
                                 true
                             )
                         } else {
                             updatedTargets += TagTarget(dimensionId, pos.toImmutable())
                             setSettings(stack, settings.copy(extraTargets = updatedTargets))
                             player.sendMessage(
-                                Text.literal("Added extra target at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
+                                Text.translatable("message.cobblepalsworld.extra_target_added", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                                 true
                             )
                         }
@@ -356,7 +356,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         setSettings(stack, settings.copy(extraTargets = filteredTargets))
                     }
                     player.sendMessage(
-                        Text.literal("Bound to container at ${pos.x}, ${pos.y}, ${pos.z}").formatted(Formatting.GREEN),
+                        Text.translatable("message.cobblepalsworld.bound_container", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                         true
                     )
                 }
@@ -383,7 +383,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                             setSettings(stack, getSettings(stack).copy(extraTargets = emptyList()))
                         }
                         user.sendMessage(
-                            Text.literal("Binding cleared").formatted(Formatting.YELLOW), true
+                            Text.translatable("message.cobblepalsworld.binding_cleared").formatted(Formatting.YELLOW), true
                         )
                     }
                 }
@@ -407,31 +407,31 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         tooltip: MutableList<Text>,
         type: TooltipType
     ) {
-        tooltip.add(Text.literal(tagType.description).formatted(Formatting.BLUE))
+        tooltip.add(Text.translatable("tooltip.cobblepalsworld.tag.${tagType.id}.desc").formatted(Formatting.BLUE))
 
         val registries = context.registryLookup ?: return
         if (tagType.usesFilter) {
             val filter = getFilter(stack, registries)
-            val mode = if (filter.whitelist) "Whitelist" else "Blacklist"
-            tooltip.add(Text.literal("Mode: $mode").formatted(Formatting.GRAY))
-            tooltip.add(Text.literal("Match: ${filter.matchMode.name.lowercase().replaceFirstChar(Char::titlecase)}").formatted(Formatting.DARK_GRAY))
+            val mode = Text.translatable(if (filter.whitelist) "tooltip.cobblepalsworld.mode.whitelist" else "tooltip.cobblepalsworld.mode.blacklist")
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.mode", mode).formatted(Formatting.GRAY))
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.match", filter.matchMode.name.lowercase().replaceFirstChar(Char::titlecase)).formatted(Formatting.DARK_GRAY))
             val filterParts = mutableListOf<String>()
             if (filter.items.isNotEmpty()) {
-                filterParts += "${filter.items.size} item${if (filter.items.size != 1) "s" else ""}"
+                filterParts += Text.translatable("tooltip.cobblepalsworld.filter_count.items", filter.items.size).string
             }
             if (filter.matchTags.isNotEmpty()) {
-                filterParts += "${filter.matchTags.size} tag${if (filter.matchTags.size != 1) "s" else ""}"
+                filterParts += Text.translatable("tooltip.cobblepalsworld.filter_count.tags", filter.matchTags.size).string
             }
             if (filter.matchModIds.isNotEmpty()) {
-                filterParts += "${filter.matchModIds.size} mod${if (filter.matchModIds.size != 1) "s" else ""}"
+                filterParts += Text.translatable("tooltip.cobblepalsworld.filter_count.mods", filter.matchModIds.size).string
             }
             if (filterParts.isNotEmpty()) {
-                tooltip.add(Text.literal("Filter: ${filterParts.joinToString(", ")}").formatted(Formatting.DARK_GRAY))
-                val behaviorText = when (filter.matchMode) {
-                    com.cobblepalsworld.tag.filter.FilterMatchMode.ANY -> "Any enabled filter group may match"
-                    com.cobblepalsworld.tag.filter.FilterMatchMode.ALL -> "Every enabled filter group must match"
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.filter_summary", filterParts.joinToString(", ")).formatted(Formatting.DARK_GRAY))
+                val behaviorKey = when (filter.matchMode) {
+                    com.cobblepalsworld.tag.filter.FilterMatchMode.ANY -> "tooltip.cobblepalsworld.match_behavior.any"
+                    com.cobblepalsworld.tag.filter.FilterMatchMode.ALL -> "tooltip.cobblepalsworld.match_behavior.all"
                 }
-                tooltip.add(Text.literal(behaviorText).formatted(Formatting.DARK_AQUA))
+                tooltip.add(Text.translatable(behaviorKey).formatted(Formatting.DARK_AQUA))
             }
             if (filter.whitelist && filter.isEmpty()) {
                 tooltip.add(Text.translatable("tooltip.cobblepalsworld.whitelist_empty").formatted(Formatting.RED))
@@ -440,13 +440,14 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
 
         val settings = getSettings(stack)
         if (settings.redstoneMode != RedstoneControlMode.ALWAYS) {
-            tooltip.add(Text.literal("Signal: ${humanValue(settings.redstoneMode.id)}").formatted(Formatting.GOLD))
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.signal", humanValue(settings.redstoneMode.id)).formatted(Formatting.GOLD))
         }
         if (tagType.supportsTargetList) {
-            tooltip.add(Text.literal("Target: ${humanValue(settings.targetStrategy.id)}").formatted(Formatting.AQUA))
-            tooltip.add(Text.literal("Run: ${if (settings.terminateAfterSuccess) "One pass" else "Loop"}").formatted(Formatting.DARK_AQUA))
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.target", humanValue(settings.targetStrategy.id)).formatted(Formatting.AQUA))
+            val runMode = Text.translatable(if (settings.terminateAfterSuccess) "tooltip.cobblepalsworld.run.one_pass" else "tooltip.cobblepalsworld.run.loop")
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.run", runMode).formatted(Formatting.DARK_AQUA))
             if (settings.regulatorAmount != 64) {
-                tooltip.add(Text.literal("Regulator: ${settings.regulatorAmount}").formatted(Formatting.GREEN))
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.regulator", settings.regulatorAmount).formatted(Formatting.GREEN))
             }
         }
 
@@ -455,22 +456,22 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
             val area = getBoundArea(stack)
             val pending = getPendingAreaStart(stack)
             if (area != null) {
-                tooltip.add(Text.literal("Bound Box: ${area.min.x}, ${area.min.y}, ${area.min.z}").formatted(Formatting.GREEN))
-                tooltip.add(Text.literal("to ${area.max.x}, ${area.max.y}, ${area.max.z} (${area.width()}x${area.height()}x${area.depth()})").formatted(Formatting.GREEN))
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.bound_box", area.min.x, area.min.y, area.min.z).formatted(Formatting.GREEN))
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.bound_box_to", area.max.x, area.max.y, area.max.z, area.width(), area.height(), area.depth()).formatted(Formatting.GREEN))
             } else if (bound != null) {
-                val label = when (tagType.bindingMode) {
-                    BindingMode.CONTAINER -> "Bound Container"
+                val labelKey = when (tagType.bindingMode) {
+                    BindingMode.CONTAINER -> "tooltip.cobblepalsworld.bound_label.container"
                     BindingMode.POSITION -> when (tagType) {
-                        TagType.BREAKER -> "Bound Block"
-                        TagType.ACTIVATOR -> "Bound Target"
-                        else -> "Bound Position"
+                        TagType.BREAKER -> "tooltip.cobblepalsworld.bound_label.block"
+                        TagType.ACTIVATOR -> "tooltip.cobblepalsworld.bound_label.target"
+                        else -> "tooltip.cobblepalsworld.bound_label.position"
                     }
-                    BindingMode.AREA -> "Bound Box"
-                    BindingMode.NONE -> "Bound"
+                    BindingMode.AREA -> "tooltip.cobblepalsworld.bound_label.box"
+                    BindingMode.NONE -> "tooltip.cobblepalsworld.bound_label.generic"
                 }
-                tooltip.add(Text.literal("$label: ${bound.x}, ${bound.y}, ${bound.z}").formatted(Formatting.GREEN))
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.bound_at", Text.translatable(labelKey), bound.x, bound.y, bound.z).formatted(Formatting.GREEN))
             } else if (pending != null) {
-                tooltip.add(Text.literal("Area Start: ${pending.x}, ${pending.y}, ${pending.z}").formatted(Formatting.YELLOW))
+                tooltip.add(Text.translatable("tooltip.cobblepalsworld.area_start", pending.x, pending.y, pending.z).formatted(Formatting.YELLOW))
             } else {
                 tooltip.add(Text.translatable("tooltip.cobblepalsworld.bind_hint").formatted(Formatting.YELLOW))
             }
@@ -478,10 +479,10 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         }
 
         if (tagType.supportsTargetList && settings.extraTargets.isNotEmpty()) {
-            tooltip.add(Text.literal("Extra Targets: ${settings.extraTargets.size}").formatted(Formatting.AQUA))
+            tooltip.add(Text.translatable("tooltip.cobblepalsworld.extra_targets", settings.extraTargets.size).formatted(Formatting.AQUA))
         }
 
-        tooltip.add(Text.literal("Command Post: hover + R to edit").formatted(Formatting.DARK_GRAY))
+        tooltip.add(Text.translatable("tooltip.cobblepalsworld.edit_hint").formatted(Formatting.DARK_GRAY))
     }
 
     private fun humanValue(value: String): String =

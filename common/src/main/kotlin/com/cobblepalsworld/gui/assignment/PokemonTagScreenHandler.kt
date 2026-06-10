@@ -282,7 +282,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         if (!player.world.isClient && currentPokemonId != null) {
             if (TagAssignmentManager.getControllerBinding(currentPokemonId) != null) {
                 player.sendMessage(
-                    net.minecraft.text.Text.literal("This Pokemon is currently managed by a linked Command Post.")
+                    net.minecraft.text.Text.translatable("message.cobblepalsworld.pokemon_managed")
                         .formatted(net.minecraft.util.Formatting.YELLOW),
                     true
                 )

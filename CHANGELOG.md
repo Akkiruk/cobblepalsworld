@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.44
+
+- Hardened save/load reliability: corrupted item NBT entries in Pokemon inventories, Command Post inventories, and tag filters are now skipped safely instead of risking a crash or aborting the rest of the load, and out-of-range inventory slots are ignored on load.
+- Removed the remaining fragile non-null assertions from the worker deposit flow and crew snapshot status labels; a worker whose deposit target disappears mid-trip now cleanly re-enters target search instead of risking a tick crash.
+- Client crew and source snapshot caches are now fully cleared on world or dimension change so stale Command Post data from a previous world can never leak into the next session.
+- Made every player-facing string translatable: tag and augment tooltips, tag binding action-bar messages, Command Post screen tooltips, filter and assignment screen tooltips, and screen-handler warnings now use lang keys, expanding en_us.json from 27 to over 120 entries so the mod can be localized.
+
 ## 0.2.43
 
 - Removed the Guardian and Shepherd tags entirely from CobblePals World, including their behaviors, config defaults, recipes, language entries, module tag list entries, and item models.
