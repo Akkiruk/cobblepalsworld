@@ -5,14 +5,21 @@ import com.cobblepalsworld.tag.filter.FilterSerializer
 import com.cobblepalsworld.tag.filter.TagFilter
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.navigation.ContainerFinder
+import net.minecraft.entity.Entity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
 import net.minecraft.item.ItemUsageContext
 import net.minecraft.item.tooltip.TooltipType
 import net.minecraft.nbt.NbtCompound
+import net.minecraft.particle.ParticleTypes
 import net.minecraft.registry.RegistryWrapper
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory
+import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.server.world.ServerWorld
+import net.minecraft.sound.SoundCategory
+import net.minecraft.sound.SoundEvent
+import net.minecraft.sound.SoundEvents
 import net.minecraft.text.Text
 import net.minecraft.util.ActionResult
 import net.minecraft.util.Formatting
@@ -41,6 +48,12 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         private const val KEY_SETTINGS = "TagSettings"
         private const val KEY_REVISION = "TagRevision"
         private const val KEY_TRACKING_ID = "TagTrackingId"
+
+        /** How often (in ticks) a held bound tag re-emits its binding preview particles. */
+        private const val PREVIEW_INTERVAL_TICKS = 10L
+
+        /** Maximum distance at which binding preview particles are shown to the holder. */
+        private const val PREVIEW_MAX_DISTANCE = 64.0
 
         fun getRevision(stack: ItemStack): Long {
             val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
@@ -293,6 +306,8 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                     val start = getPendingAreaStart(stack)
                     if (start == null) {
                         setPendingAreaStart(stack, pos)
+                        playBindingSound(world, pos, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 1.4f)
+                        markBindingTarget(world, player, pos)
                         player.sendMessage(
                             Text.translatable("message.cobblepalsworld.area_first_corner", pos.x, pos.y, pos.z).formatted(Formatting.YELLOW),
                             true
@@ -300,6 +315,8 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                     } else {
                         val area = BoundArea.of(start, pos)
                         setBoundArea(stack, area)
+                        playBindingSound(world, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, 1.0f)
+                        markBindingTarget(world, player, pos)
                         player.sendMessage(
                             Text.translatable("message.cobblepalsworld.area_bound", area.width(), area.height(), area.depth()).formatted(Formatting.GREEN),
                             true
@@ -313,6 +330,8 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         val filteredTargets = settings.extraTargets.filterNot { it.dimensionId == dimensionId && it.pos == pos }
                         setSettings(stack, settings.copy(extraTargets = filteredTargets))
                     }
+                    playBindingSound(world, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, 1.0f)
+                    markBindingTarget(world, player, pos)
                     player.sendMessage(
                         Text.translatable("message.cobblepalsworld.bound_position", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                         true
@@ -320,6 +339,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                 }
                 BindingMode.CONTAINER -> {
                     if (!ContainerFinder.isContainer(world, pos)) {
+                        playBindingSound(world, pos, SoundEvents.ENTITY_VILLAGER_NO, 1.0f)
                         player.sendMessage(
                             Text.translatable("message.cobblepalsworld.must_bind_container").formatted(Formatting.RED),
                             true
@@ -334,6 +354,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         if (existingIndex >= 0) {
                             updatedTargets.removeAt(existingIndex)
                             setSettings(stack, settings.copy(extraTargets = updatedTargets))
+                            playBindingSound(world, pos, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 0.7f)
                             player.sendMessage(
                                 Text.translatable("message.cobblepalsworld.extra_target_removed", pos.x, pos.y, pos.z).formatted(Formatting.YELLOW),
                                 true
@@ -341,6 +362,8 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         } else {
                             updatedTargets += TagTarget(dimensionId, pos.toImmutable())
                             setSettings(stack, settings.copy(extraTargets = updatedTargets))
+                            playBindingSound(world, pos, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 1.2f)
+                            markBindingTarget(world, player, pos)
                             player.sendMessage(
                                 Text.translatable("message.cobblepalsworld.extra_target_added", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                                 true
@@ -355,6 +378,8 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         val filteredTargets = settings.extraTargets.filterNot { it.dimensionId == dimensionId && it.pos == pos }
                         setSettings(stack, settings.copy(extraTargets = filteredTargets))
                     }
+                    playBindingSound(world, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, 1.0f)
+                    markBindingTarget(world, player, pos)
                     player.sendMessage(
                         Text.translatable("message.cobblepalsworld.bound_container", pos.x, pos.y, pos.z).formatted(Formatting.GREEN),
                         true
@@ -382,6 +407,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
                         if (tagType.supportsTargetList) {
                             setSettings(stack, getSettings(stack).copy(extraTargets = emptyList()))
                         }
+                        playBindingSound(world, user.blockPos, SoundEvents.ENTITY_ITEM_FRAME_REMOVE_ITEM, 0.9f)
                         user.sendMessage(
                             Text.translatable("message.cobblepalsworld.binding_cleared").formatted(Formatting.YELLOW), true
                         )
@@ -482,7 +508,79 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
             tooltip.add(Text.translatable("tooltip.cobblepalsworld.extra_targets", settings.extraTargets.size).formatted(Formatting.AQUA))
         }
 
+        tooltip.add(Text.translatable("tooltip.cobblepalsworld.open_editor_hint").formatted(Formatting.DARK_GRAY))
         tooltip.add(Text.translatable("tooltip.cobblepalsworld.edit_hint").formatted(Formatting.DARK_GRAY))
+    }
+
+    /**
+     * While a bound tag is held, gently highlight its bound target(s) in-world so
+     * players can see at a glance where the tag points without reading coordinates.
+     */
+    override fun inventoryTick(stack: ItemStack, world: World, entity: Entity, slot: Int, selected: Boolean) {
+        if (world.isClient || world !is ServerWorld) return
+        if (world.time % PREVIEW_INTERVAL_TICKS != 0L) return
+        val player = entity as? ServerPlayerEntity ?: return
+        if (!selected && player.offHandStack !== stack) return
+        if (!tagType.supportsBinding) return
+
+        val area = getBoundArea(stack)
+        if (area != null) {
+            for (corner in area.corners()) {
+                if (corner.isWithinDistance(player.pos, PREVIEW_MAX_DISTANCE)) {
+                    spawnPreviewParticle(world, player, corner, ParticleTypes.END_ROD)
+                }
+            }
+            return
+        }
+
+        getBoundPos(stack)?.let { bound ->
+            if (bound.isWithinDistance(player.pos, PREVIEW_MAX_DISTANCE)) {
+                spawnPreviewParticle(world, player, bound, ParticleTypes.END_ROD)
+            }
+            val dimensionId = world.registryKey.value.toString()
+            getSettings(stack).extraTargets.forEach { target ->
+                if (target.dimensionId == dimensionId && target.pos.isWithinDistance(player.pos, PREVIEW_MAX_DISTANCE)) {
+                    spawnPreviewParticle(world, player, target.pos, ParticleTypes.END_ROD)
+                }
+            }
+            return
+        }
+
+        getPendingAreaStart(stack)?.let { pending ->
+            if (pending.isWithinDistance(player.pos, PREVIEW_MAX_DISTANCE)) {
+                spawnPreviewParticle(world, player, pending, ParticleTypes.FLAME)
+            }
+        }
+    }
+
+    private fun spawnPreviewParticle(world: ServerWorld, player: ServerPlayerEntity, pos: BlockPos, particle: net.minecraft.particle.ParticleEffect) {
+        world.spawnParticles(
+            player,
+            particle,
+            true,
+            pos.x + 0.5, pos.y + 0.5, pos.z + 0.5,
+            2,
+            0.25, 0.25, 0.25,
+            0.0
+        )
+    }
+
+    private fun playBindingSound(world: World, pos: BlockPos, sound: SoundEvent, pitch: Float) {
+        world.playSound(null, pos, sound, SoundCategory.PLAYERS, 0.6f, pitch)
+    }
+
+    private fun markBindingTarget(world: World, player: PlayerEntity, pos: BlockPos) {
+        val sw = world as? ServerWorld ?: return
+        val viewer = player as? ServerPlayerEntity ?: return
+        sw.spawnParticles(
+            viewer,
+            ParticleTypes.HAPPY_VILLAGER,
+            true,
+            pos.x + 0.5, pos.y + 0.5, pos.z + 0.5,
+            6,
+            0.35, 0.35, 0.35,
+            0.0
+        )
     }
 
     private fun humanValue(value: String): String =

@@ -102,7 +102,7 @@ object TagExecutionEngine {
             if (state.phase != WorkerPhase.IDLE) {
                 releaseClaimAndReset(world, state)
             }
-            state.setStatus(WorkerStatusReason.TAG_DISABLED, "This tag is disabled in the config")
+            state.setStatus(WorkerStatusReason.TAG_DISABLED, "status.cobblepalsworld.detail.tag_disabled")
             return
         }
 
@@ -119,12 +119,12 @@ object TagExecutionEngine {
                     releaseClaimAndReset(world, state)
                     state.phase = WorkerPhase.DEPOSITING
                 }
-                state.setStatus(WorkerStatusReason.DEPOSITING, "Returning cargo while the redstone gate is closed")
+                state.setStatus(WorkerStatusReason.DEPOSITING, "status.cobblepalsworld.detail.depositing_redstone")
             } else {
                 if (state.phase != WorkerPhase.IDLE) {
                     releaseClaimAndReset(world, state)
                 }
-                state.setStatus(WorkerStatusReason.REDSTONE_OFF, "Waiting for the redstone condition to allow work")
+                state.setStatus(WorkerStatusReason.REDSTONE_OFF, "status.cobblepalsworld.detail.redstone_off")
                 return
             }
         } else {
@@ -141,7 +141,7 @@ object TagExecutionEngine {
                 state.ecoSkipCounter++
                 if (state.ecoSkipCounter < config.ecoTickMultiplier) {
                     if (state.statusReason == WorkerStatusReason.READY) {
-                        state.setStatus(WorkerStatusReason.ECO_IDLE, "Quiet scan mode is spacing out work checks")
+                        state.setStatus(WorkerStatusReason.ECO_IDLE, "status.cobblepalsworld.detail.eco_idle")
                     }
                     return
                 }
@@ -279,15 +279,15 @@ object TagExecutionEngine {
         navigationBudget: NavigationBudget
     ) {
         if (world.time < state.cooldownUntil) {
-            state.setStatus(WorkerStatusReason.COOLDOWN, "Recovering before the next assignment")
+            state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_recovering")
             // While on cooldown, drift back toward the Command Post if far away
             if (!NavigationHelper.isAtPosition(entity, origin, 5.0)) {
                 applyNavigationStatus(
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = WorkerStatusReason.COOLDOWN,
-                    activeDetail = "Returning near the Command Post while cooling down",
-                    failedDetail = "Could not path back toward the Command Post"
+                    activeDetail = "status.cobblepalsworld.detail.returning_cooldown",
+                    failedDetail = "status.cobblepalsworld.detail.path_back_failed"
                 )
             }
             return
@@ -307,8 +307,8 @@ object TagExecutionEngine {
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.SEARCH_DELAY,
-                    activeDetail = "Returning near the Command Post before the next scan",
-                    failedDetail = "Could not path back toward the Command Post"
+                    activeDetail = "status.cobblepalsworld.detail.returning_scan",
+                    failedDetail = "status.cobblepalsworld.detail.path_back_failed"
                 )
             }
             return
@@ -319,7 +319,7 @@ object TagExecutionEngine {
         val existingInv = InventoryManager.get(pokemon.uuid)
         if (existingInv != null && !existingInv.isEmpty && !behavior.handlesOwnInventory) {
             state.phase = WorkerPhase.DEPOSITING
-            state.setStatus(WorkerStatusReason.DEPOSITING, "Returning carried cargo to storage")
+            state.setStatus(WorkerStatusReason.DEPOSITING, "status.cobblepalsworld.detail.depositing_carried")
             return
         }
 
@@ -340,21 +340,21 @@ object TagExecutionEngine {
                     state = state,
                     attempt = NavigationHelper.navigateTo(entity, origin, state, navigationBudget, MovementPurpose.RETURN_HOME),
                     activeReason = if (state.ecoMode) WorkerStatusReason.ECO_IDLE else WorkerStatusReason.NO_TARGET,
-                    activeDetail = "Returning near the Command Post while idle",
-                    failedDetail = "Could not path back toward the Command Post"
+                    activeDetail = "status.cobblepalsworld.detail.returning_idle",
+                    failedDetail = "status.cobblepalsworld.detail.path_back_failed"
                 )
             }
             return
         }
         if (!isWithinWorkRange(origin, target, effectiveRange(tag, state))) {
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Ignored a job target outside this Command Post's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_target_out_of_range")
             return
         }
         // Found work — check claim first, then exit eco mode
         if (ClaimManager.isClaimedByOther(target, pokemon.uuid, world)) {
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
-            state.setStatus(WorkerStatusReason.TARGET_BUSY, "Another pal already claimed that target")
+            state.setStatus(WorkerStatusReason.TARGET_BUSY, "status.cobblepalsworld.detail.target_busy")
             return
         }
         state.markDidWork()
@@ -367,14 +367,14 @@ object TagExecutionEngine {
             state = state,
             attempt = attempt,
             activeReason = WorkerStatusReason.NAVIGATING,
-            activeDetail = "Moving to the selected job target",
-            failedDetail = "Could not find a path to the selected target"
+            activeDetail = "status.cobblepalsworld.detail.moving_to_target",
+            failedDetail = "status.cobblepalsworld.detail.path_to_target_failed"
         )
         if (attempt == NavigationAttempt.UNREACHABLE) {
             ClaimManager.release(target, world)
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + behavior.idleRetryTicks(tag, state)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target is currently unreachable; choosing another job later")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_target_unreachable")
             return
         }
         state.phase = WorkerPhase.NAVIGATING
@@ -392,7 +392,7 @@ object TagExecutionEngine {
             ClaimManager.release(target, world)
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target drifted outside this Command Post's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_target_drifted")
             return
         }
 
@@ -400,7 +400,7 @@ object TagExecutionEngine {
             ClaimManager.release(target, world)
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
-            state.setStatus(WorkerStatusReason.NO_TARGET, "The claimed target is no longer valid")
+            state.setStatus(WorkerStatusReason.NO_TARGET, "status.cobblepalsworld.detail.no_target_invalid")
             return
         }
 
@@ -408,7 +408,7 @@ object TagExecutionEngine {
             NavigationHelper.stopNavigation(entity, state)
             state.arrivalTick = world.time
             state.phase = WorkerPhase.ARRIVING
-            state.setStatus(WorkerStatusReason.ARRIVING, "Settling into position before starting work")
+            state.setStatus(WorkerStatusReason.ARRIVING, "status.cobblepalsworld.detail.arriving_settle")
             WorkVisualHandler.onArrival(world, entity, target, tag.type)
         } else {
             val attempt = NavigationHelper.navigateTo(entity, target, state, navigationBudget, MovementPurpose.WORK_TARGET)
@@ -416,14 +416,14 @@ object TagExecutionEngine {
                 state = state,
                 attempt = attempt,
                 activeReason = WorkerStatusReason.NAVIGATING,
-                activeDetail = "Closing in on the current target",
-                failedDetail = "Pathfinding to the target failed; retrying"
+                activeDetail = "status.cobblepalsworld.detail.closing_in",
+                failedDetail = "status.cobblepalsworld.detail.path_retrying"
             )
             if (attempt == NavigationAttempt.UNREACHABLE) {
                 ClaimManager.release(target, world)
                 resetToIdle(state)
                 state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-                state.setStatus(WorkerStatusReason.PATHING_STALLED, "Target stayed unreachable after recovery attempts")
+                state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_unreachable_after_recovery")
             }
         }
     }
@@ -436,19 +436,19 @@ object TagExecutionEngine {
             ClaimManager.release(target, world)
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 20L)
-            state.setStatus(WorkerStatusReason.NO_TARGET, "The target disappeared before work could begin")
+            state.setStatus(WorkerStatusReason.NO_TARGET, "status.cobblepalsworld.detail.no_target_disappeared")
             return
         }
 
         val arrived = state.arrivalTick ?: run { state.arrivalTick = world.time; return }
         if (world.time - arrived < behavior.arrivalDelayTicks(tag, state)) {
-            state.setStatus(WorkerStatusReason.ARRIVING, "Preparing to work at the target")
+            state.setStatus(WorkerStatusReason.ARRIVING, "status.cobblepalsworld.detail.arriving_prepare")
             return
         }
 
         state.arrivalTick = null
         state.phase = WorkerPhase.WORKING
-        state.setStatus(WorkerStatusReason.WORKING, "Executing the assigned job")
+        state.setStatus(WorkerStatusReason.WORKING, "status.cobblepalsworld.detail.working")
     }
 
     private fun tickWorking(
@@ -457,7 +457,7 @@ object TagExecutionEngine {
         navigationBudget: NavigationBudget
     ) {
         val target = state.targetPos ?: run { resetToIdle(state); return }
-        state.setStatus(WorkerStatusReason.WORKING, "Executing the assigned job")
+        state.setStatus(WorkerStatusReason.WORKING, "status.cobblepalsworld.detail.working")
         val result = behavior.doWork(world, entity, target, tag, state)
 
         when (result) {
@@ -472,11 +472,11 @@ object TagExecutionEngine {
                     storeItems(world, entity, pokemon, result.items)
                     (world as? ServerWorld)?.let(CobblePalsSaveData::markDirty)
                     state.phase = WorkerPhase.DEPOSITING
-                    state.setStatus(WorkerStatusReason.DEPOSITING, "Returning gathered cargo to storage")
+                    state.setStatus(WorkerStatusReason.DEPOSITING, "status.cobblepalsworld.detail.depositing_gathered")
                 } else {
                     resetToIdle(state)
                     state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
-                    state.setStatus(WorkerStatusReason.COOLDOWN, "Work completed; cooling down before the next job")
+                    state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_work_complete")
                 }
             }
             is WorkResult.MoveTo -> {
@@ -484,7 +484,7 @@ object TagExecutionEngine {
                     ClaimManager.release(target, world)
                     resetToIdle(state)
                     state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was outside this Command Post's work range")
+                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_followup_out_of_range")
                     return
                 }
                 ClaimManager.release(target, world)
@@ -495,14 +495,14 @@ object TagExecutionEngine {
                     state = state,
                     attempt = attempt,
                     activeReason = WorkerStatusReason.NAVIGATING,
-                    activeDetail = "Repositioning to a follow-up target",
-                    failedDetail = "Could not path to the follow-up target"
+                    activeDetail = "status.cobblepalsworld.detail.moving_followup",
+                    failedDetail = "status.cobblepalsworld.detail.path_followup_failed"
                 )
                 if (attempt == NavigationAttempt.UNREACHABLE) {
                     ClaimManager.release(result.target, world)
                     resetToIdle(state)
                     state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "Follow-up target was unreachable")
+                    state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_followup_unreachable")
                     return
                 }
                 state.phase = WorkerPhase.NAVIGATING
@@ -511,7 +511,7 @@ object TagExecutionEngine {
                 state.arrivalTick = null
                 state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
                 state.phase = WorkerPhase.IDLE
-                state.setStatus(WorkerStatusReason.COOLDOWN, "Loop complete; waiting before the next pass")
+                state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_loop_complete")
             }
             is WorkResult.Continue -> { /* stay in WORKING */ }
         }
@@ -540,7 +540,7 @@ object TagExecutionEngine {
         if (inventory == null || inventory.isEmpty) {
             resetToIdle(state)
             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
-            state.setStatus(WorkerStatusReason.COOLDOWN, "Cargo run finished; waiting before new work")
+            state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_run_finished")
             return
         }
 
@@ -591,17 +591,17 @@ object TagExecutionEngine {
                             WorkVisualHandler.onDeposit(world, entity, origin)
                             resetToIdle(state)
                             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
-                            state.setStatus(WorkerStatusReason.COOLDOWN, "Delivered cargo to a mobile inventory")
+                            state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_mobile_delivery")
                             return
                         }
                         dropAllItems(world, entity, inventory)
                         resetToIdle(state)
-                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "No deposit target was available, so cargo was dropped")
+                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "status.cobblepalsworld.detail.no_deposit_dropped")
                         return
                     } else {
                         dropAllItems(world, entity, inventory)
                         resetToIdle(state)
-                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "No deposit space was found for the carried cargo")
+                        state.setStatus(WorkerStatusReason.NO_DEPOSIT, "status.cobblepalsworld.detail.no_deposit_full")
                         return
                     }
                 }
@@ -610,7 +610,7 @@ object TagExecutionEngine {
 
         val depositPos = state.depositPos ?: run {
             resetToIdle(state)
-            state.setStatus(WorkerStatusReason.NO_DEPOSIT, "Deposit target was lost; searching again")
+            state.setStatus(WorkerStatusReason.NO_DEPOSIT, "status.cobblepalsworld.detail.no_deposit_lost")
             return
         }
         if (!isWithinWorkRange(origin, depositPos, effectiveRange(tag, state))) {
@@ -618,7 +618,7 @@ object TagExecutionEngine {
             if (state.cachedContainerPos == depositPos) {
                 state.cachedContainerPos = null
             }
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was outside this Command Post's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_deposit_out_of_range")
             return
         }
         if (NavigationHelper.isAtPosition(entity, depositPos)) {
@@ -632,22 +632,22 @@ object TagExecutionEngine {
             state.depositPos = null
             resetToIdle(state)
             state.cooldownUntil = world.time + behavior.cooldownTicks(tag, state)
-            state.setStatus(WorkerStatusReason.COOLDOWN, "Cargo delivered; waiting before the next assignment")
+            state.setStatus(WorkerStatusReason.COOLDOWN, "status.cobblepalsworld.detail.cooldown_delivered")
         } else {
             val attempt = NavigationHelper.navigateTo(entity, depositPos, state, navigationBudget, MovementPurpose.DEPOSIT)
             applyNavigationStatus(
                 state = state,
                 attempt = attempt,
                 activeReason = WorkerStatusReason.DEPOSITING,
-                activeDetail = "Returning carried cargo to deposit it",
-                failedDetail = "Could not path back to a deposit target"
+                activeDetail = "status.cobblepalsworld.detail.returning_deposit",
+                failedDetail = "status.cobblepalsworld.detail.path_deposit_failed"
             )
             if (attempt == NavigationAttempt.UNREACHABLE) {
                 state.depositPos = null
                 if (state.cachedContainerPos == depositPos) {
                     state.cachedContainerPos = null
                 }
-                state.setStatus(WorkerStatusReason.PATHING_STALLED, "Deposit target was unreachable; looking for another")
+                state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_deposit_unreachable")
             }
         }
     }
@@ -690,9 +690,9 @@ object TagExecutionEngine {
     ) {
         when (attempt) {
             NavigationAttempt.STARTED, NavigationAttempt.THROTTLED -> state.setStatus(activeReason, activeDetail)
-            NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "Waiting for an open Command Post pathing slot")
-            NavigationAttempt.RECOVERING -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Trying to hop or clear a stuck movement state")
-            NavigationAttempt.RESCUED -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "Reseated to a nearby safe spot after getting stuck")
+            NavigationAttempt.BUDGETED -> state.setStatus(WorkerStatusReason.PATH_BUDGET, "status.cobblepalsworld.detail.path_budget")
+            NavigationAttempt.RECOVERING -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "status.cobblepalsworld.detail.recovery_unsticking")
+            NavigationAttempt.RESCUED -> state.setStatus(WorkerStatusReason.MOVEMENT_RECOVERY, "status.cobblepalsworld.detail.recovery_reseated")
             NavigationAttempt.UNREACHABLE -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
             NavigationAttempt.FAILED -> state.setStatus(WorkerStatusReason.PATHING_STALLED, failedDetail)
         }
@@ -722,7 +722,7 @@ object TagExecutionEngine {
             state.cachedContainerPos = null
             resetToIdle(state)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Cleared a target outside this Command Post's work range")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_cleared_out_of_range")
             return guideBackToWorksite(entity, state, origin, navigationBudget, range)
         }
 
@@ -731,7 +731,7 @@ object TagExecutionEngine {
             resetToIdle(state)
             recallToWorksite(entity, state, origin)
             state.nextTargetSearchTick = world.time + minOf(behavior.idleRetryTicks(tag, state), 40L)
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returned to the Command Post after leaving the safe work area")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_returned_to_post")
             return true
         }
 
@@ -754,7 +754,7 @@ object TagExecutionEngine {
         if (attempt == NavigationAttempt.UNREACHABLE) {
             recallToWorksite(entity, state, origin)
         } else {
-            state.setStatus(WorkerStatusReason.PATHING_STALLED, "Returning to the Command Post after rejecting a distant target")
+            state.setStatus(WorkerStatusReason.PATHING_STALLED, "status.cobblepalsworld.detail.pathing_rejecting_distant")
         }
         return true
     }

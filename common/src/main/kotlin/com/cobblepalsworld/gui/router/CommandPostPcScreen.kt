@@ -1140,7 +1140,7 @@ class CommandPostPcScreen(
                 lines += CommandPostInfoPanel.DetailLine(member.sourceLabel(), 0xFFB8C3C7.toInt())
                 lines += member.tagTypeId?.let { crewRoleLine(it, member) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
                 lines += CommandPostInfoPanel.DetailLine(member.assignmentLabel(), 0xFFEAF4F5.toInt())
-                lines += CommandPostInfoPanel.DetailLine(member.cargoSummary.ifBlank { member.statusDetailOrFallback() }, if (member.carriedItemCount > 0) 0xFFFFD166.toInt() else 0xFF8FA0A8.toInt())
+                lines += CommandPostInfoPanel.DetailLine(member.cargoSummary.ifBlank { Text.translatable(member.statusDetailKey()).string }, if (member.carriedItemCount > 0) 0xFFFFD166.toInt() else 0xFF8FA0A8.toInt())
             }
             else -> {
                 lines += CommandPostInfoPanel.DetailLine(if (preview.isFainted) "Fainted" else "Ready")
@@ -1268,7 +1268,7 @@ class CommandPostPcScreen(
         add(Text.translatable("gui.cobblepalsworld.level_species", member.level, friendlySpecies(member.species)))
         add(Text.literal(member.sourceLabel()))
         add(Text.literal(member.statusLabel()))
-        add(Text.literal(member.statusDetailOrFallback()))
+        add(Text.translatable(member.statusDetailKey()))
         member.tagTypeId?.let { tagId ->
             val role = TagType.fromId(tagId)?.let(TagTypePresentation::roleLabel) ?: tagId
             add(Text.literal(role))

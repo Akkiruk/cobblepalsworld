@@ -195,7 +195,7 @@ object RouterExecutionEngine {
             val state = StateManager.getOrCreate(candidate.pokemonId)
             state.lastSeenTick = entity.world.time
             if (state.phase == WorkerPhase.IDLE) {
-                state.setStatus(WorkerStatusReason.READY, "Waiting for a Command Post role card")
+                state.setStatus(WorkerStatusReason.READY, "status.cobblepalsworld.detail.awaiting_role")
             }
             buildWorkerVisual(entity, candidate.pokemonId)?.let(activeVisuals::add)
         }

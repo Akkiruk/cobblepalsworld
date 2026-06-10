@@ -74,13 +74,17 @@ data class CommandPostCrewMemberSnapshot(
         else -> statusReason()?.label ?: if (hasEntity) "Ready" else "Awaiting spawn"
     }
 
-    fun statusDetailOrFallback(): String = when {
-        isMissing -> "This leased Pokemon was not found in the owner's current Party or PC."
-        isFainted -> "This Pokemon must be healed before it can work."
+    /**
+     * Translation key describing this member's current status in detail.
+     * [statusDetail] itself carries a translation key supplied by the server.
+     */
+    fun statusDetailKey(): String = when {
+        isMissing -> "status.cobblepalsworld.fallback.missing"
+        isFainted -> "status.cobblepalsworld.fallback.fainted"
         statusDetail.isNotBlank() -> statusDetail
-        tagTypeId == null -> "Install tag cards to give this pal work."
-        !hasEntity -> "The Command Post will send this worker out when it is selected for work."
-        else -> "Ready for Command Post work."
+        tagTypeId == null -> "status.cobblepalsworld.fallback.no_role"
+        !hasEntity -> "status.cobblepalsworld.fallback.awaiting_spawn"
+        else -> "status.cobblepalsworld.fallback.ready"
     }
 
     fun isActive(): Boolean = !isMissing && !isFainted && tagTypeId != null && statusReason()?.kind == WorkerStatusKind.ACTIVE
