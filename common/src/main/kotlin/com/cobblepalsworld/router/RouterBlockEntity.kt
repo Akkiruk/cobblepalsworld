@@ -311,6 +311,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         nativeCrew.forEach { member ->
             com.cobblepalsworld.behavior.TagExecutionEngine.cleanup(member.pokemonId, world, cleanupPos)
             TagAssignmentManager.removeIfControlledBy(member.pokemonId, dimensionId, pos)
+            TagAssignmentManager.resetProfile(member.pokemonId)
             if (CommandPostCrewManager.remove(member.pokemonId, dimensionId, pos) != null) {
                 changed = true
             }

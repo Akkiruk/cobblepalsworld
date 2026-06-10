@@ -32,6 +32,10 @@ import com.cobblepalsworld.tag.TagItem
 import com.cobblepalsworld.tag.TagSpec
 import com.cobblepalsworld.tag.TagType
 import com.cobblepalsworld.tag.TagTypePresentation
+import com.cobblepalsworld.tag.filter.TagPolicyAnalyzer
+import com.cobblepalsworld.tag.filter.TagPolicyIssue
+import com.cobblepalsworld.tag.filter.TagPolicyLine
+import com.cobblepalsworld.tag.filter.TagPolicySeverity
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.ingame.HandledScreen
@@ -43,6 +47,7 @@ import net.minecraft.item.Items
 import net.minecraft.registry.Registries
 import net.minecraft.sound.SoundEvent
 import net.minecraft.text.Text
+import net.minecraft.util.Formatting
 import net.minecraft.util.Identifier
 import org.lwjgl.glfw.GLFW
 import org.joml.Quaternionf
@@ -618,6 +623,7 @@ class CommandPostPcScreen(
         drawOperationalFrame(context, "JOBS")
         val views = moduleViews()
         val members = CommandPostCrewSnapshotCache.get(handler.routerPos)?.members.orEmpty()
+        val policyIssues = modulePolicyIssues(views)
         drawSmallText(context, "Tag cards", JOBS_MODULE_LEFT, JOBS_MODULE_TOP - 10, 0xFFEAF4F5.toInt(), true)
         drawSmallText(context, "Augments", JOBS_UPGRADE_LEFT, JOBS_UPGRADE_TOP - 10, 0xFFEAF4F5.toInt(), true)
         drawSmallText(context, "Bag", CENTER_INV_LEFT, JOBS_PLAYER_TOP - 9, 0xFFEAF4F5.toInt(), true)
@@ -630,8 +636,11 @@ class CommandPostPcScreen(
             val assigned = handler.moduleAssigned(view.moduleIndex)
             val roleMembers = members.filter { it.tagTypeId == view.tagType.id }
             val blocked = roleMembers.count { it.isBlocked() || it.isFainted || it.isMissing }
+            val issues = policyIssues[view.moduleIndex].orEmpty()
+            val worstIssue = issues.firstOrNull()
             val rowColor = when {
-                blocked > 0 -> 0xFFFF7777.toInt()
+                worstIssue?.severity == TagPolicySeverity.BLOCKING || blocked > 0 -> 0xFFFF7777.toInt()
+                worstIssue?.severity == TagPolicySeverity.WARNING -> 0xFFFFD166.toInt()
                 active -> 0xFF6FEA8A.toInt()
                 assigned -> 0xFFFFD166.toInt()
                 else -> 0xFFEAF4F5.toInt()
@@ -640,15 +649,36 @@ class CommandPostPcScreen(
             val badgeTop = slot.y + 12
             context.fill(x + badgeLeft, y + badgeTop, x + badgeLeft + 5, y + badgeTop + 5, rowColor)
             if (contains(localMouseX, localMouseY, slot.x - 4, slot.y - 4, 25, 25)) {
-                hoveredTooltip = HoverTooltip("job-${view.moduleIndex}", listOf(
-                    Text.literal(TagTypePresentation.roleLabel(view.tagType)),
-                    Text.literal(TagTypePresentation.familyOf(view.tagType).label),
-                    Text.literal(causeChip(active, assigned, blocked))
-                ))
+                hoveredTooltip = HoverTooltip("job-${view.moduleIndex}", buildList {
+                    add(Text.literal(TagTypePresentation.roleLabel(view.tagType)))
+                    add(Text.literal(TagTypePresentation.familyOf(view.tagType).label))
+                    add(Text.literal(causeChip(active, assigned, blocked)))
+                    issues.forEach { issue ->
+                        add(Text.translatable(issue.labelKey).formatted(issueFormatting(issue.severity)))
+                        add(Text.translatable(issue.detailKey).formatted(Formatting.GRAY))
+                    }
+                })
             }
         }
         panelHits = emptyList()
         slotHits = emptyList()
+    }
+
+    private fun modulePolicyIssues(views: List<ModuleView>): Map<Int, List<TagPolicyIssue>> {
+        if (views.isEmpty()) return emptyMap()
+        return TagPolicyAnalyzer.issuesByModule(views.map { TagPolicyLine(it.moduleIndex, it.tagType, it.spec) })
+    }
+
+    private fun issueFormatting(severity: TagPolicySeverity): Formatting = when (severity) {
+        TagPolicySeverity.BLOCKING -> Formatting.RED
+        TagPolicySeverity.WARNING -> Formatting.GOLD
+        TagPolicySeverity.INFO -> Formatting.AQUA
+    }
+
+    private fun issueColor(severity: TagPolicySeverity): Int = when (severity) {
+        TagPolicySeverity.BLOCKING -> 0xFFFF7777.toInt()
+        TagPolicySeverity.WARNING -> 0xFFFFD166.toInt()
+        TagPolicySeverity.INFO -> 0xFF9FE0EA.toInt()
     }
 
     private fun drawTagCardWell(context: DrawContext, empty: Boolean) {
@@ -686,6 +716,7 @@ class CommandPostPcScreen(
             slotHits = emptyList()
             return
         }
+        val policyIssues = modulePolicyIssues(views)
         val hits = mutableListOf<PanelHit>()
         views.take(4).forEachIndexed { row, view ->
             val top = CommandPostStorageWidget.Y + 18 + row * 24
@@ -693,6 +724,19 @@ class CommandPostPcScreen(
             context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 20, if (selected) 0x77415661 else if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 20)) 0x5522343A else 0x3318242A)
             drawSmallText(context, TagTypePresentation.roleLabel(view.tagType), CommandPostStorageWidget.X + 13, top, 0xFFEAF4F5.toInt(), true)
             drawSmallText(context, "${humanValue(view.spec.filter.matchMode.name)} ${if (view.spec.filter.whitelist) "Allow" else "Deny"}", CommandPostStorageWidget.X + 13, top + 9, 0xFFB8C3C7.toInt(), false)
+            val issues = policyIssues[view.moduleIndex].orEmpty()
+            issues.firstOrNull()?.let { issue ->
+                val dotLeft = CommandPostStorageWidget.X + 84
+                context.fill(x + dotLeft, y + top + 1, x + dotLeft + 4, y + top + 5, issueColor(issue.severity))
+                if (contains(localMouseX, localMouseY, dotLeft - 2, top - 1, 8, 8)) {
+                    hoveredTooltip = HoverTooltip("policy-issue-${view.moduleIndex}", buildList {
+                        issues.forEach {
+                            add(Text.translatable(it.labelKey).formatted(issueFormatting(it.severity)))
+                            add(Text.translatable(it.detailKey).formatted(Formatting.GRAY))
+                        }
+                    })
+                }
+            }
             val signalLeft = CommandPostStorageWidget.X + 91
             val targetLeft = CommandPostStorageWidget.X + 115
             val runLeft = CommandPostStorageWidget.X + 139

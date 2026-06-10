@@ -15,8 +15,12 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.assignment.TagAssignmentManager
+import com.cobblepalsworld.assignment.WorkerAssignmentMode
+import com.cobblepalsworld.mastery.MasteryTier
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.runtime.ServerScaleRuntime
 import com.cobblepalsworld.tag.TagInstance
+import com.cobblepalsworld.tag.TagType
 import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
@@ -79,10 +83,14 @@ object RouterExecutionEngine {
 
         var assignedWorkerCount = 0
         var activeWorkerCount = 0
+        var capLimited = false
 
         for (slotIndex in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) {
             val tag = tasksBySlot[slotIndex]
             if (tag == null || assignedWorkerCount >= maxAssignableWorkers) {
+                if (tag != null) {
+                    capLimited = true
+                }
                 if (router.assignedWorker(slotIndex) != null) {
                     router.setAssignedWorker(slotIndex, null)
                     changed = true
@@ -98,6 +106,7 @@ object RouterExecutionEngine {
                 roster = roster,
                 rosterById = rosterById,
                 currentPokemonId = currentPokemonId,
+                tagType = tag.type,
                 dimensionId = dimensionId,
                 controllerPos = pos,
                 claimed = claimed,
@@ -144,7 +153,7 @@ object RouterExecutionEngine {
             changed = true
         }
 
-        markIdleNativeCrew(roster, controlledThisTick, activeVisuals)
+        markIdleNativeCrew(roster, controlledThisTick, capLimited, activeVisuals)
         val nearbyPlayers = ServerScaleRuntime.nearbyWorksitePlayers(world, pos)
         if (nearbyPlayers.isNotEmpty() && ServerScaleRuntime.shouldSendWorksiteVisuals(world, pos, activeVisuals)) {
             CobblePalsNetworking.sendWorkerVisuals(nearbyPlayers, pos, activeVisuals)
@@ -152,7 +161,11 @@ object RouterExecutionEngine {
 
         router.updateStatus(hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
         router.updatePowered(activeWorkerCount > 0)
-        router.cooldownTicks = BASE_COOLDOWN
+        router.cooldownTicks = if (nearbyPlayers.isEmpty()) {
+            BASE_COOLDOWN * ConfigManager.config.general.distantTickMultiplier
+        } else {
+            BASE_COOLDOWN
+        }
 
         if (changed) {
             CobblePalsSaveData.markDirty(world)
@@ -187,6 +200,7 @@ object RouterExecutionEngine {
     private fun markIdleNativeCrew(
         roster: List<WorkerCandidate>,
         controlledThisTick: Set<UUID>,
+        capLimited: Boolean,
         activeVisuals: MutableList<CobblePalsNetworking.WorkerVisualSnapshot>
     ) {
         roster.forEach { candidate ->
@@ -195,7 +209,17 @@ object RouterExecutionEngine {
             val state = StateManager.getOrCreate(candidate.pokemonId)
             state.lastSeenTick = entity.world.time
             if (state.phase == WorkerPhase.IDLE) {
-                state.setStatus(WorkerStatusReason.READY, "status.cobblepalsworld.detail.awaiting_role")
+                val profile = TagAssignmentManager.getProfile(candidate.pokemonId)
+                when {
+                    profile.mode == WorkerAssignmentMode.RESERVED ->
+                        state.setStatus(WorkerStatusReason.RESERVED_DUTY, "status.cobblepalsworld.detail.reserved_duty")
+                    !profile.allowFallback ->
+                        state.setStatus(WorkerStatusReason.ROLE_LOCKED, "status.cobblepalsworld.detail.role_locked")
+                    capLimited ->
+                        state.setStatus(WorkerStatusReason.WORKER_CAP, "status.cobblepalsworld.detail.worker_cap")
+                    else ->
+                        state.setStatus(WorkerStatusReason.READY, "status.cobblepalsworld.detail.awaiting_role")
+                }
             }
             buildWorkerVisual(entity, candidate.pokemonId)?.let(activeVisuals::add)
         }
@@ -238,19 +262,35 @@ object RouterExecutionEngine {
         roster: List<WorkerCandidate>,
         rosterById: Map<UUID, WorkerCandidate>,
         currentPokemonId: UUID?,
+        tagType: TagType,
         dimensionId: String,
         controllerPos: BlockPos,
         claimed: Set<UUID>,
         startIndex: Int
     ): WorkerCandidate? {
         val currentCandidate = currentPokemonId?.let(rosterById::get)
-        if (currentCandidate != null && canUseCandidate(currentCandidate.pokemonId, dimensionId, controllerPos, claimed)) {
+        if (currentCandidate != null &&
+            TagAssignmentManager.getProfile(currentCandidate.pokemonId).mode != WorkerAssignmentMode.RESERVED &&
+            canUseCandidate(currentCandidate.pokemonId, dimensionId, controllerPos, claimed)
+        ) {
             return currentCandidate
         }
         if (roster.isEmpty()) return null
 
+        // Preferred workers are dispatched first, best mastery for this role winning.
+        // Restricted workers (Preferred without fallback) only take roles they have mastered.
+        val preferred = roster.filter { candidate ->
+            val profile = TagAssignmentManager.getProfile(candidate.pokemonId)
+            profile.mode == WorkerAssignmentMode.PREFERRED &&
+                (profile.allowFallback || WorkMasteryManager.tierFor(candidate.pokemonId, tagType) != MasteryTier.NOVICE) &&
+                canUseCandidate(candidate.pokemonId, dimensionId, controllerPos, claimed)
+        }
+        preferred.maxByOrNull { WorkMasteryManager.tierFor(it.pokemonId, tagType).ordinal }?.let { return it }
+
         for (offset in roster.indices) {
             val candidate = roster[(startIndex + offset) % roster.size]
+            val profile = TagAssignmentManager.getProfile(candidate.pokemonId)
+            if (profile.mode != WorkerAssignmentMode.GENERAL || !profile.allowFallback) continue
             if (canUseCandidate(candidate.pokemonId, dimensionId, controllerPos, claimed)) {
                 return candidate
             }

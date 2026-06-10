@@ -82,6 +82,17 @@ class CobblePalsSaveData : PersistentState() {
         }
         nbt.put("Assignments", assignmentsNbt)
 
+        // Save assignment profiles (Reserved/Preferred/fallback) for every worker that
+        // customized one, including crew members that currently hold no role card.
+        val profilesNbt = NbtCompound()
+        TagAssignmentManager.forEachCustomProfile { uuid, profile ->
+            val profileNbt = NbtCompound()
+            profileNbt.putInt("Mode", profile.mode.ordinal)
+            profileNbt.putBoolean("AllowFallback", profile.allowFallback)
+            profilesNbt.put(uuid.toString(), profileNbt)
+        }
+        nbt.put("WorkerProfiles", profilesNbt)
+
         // Save inventories
         val inventoriesNbt = NbtCompound()
         for ((uuid, inventory) in getAllInventories()) {
@@ -233,6 +244,24 @@ class CobblePalsSaveData : PersistentState() {
                         )
                     } catch (e: Exception) {
                         CobblePalsWorld.LOGGER.warn("Failed to load assignment for $key", e)
+                    }
+                }
+            }
+
+            // Load standalone assignment profiles after per-assignment ones so they win.
+            if (nbt.contains("WorkerProfiles")) {
+                val profilesNbt = nbt.getCompound("WorkerProfiles")
+                for (key in profilesNbt.keys) {
+                    try {
+                        val uuid = UUID.fromString(key)
+                        val profileNbt = profilesNbt.getCompound(key)
+                        TagAssignmentManager.updateProfile(
+                            pokemonId = uuid,
+                            mode = WorkerAssignmentMode.fromOrdinal(profileNbt.getInt("Mode")),
+                            allowFallback = if (profileNbt.contains("AllowFallback")) profileNbt.getBoolean("AllowFallback") else true
+                        )
+                    } catch (e: Exception) {
+                        CobblePalsWorld.LOGGER.warn("Failed to load worker profile for $key", e)
                     }
                 }
             }

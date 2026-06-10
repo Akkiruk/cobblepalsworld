@@ -171,7 +171,7 @@ object WorkerNavigationManager {
             }
             else -> {
                 state.navigationFailedAttempts++
-                if (state.navigationFailedAttempts >= MAX_FAILED_ATTEMPTS || purpose == MovementPurpose.IDLE) {
+                if (state.navigationFailedAttempts >= MAX_FAILED_ATTEMPTS) {
                     NavigationAttempt.UNREACHABLE
                 } else {
                     state.navigationLastProgressTick = now

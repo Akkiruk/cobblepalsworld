@@ -10,7 +10,6 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.mastery.MasteryTier
 import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.assignment.TagAssignmentManager
-import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld
@@ -44,6 +43,7 @@ object CommandPostCrewSnapshotFactory {
                 val entity = pokemon?.entity
                 val hasEntity = entity != null && entity.world === world && !entity.isRemoved
                 val tagType = assignmentView?.tag?.type
+                val profile = TagAssignmentManager.getProfile(member.pokemonId)
                 val masteryJobs = tagType?.let { WorkMasteryManager.jobsCompleted(member.pokemonId, it) } ?: 0L
                 val masteryTier = tagType?.let { WorkMasteryManager.tierFor(member.pokemonId, it) } ?: MasteryTier.NOVICE
                 CommandPostCrewMemberSnapshot(
@@ -67,8 +67,8 @@ object CommandPostCrewSnapshotFactory {
                     carriedItemCount = carriedItemCount,
                     carriedSlotCount = carriedSlotCount,
                     cargoSummary = if (carriedDescriptions.isEmpty()) "Cargo empty" else carriedDescriptions.joinToString(", "),
-                    assignmentModeOrdinal = assignmentView?.assignmentProfile?.mode?.ordinal ?: WorkerAssignmentMode.GENERAL.ordinal,
-                    allowFallback = assignmentView?.assignmentProfile?.allowFallback ?: true,
+                    assignmentModeOrdinal = profile.mode.ordinal,
+                    allowFallback = profile.allowFallback,
                     masteryTierOrdinal = masteryTier.ordinal,
                     masteryJobs = masteryJobs
                 )

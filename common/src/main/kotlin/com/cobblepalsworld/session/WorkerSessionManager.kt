@@ -142,6 +142,18 @@ object WorkerSessionManager {
         }
     }
 
+    fun forEachCustomProfile(action: (UUID, WorkerAssignmentProfile) -> Unit) {
+        sessions.forEach { (uuid, session) ->
+            if (!session.assignmentProfile.isDefault()) action(uuid, session.assignmentProfile)
+        }
+    }
+
+    fun resetAssignmentProfile(pokemonId: UUID) {
+        val session = sessions[pokemonId] ?: return
+        session.assignmentProfile = WorkerAssignmentProfile()
+        discardIfEmpty(pokemonId, session)
+    }
+
     fun clearAssignments() {
         sessions.forEach { (uuid, session) ->
             removeFromWorksiteIndex(uuid, session.worksiteBinding)
@@ -267,7 +279,6 @@ object WorkerSessionManager {
         session.tag = null
         session.worksiteBinding = null
         session.controllerBinding = null
-        session.assignmentProfile = WorkerAssignmentProfile()
         discardIfEmpty(pokemonId, session)
         return tag
     }
@@ -305,6 +316,9 @@ object WorkerSessionManager {
             return
         }
         if (session.worksiteBinding != null || session.controllerBinding != null) {
+            return
+        }
+        if (!session.assignmentProfile.isDefault()) {
             return
         }
         sessions.remove(pokemonId, session)
