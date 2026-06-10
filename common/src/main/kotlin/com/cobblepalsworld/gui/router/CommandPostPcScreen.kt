@@ -67,6 +67,7 @@ class CommandPostPcScreen(
     private var sourceType = CrewSourceType.PC
     private var sourceBoxIndex = 0
     private var pastureScrollIndex = 0
+    private var policyScrollIndex = 0
     private var commandMode = CommandPostMode.JOBS
     private var rosterSort = CommandPostRosterSort.STATUS
     private var drawerMode = CommandPostDrawerMode.CLOSED
@@ -134,6 +135,7 @@ class CommandPostPcScreen(
                     commandMode = mode
                     selectedPokemonId = null
                     selectedModuleIndex = null
+                    policyScrollIndex = 0
                     searchField?.setFocused(false)
                     sourceSearchActive = false
                         if (mode == CommandPostMode.SOURCE && previousMode != CommandPostMode.SOURCE) {
@@ -441,6 +443,11 @@ class CommandPostPcScreen(
             changeBox(if (verticalAmount > 0) -1 else 1)
             return true
         }
+        if (commandMode == CommandPostMode.POLICY && CommandPostStorageWidget.contains(localMouseX, localMouseY)) {
+            val maxScroll = (moduleViews().size - POLICY_VISIBLE_ROWS).coerceAtLeast(0)
+            policyScrollIndex = (policyScrollIndex + if (verticalAmount > 0) -1 else 1).coerceIn(0, maxScroll)
+            return true
+        }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
     }
 
@@ -718,7 +725,16 @@ class CommandPostPcScreen(
         }
         val policyIssues = modulePolicyIssues(views)
         val hits = mutableListOf<PanelHit>()
-        views.take(4).forEachIndexed { row, view ->
+        val maxScroll = (views.size - POLICY_VISIBLE_ROWS).coerceAtLeast(0)
+        policyScrollIndex = policyScrollIndex.coerceIn(0, maxScroll)
+        if (maxScroll > 0) {
+            val firstRow = policyScrollIndex + 1
+            val lastRow = (policyScrollIndex + POLICY_VISIBLE_ROWS).coerceAtMost(views.size)
+            val indicator = "$firstRow-$lastRow / ${views.size}"
+            val indicatorWidth = (textRenderer.getWidth(indicator) * CommandPostPcShell.TEXTURE_SCALE).toInt()
+            drawSmallText(context, indicator, CommandPostStorageWidget.X + 164 - indicatorWidth, CommandPostStorageWidget.Y + 7, 0xFF8FA0A8.toInt(), false)
+        }
+        views.drop(policyScrollIndex).take(POLICY_VISIBLE_ROWS).forEachIndexed { row, view ->
             val top = CommandPostStorageWidget.Y + 18 + row * 24
             val selected = selectedModuleIndex == view.moduleIndex
             context.fill(x + CommandPostStorageWidget.X + 8, y + top - 2, x + CommandPostStorageWidget.X + 164, y + top + 20, if (selected) 0x77415661 else if (contains(localMouseX, localMouseY, CommandPostStorageWidget.X + 8, top - 2, 156, 20)) 0x5522343A else 0x3318242A)
@@ -740,9 +756,12 @@ class CommandPostPcScreen(
             val signalLeft = CommandPostStorageWidget.X + 91
             val targetLeft = CommandPostStorageWidget.X + 115
             val runLeft = CommandPostStorageWidget.X + 139
+            val supportsTargets = view.tagType.supportsTargetList
             drawMiniChip(context, signalLeft, top + 5, compactValue(view.spec.settings.redstoneMode.id), localMouseX, localMouseY)
-            drawMiniChip(context, targetLeft, top + 5, compactValue(view.spec.settings.targetStrategy.id), localMouseX, localMouseY)
-            drawMiniChip(context, runLeft, top + 5, if (view.spec.settings.terminateAfterSuccess) "1" else "Loop", localMouseX, localMouseY)
+            if (supportsTargets) {
+                drawMiniChip(context, targetLeft, top + 5, compactValue(view.spec.settings.targetStrategy.id), localMouseX, localMouseY)
+                drawMiniChip(context, runLeft, top + 5, if (view.spec.settings.terminateAfterSuccess) "1" else "Loop", localMouseX, localMouseY)
+            }
             hits += PanelHit(CommandPostStorageWidget.X + 8, top - 2, 80, 20) {
                 selectedModuleIndex = view.moduleIndex
                 true
@@ -751,13 +770,15 @@ class CommandPostPcScreen(
                 client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_CYCLE_SIGNAL))
                 true
             }
-            hits += PanelHit(targetLeft, top + 5, 20, 10) {
-                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_CYCLE_TARGET))
-                true
-            }
-            hits += PanelHit(runLeft, top + 5, 20, 10) {
-                client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_TOGGLE_RUN))
-                true
+            if (supportsTargets) {
+                hits += PanelHit(targetLeft, top + 5, 20, 10) {
+                    client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_CYCLE_TARGET))
+                    true
+                }
+                hits += PanelHit(runLeft, top + 5, 20, 10) {
+                    client?.interactionManager?.clickButton(handler.syncId, RouterScreenHandler.policyQuickActionId(view.rowIndex, RouterScreenHandler.POLICY_ACTION_TOGGLE_RUN))
+                    true
+                }
             }
         }
         drawPolicyContextSheet(context, localMouseX, localMouseY, views.firstOrNull { it.moduleIndex == selectedModuleIndex } ?: views.firstOrNull(), hits)
@@ -1221,8 +1242,8 @@ class CommandPostPcScreen(
             val stack = handler.slots.getOrNull(moduleIndex)?.stack ?: return@mapNotNull null
             val tagItem = stack.item as? TagItem ?: return@mapNotNull null
             val spec = TagItem.getSpec(stack, registries) ?: TagSpec(type = tagItem.tagType)
-            ModuleView(rowIndex = moduleIndex, moduleIndex = moduleIndex, stack = stack, tagType = tagItem.tagType, spec = spec)
-        }
+            ModuleView(rowIndex = 0, moduleIndex = moduleIndex, stack = stack, tagType = tagItem.tagType, spec = spec)
+        }.mapIndexed { rowIndex, view -> view.copy(rowIndex = rowIndex) }
     }
 
     private fun play(sound: SoundEvent) {
@@ -1383,6 +1404,7 @@ class CommandPostPcScreen(
         private const val LOGISTICS_BUFFER_TOP = 39
         private const val LOGISTICS_PLAYER_TOP = 104
         private const val LOGISTICS_HOTBAR_TOP = 162
+        private const val POLICY_VISIBLE_ROWS = 4
         private const val HIDDEN_SLOT_X = -10_000
         private const val HIDDEN_SLOT_Y = -10_000
         private const val MAX_RENDER_STATE_CACHE_ENTRIES = 48

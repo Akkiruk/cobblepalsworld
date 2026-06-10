@@ -49,6 +49,11 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         const val STORAGE_SLOT_COUNT = 27
         const val STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT
         const val TOTAL_SLOTS = STORAGE_SLOT_END
+
+        const val PROPERTY_MODULE_ASSIGNED_START = 4
+        const val PROPERTY_MODULE_ACTIVE_START = PROPERTY_MODULE_ASSIGNED_START + MODULE_SLOT_COUNT
+        const val PROPERTY_POS_START = PROPERTY_MODULE_ACTIVE_START + MODULE_SLOT_COUNT
+        const val PROPERTY_COUNT = PROPERTY_POS_START + 3
         private val AUTOMATION_SLOTS = IntArray(STORAGE_SLOT_COUNT) { STORAGE_SLOT_START + it }
 
         fun tick(world: World, pos: BlockPos, state: BlockState, blockEntity: RouterBlockEntity) {
@@ -66,26 +71,25 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                 1 -> nativeCrewCount().takeIf { it > 0 } ?: linkedWorkerCount
                 2 -> assignedWorkerCount
                 3 -> activeWorkerCount
-                4, 5, 6 -> 0
-                in 7 until 7 + MODULE_SLOT_COUNT -> {
-                    val moduleIndex = index - 7
+                in PROPERTY_MODULE_ASSIGNED_START until PROPERTY_MODULE_ACTIVE_START -> {
+                    val moduleIndex = index - PROPERTY_MODULE_ASSIGNED_START
                     if (assignedWorkers[moduleIndex] != null) 1 else 0
                 }
-                in 16 until 16 + MODULE_SLOT_COUNT -> {
-                    val moduleIndex = index - 16
+                in PROPERTY_MODULE_ACTIVE_START until PROPERTY_POS_START -> {
+                    val moduleIndex = index - PROPERTY_MODULE_ACTIVE_START
                     val pokemonId = assignedWorkers[moduleIndex]
                     if (pokemonId != null && StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
                 }
-                25 -> pos.x
-                26 -> pos.y
-                27 -> pos.z
+                PROPERTY_POS_START -> pos.x
+                PROPERTY_POS_START + 1 -> pos.y
+                PROPERTY_POS_START + 2 -> pos.z
                 else -> 0
             }
         }
 
         override fun set(index: Int, value: Int) {}
 
-        override fun size(): Int = 28
+        override fun size(): Int = PROPERTY_COUNT
     }
 
     var cooldownTicks: Int = 0

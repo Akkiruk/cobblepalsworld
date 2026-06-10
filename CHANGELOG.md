@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.48
+
+- Fixed the Policy view targeting the wrong role card: when tag cards sat in non-contiguous slots, the quick chips and Edit button could silently fail or edit a different card than the one shown.
+- The Policy view now shows every role card instead of only the first four: scroll the panel to page through all nine slots, with a row counter showing where you are.
+- Policy quick actions now respect what each role actually supports, matching the role editor: Target and Run chips only appear (and only apply) for roles that use target lists, and filter toggles are rejected for roles without filters — no more editing settings that silently did nothing.
+- Pruned dead code left from half-finished optimizations: the never-read worker slot-memory and deposit miss-cache fields, three reserved-but-empty Command Post sync values, and three orphaned translation strings.
+
 ## 0.2.47
 
 - Finished the crew assignment modes that previously did nothing: Reserved workers are now truly held out of Command Post labor, workers with general fallback locked are no longer auto-drafted into new roles, and Preferred workers are dispatched first — with the best mastery for the role winning the slot and Restricted workers only taking roles they have actually mastered.
