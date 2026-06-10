@@ -24,7 +24,7 @@ enum class MasteryTier(
     MASTER("Master", 750L, 0.75, 8, Formatting.GOLD),
     ;
 
-    val next: MasteryTier? get() = entries.getOrNull(ordinal + 1)
+    val nextTier: MasteryTier? get() = entries.getOrNull(ordinal + 1)
 
     companion object {
         fun forJobs(jobs: Long): MasteryTier {

@@ -43,7 +43,7 @@ data class CommandPostCrewMemberSnapshot(
 
     fun masteryLabel(): String {
         val tier = masteryTier()
-        val next = tier.next
+        val next = tier.nextTier
         return if (next != null) {
             "${tier.label} $masteryJobs/${next.requiredJobs}"
         } else {
