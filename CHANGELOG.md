@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.47
+
+- Finished the crew assignment modes that previously did nothing: Reserved workers are now truly held out of Command Post labor, workers with general fallback locked are no longer auto-drafted into new roles, and Preferred workers are dispatched first — with the best mastery for the role winning the slot and Restricted workers only taking roles they have actually mastered.
+- Standby crew now report why they are waiting: Reserved, Held (fallback locked), and Standby (Command Post at its worker cap) statuses are finally used, shown in crew tooltips and worker overlays with translatable detail lines.
+- Assignment mode choices now survive role changes, releases, and world reloads: profiles persist independently of the worker's current role card and are reset only when a Pokemon is removed from the post's crew.
+- Wired up the previously dormant tag policy analyzer: the Jobs view now flags role cards that need a binding, block every item, or compete for the same target, and the Policy view shows a severity marker per role card with full explanations on hover — all localized.
+- Command Posts now honor the `distantTickMultiplier` config that previously did nothing: worksites with no players nearby dispatch on a slower cadence, cutting idle server load.
+- Removed dead code: the unused texture generator script and its orphaned widgets.png, unused ContainerFinder helpers, and the never-produced IDLE movement purpose.
+
 ## 0.2.46
 
 - Polished the tag binding flow: binding a container, block, or work area now plays a lodestone-style lock chime with a particle pop at the target, area corners chime when set, extra targets ping as they are added or removed, clearing a binding has its own sound, and trying to bind a non-container plays a clear "no" cue instead of failing with text alone.
