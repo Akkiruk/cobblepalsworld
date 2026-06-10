@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.46
+
+- Polished the tag binding flow: binding a container, block, or work area now plays a lodestone-style lock chime with a particle pop at the target, area corners chime when set, extra targets ping as they are added or removed, clearing a binding has its own sound, and trying to bind a non-container plays a clear "no" cue instead of failing with text alone.
+- Holding a bound tag now softly highlights what it points at: the bound block, container, and extra targets glow with end-rod particles, work areas mark all their corners, and a pending first corner flickers with flame until the box is finished — visible only to the holder and only within render range.
+- Made tag editing discoverable from the item itself: every tag tooltip now says "Use in hand to edit filter & behavior", and the Command Post edit hint was reworded to explain the hover + R shortcut instead of assuming players already knew it.
+- Localized the last hardcoded player-facing strings: all ~50 worker status detail messages (cooldowns, pathing problems, deposit failures, redstone gating, eco idle) and the crew panel status fallbacks now live in en_us.json, so worker diagnostics can finally be translated like the rest of the mod.
+- Clarified the augment install hint to spell out where augments actually go: a tag's augment slots in the Assign Tag screen or the Command Post Jobs view.
+
 ## 0.2.45
 
 - Added Work Mastery: every worker Pokemon now earns persistent, per-role mastery for each job it completes, climbing from Novice through Apprentice, Adept, and Expert up to Master.
