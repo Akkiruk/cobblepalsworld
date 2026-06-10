@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.45
+
+- Added Work Mastery: every worker Pokemon now earns persistent, per-role mastery for each job it completes, climbing from Novice through Apprentice, Adept, and Expert up to Master.
+- Mastery tiers grant real perks — Apprentice workers shave 5% off their work cooldown scaling to 25% at Master, and Adept and above gain bonus search range (up to +8 blocks) — all stacking with augments and applied instantly on tier-up.
+- Tier-ups are celebrated in-world with a totem particle burst and level-up chime at the worker, and mastery follows the Pokemon itself, surviving reassignment, re-leasing, and moves between Command Posts.
+- The Command Post crew view now shows mastery everywhere it matters: the selected-worker panel renders tier-colored role titles like "Adept Harvester", and crew tooltips show tier, completed jobs, and progress toward the next rank.
+
 ## 0.2.44
 
 - Hardened save/load reliability: corrupted item NBT entries in Pokemon inventories, Command Post inventories, and tag filters are now skipped safely instead of risking a crash or aborting the rest of the load, and out-of-range inventory slots are ignored on load.

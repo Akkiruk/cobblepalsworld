@@ -8,6 +8,7 @@ import com.cobblepalsworld.behavior.behaviors.*
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.gui.assignment.PokemonTagScreenHandler
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.router.RouterRegistry
@@ -87,6 +88,7 @@ object CobblePalsWorld {
             CommandPostCrewLifecycle.clearRuntimeState()
             CobblePalsSaveData.markDirty(server)
             TagExecutionEngine.resetRuntimeState()
+            WorkMasteryManager.clear()
             CobblePalsSaveData.clearLoaded(server)
             ServerScaleRuntime.clear(server)
         }

@@ -8,6 +8,7 @@ import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.assignment.ControllerBinding
 import com.cobblepalsworld.assignment.TagAssignmentManager
@@ -132,6 +133,8 @@ class CobblePalsSaveData : PersistentState() {
         }
         nbt.put("CommandPostCrews", commandPostCrewsNbt)
 
+        WorkMasteryManager.writeNbt(nbt)
+
         return nbt
     }
 
@@ -161,6 +164,12 @@ class CobblePalsSaveData : PersistentState() {
             InventoryManager.clear()
             StateManager.clear()
             ClaimManager.clear()
+
+            try {
+                WorkMasteryManager.readNbt(nbt)
+            } catch (e: Exception) {
+                CobblePalsWorld.LOGGER.warn("Failed to load work mastery records", e)
+            }
 
             // Load assignments
             if (nbt.contains("Assignments")) {

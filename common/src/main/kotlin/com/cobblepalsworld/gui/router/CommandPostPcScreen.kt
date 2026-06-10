@@ -25,6 +25,7 @@ import com.cobblepalsworld.gui.crew.CrewSourceSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.gui.crew.CrewSourceSlotSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourceType
+import com.cobblepalsworld.mastery.MasteryTier
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.router.RouterBlockEntity
 import com.cobblepalsworld.tag.TagItem
@@ -1137,7 +1138,7 @@ class CommandPostPcScreen(
                 val statusColor = if (member.isBlocked() || member.isFainted || member.isMissing) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt()
                 lines += CommandPostInfoPanel.DetailLine(member.statusLabel(), statusColor, member.isReady())
                 lines += CommandPostInfoPanel.DetailLine(member.sourceLabel(), 0xFFB8C3C7.toInt())
-                lines += member.tagTypeId?.let { tagRoleLine(it) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
+                lines += member.tagTypeId?.let { crewRoleLine(it, member) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
                 lines += CommandPostInfoPanel.DetailLine(member.assignmentLabel(), 0xFFEAF4F5.toInt())
                 lines += CommandPostInfoPanel.DetailLine(member.cargoSummary.ifBlank { member.statusDetailOrFallback() }, if (member.carriedItemCount > 0) 0xFFFFD166.toInt() else 0xFF8FA0A8.toInt())
             }
@@ -1152,6 +1153,22 @@ class CommandPostPcScreen(
         val tagType = TagType.fromId(tagId)
         val label = tagType?.let(TagTypePresentation::roleLabel) ?: tagId
         return CommandPostInfoPanel.DetailLine(label, 0xFFEAF4F5.toInt(), true)
+    }
+
+    private fun crewRoleLine(tagId: String, member: CommandPostCrewMemberSnapshot): CommandPostInfoPanel.DetailLine {
+        val tagType = TagType.fromId(tagId) ?: return tagRoleLine(tagId)
+        val roleLabel = TagTypePresentation.roleLabel(tagType)
+        val tier = member.masteryTier()
+        val label = if (tier == MasteryTier.NOVICE) roleLabel else "${tier.label} $roleLabel"
+        return CommandPostInfoPanel.DetailLine(label, masteryColor(tier), true)
+    }
+
+    private fun masteryColor(tier: MasteryTier): Int = when (tier) {
+        MasteryTier.NOVICE -> 0xFFEAF4F5.toInt()
+        MasteryTier.APPRENTICE -> 0xFFFFFFFF.toInt()
+        MasteryTier.ADEPT -> 0xFFBFE7C4.toInt()
+        MasteryTier.EXPERT -> 0xFF9FE0EA.toInt()
+        MasteryTier.MASTER -> 0xFFFFD166.toInt()
     }
 
     private fun moduleViews(): List<ModuleView> {
@@ -1255,6 +1272,7 @@ class CommandPostPcScreen(
         member.tagTypeId?.let { tagId ->
             val role = TagType.fromId(tagId)?.let(TagTypePresentation::roleLabel) ?: tagId
             add(Text.literal(role))
+            add(Text.literal("Mastery: ${member.masteryLabel()}").formatted(member.masteryTier().color))
         }
         add(Text.literal(member.assignmentLabel()))
     }

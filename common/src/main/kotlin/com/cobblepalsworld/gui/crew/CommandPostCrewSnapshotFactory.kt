@@ -7,6 +7,8 @@ import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.mastery.MasteryTier
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.router.RouterBlockEntity
@@ -41,6 +43,9 @@ object CommandPostCrewSnapshotFactory {
                 }
                 val entity = pokemon?.entity
                 val hasEntity = entity != null && entity.world === world && !entity.isRemoved
+                val tagType = assignmentView?.tag?.type
+                val masteryJobs = tagType?.let { WorkMasteryManager.jobsCompleted(member.pokemonId, it) } ?: 0L
+                val masteryTier = tagType?.let { WorkMasteryManager.tierFor(member.pokemonId, it) } ?: MasteryTier.NOVICE
                 CommandPostCrewMemberSnapshot(
                     pokemonId = member.pokemonId,
                     displayName = pokemon?.getDisplayName(false)?.string ?: member.displayName,
@@ -63,7 +68,9 @@ object CommandPostCrewSnapshotFactory {
                     carriedSlotCount = carriedSlotCount,
                     cargoSummary = if (carriedDescriptions.isEmpty()) "Cargo empty" else carriedDescriptions.joinToString(", "),
                     assignmentModeOrdinal = assignmentView?.assignmentProfile?.mode?.ordinal ?: WorkerAssignmentMode.GENERAL.ordinal,
-                    allowFallback = assignmentView?.assignmentProfile?.allowFallback ?: true
+                    allowFallback = assignmentView?.assignmentProfile?.allowFallback ?: true,
+                    masteryTierOrdinal = masteryTier.ordinal,
+                    masteryJobs = masteryJobs
                 )
             }
             .sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName.lowercase() })

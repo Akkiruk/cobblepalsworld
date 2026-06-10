@@ -4,6 +4,7 @@ import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.assignment.WorkerAssignmentMode
+import com.cobblepalsworld.mastery.MasteryTier
 import net.minecraft.network.PacketByteBuf
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
@@ -30,11 +31,25 @@ data class CommandPostCrewMemberSnapshot(
     val carriedSlotCount: Int,
     val cargoSummary: String,
     val assignmentModeOrdinal: Int,
-    val allowFallback: Boolean
+    val allowFallback: Boolean,
+    val masteryTierOrdinal: Int,
+    val masteryJobs: Long
 ) {
     fun phase(): WorkerPhase? = WorkerPhase.entries.getOrNull(phaseOrdinal)
 
     fun statusReason(): WorkerStatusReason? = WorkerStatusReason.entries.getOrNull(statusReasonOrdinal)
+
+    fun masteryTier(): MasteryTier = MasteryTier.entries.getOrNull(masteryTierOrdinal) ?: MasteryTier.NOVICE
+
+    fun masteryLabel(): String {
+        val tier = masteryTier()
+        val next = tier.next
+        return if (next != null) {
+            "${tier.label} $masteryJobs/${next.requiredJobs}"
+        } else {
+            "${tier.label} ($masteryJobs jobs)"
+        }
+    }
 
     fun assignmentMode(): WorkerAssignmentMode = WorkerAssignmentMode.fromOrdinal(assignmentModeOrdinal)
 
@@ -110,6 +125,8 @@ data class CommandPostCrewMemberSnapshot(
         buf.writeString(cargoSummary)
         buf.writeVarInt(assignmentModeOrdinal)
         buf.writeBoolean(allowFallback)
+        buf.writeVarInt(masteryTierOrdinal)
+        buf.writeVarLong(masteryJobs)
     }
 
     companion object {
@@ -135,7 +152,9 @@ data class CommandPostCrewMemberSnapshot(
             carriedSlotCount = buf.readVarInt(),
             cargoSummary = buf.readString(),
             assignmentModeOrdinal = buf.readVarInt(),
-            allowFallback = buf.readBoolean()
+            allowFallback = buf.readBoolean(),
+            masteryTierOrdinal = buf.readVarInt(),
+            masteryJobs = buf.readVarLong()
         )
     }
 }

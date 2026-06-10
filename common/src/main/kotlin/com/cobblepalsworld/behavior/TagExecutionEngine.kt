@@ -23,6 +23,7 @@ import com.cobblepalsworld.navigation.MovementPurpose
 import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.navigation.WorkerNavigationManager
 import com.cobblepalsworld.assignment.TagAssignmentManager
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
@@ -47,7 +48,8 @@ object TagExecutionEngine {
     /** Get or compute the effective cooldown for this tag. Cached on WorkerState. */
     fun defaultCooldownTicks(tag: TagInstance, state: WorkerState): Long {
         if (state.cachedCooldown < 0) {
-            state.cachedCooldown = (config.workCooldownTicks * tag.augments.speedMultiplier()).toLong().coerceAtLeast(5)
+            val masteryMultiplier = WorkMasteryManager.tierFor(state.pokemonId, tag.type).cooldownMultiplier
+            state.cachedCooldown = (config.workCooldownTicks * tag.augments.speedMultiplier() * masteryMultiplier).toLong().coerceAtLeast(5)
         }
         return state.cachedCooldown
     }
@@ -59,7 +61,9 @@ object TagExecutionEngine {
     /** Get or compute the effective search range. Cached on WorkerState. */
     fun effectiveRange(tag: TagInstance, state: WorkerState): Int {
         if (state.cachedRange < 0) {
-            state.cachedRange = maxOf(ConfigManager.config.getTagConfig(tag.type).range, minimumBaseRange(tag.type)) + tag.augments.extraRange()
+            state.cachedRange = maxOf(ConfigManager.config.getTagConfig(tag.type).range, minimumBaseRange(tag.type)) +
+                tag.augments.extraRange() +
+                WorkMasteryManager.tierFor(state.pokemonId, tag.type).bonusRange
         }
         return state.cachedRange
     }
@@ -461,6 +465,7 @@ object TagExecutionEngine {
                 ClaimManager.release(target, world)
                 WorkVisualHandler.onWorkComplete(world, entity, target, tag.type)
                 state.markDidWork()
+                awardMastery(world, entity, pokemon, tag, state)
                 if (result.items.isNotEmpty()) {
                     // Remember where we got items from so we don't deposit back there
                     state.workSourcePos = target
@@ -509,6 +514,20 @@ object TagExecutionEngine {
                 state.setStatus(WorkerStatusReason.COOLDOWN, "Loop complete; waiting before the next pass")
             }
             is WorkResult.Continue -> { /* stay in WORKING */ }
+        }
+    }
+
+    /**
+     * Credits one completed job toward this worker's mastery for the active role.
+     * On a tier-up, recompiles the cached cooldown/range so the new perks apply
+     * immediately, and plays an in-world celebration.
+     */
+    private fun awardMastery(world: World, entity: PokemonEntity, pokemon: Pokemon, tag: TagInstance, state: WorkerState) {
+        val newTier = WorkMasteryManager.recordJob(pokemon.uuid, tag.type)
+        (world as? ServerWorld)?.let(CobblePalsSaveData::markDirty)
+        if (newTier != null) {
+            state.invalidateCache()
+            WorkVisualHandler.onMasteryTierUp(world, entity)
         }
     }
 
