@@ -173,5 +173,11 @@
   "status.cobblepalsworld.fallback.no_role": "Install tag cards to give this pal work.",
   "status.cobblepalsworld.fallback.awaiting_spawn": "The Command Post will send this worker out when it is selected for work.",
   "status.cobblepalsworld.fallback.ready": "Ready for Command Post work.",
-  "tooltip.cobblepalsworld.open_editor_hint": "Use in hand to edit filter & behavior"
+  "tooltip.cobblepalsworld.open_editor_hint": "Use in hand to edit filter & behavior",
+  "status.cobblepalsworld.label.storage_moved": "Storage moved",
+  "status.cobblepalsworld.label.fainted": "Fainted",
+  "status.cobblepalsworld.label.no_role": "No role",
+  "status.cobblepalsworld.label.ready": "Ready",
+  "status.cobblepalsworld.label.awaiting_spawn": "Awaiting spawn",
+  "gui.cobblepalsworld.role_none": "Role: none"
 }

@@ -508,7 +508,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
             tooltip.add(Text.translatable("tooltip.cobblepalsworld.extra_targets", settings.extraTargets.size).formatted(Formatting.AQUA))
         }
 
-        tooltip.add(Text.translatable("tooltip.cobblepalsworld.open_editor_hint").formatted(Formatting.DARK_GRAY))
+        tooltip.add(Text.translatable("tooltip.cobblepalsworld.open_editor_hint").formatted(Formatting.GRAY))
         tooltip.add(Text.translatable("tooltip.cobblepalsworld.edit_hint").formatted(Formatting.DARK_GRAY))
     }
 

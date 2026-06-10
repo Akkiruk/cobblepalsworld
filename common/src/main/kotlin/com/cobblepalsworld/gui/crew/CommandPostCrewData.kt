@@ -6,6 +6,7 @@ import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.mastery.MasteryTier
 import net.minecraft.network.PacketByteBuf
+import net.minecraft.text.Text
 import net.minecraft.util.math.BlockPos
 import java.util.UUID
 
@@ -68,10 +69,11 @@ data class CommandPostCrewMemberSnapshot(
     }
 
     fun statusLabel(): String = when {
-        isMissing -> "Storage moved"
-        isFainted -> "Fainted"
-        tagTypeId == null -> "No role"
-        else -> statusReason()?.label ?: if (hasEntity) "Ready" else "Awaiting spawn"
+        isMissing -> Text.translatable("status.cobblepalsworld.label.storage_moved").string
+        isFainted -> Text.translatable("status.cobblepalsworld.label.fainted").string
+        tagTypeId == null -> Text.translatable("status.cobblepalsworld.label.no_role").string
+        else -> statusReason()?.label
+            ?: Text.translatable(if (hasEntity) "status.cobblepalsworld.label.ready" else "status.cobblepalsworld.label.awaiting_spawn").string
     }
 
     /**

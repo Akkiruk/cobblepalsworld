@@ -1138,12 +1138,12 @@ class CommandPostPcScreen(
                 val statusColor = if (member.isBlocked() || member.isFainted || member.isMissing) 0xFFFF7777.toInt() else 0xFFBFE7C4.toInt()
                 lines += CommandPostInfoPanel.DetailLine(member.statusLabel(), statusColor, member.isReady())
                 lines += CommandPostInfoPanel.DetailLine(member.sourceLabel(), 0xFFB8C3C7.toInt())
-                lines += member.tagTypeId?.let { crewRoleLine(it, member) } ?: CommandPostInfoPanel.DetailLine("Role: none", 0xFF8FA0A8.toInt())
+                lines += member.tagTypeId?.let { crewRoleLine(it, member) } ?: CommandPostInfoPanel.DetailLine(Text.translatable("gui.cobblepalsworld.role_none").string, 0xFF8FA0A8.toInt())
                 lines += CommandPostInfoPanel.DetailLine(member.assignmentLabel(), 0xFFEAF4F5.toInt())
                 lines += CommandPostInfoPanel.DetailLine(member.cargoSummary.ifBlank { Text.translatable(member.statusDetailKey()).string }, if (member.carriedItemCount > 0) 0xFFFFD166.toInt() else 0xFF8FA0A8.toInt())
             }
             else -> {
-                lines += CommandPostInfoPanel.DetailLine(if (preview.isFainted) "Fainted" else "Ready")
+                lines += CommandPostInfoPanel.DetailLine(Text.translatable(if (preview.isFainted) "status.cobblepalsworld.label.fainted" else "status.cobblepalsworld.label.ready").string)
             }
         }
         return lines
