@@ -1238,6 +1238,8 @@ class CommandPostPcScreen(
 
     private fun moduleViews(): List<ModuleView> {
         val registries = client?.world?.registryManager ?: return emptyList()
+        // rowIndex is assigned after compaction so it matches the server's policyModules() ordering,
+        // which also skips empty module slots.
         return (0 until RouterBlockEntity.MODULE_SLOT_COUNT).mapNotNull { moduleIndex ->
             val stack = handler.slots.getOrNull(moduleIndex)?.stack ?: return@mapNotNull null
             val tagItem = stack.item as? TagItem ?: return@mapNotNull null
