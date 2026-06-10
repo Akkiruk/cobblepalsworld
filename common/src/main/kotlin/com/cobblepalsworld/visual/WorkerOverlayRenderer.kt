@@ -3,6 +3,8 @@ package com.cobblepalsworld.visual
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
+import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
+import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
 import com.cobblepalsworld.networking.CobblePalsNetworking
 import com.cobblepalsworld.tag.TagRegistry
 import com.cobblepalsworld.tag.TagType
@@ -126,9 +128,10 @@ object WorkerOverlayRenderer {
             drawLabel(client, matrices, vertexConsumers, snapshot.statusLabel(), x, y + 0.18, z, labelColor(snapshot))
         }
 
-        if (!snapshot.hasCargo()) return
+        val carriedItemId = snapshot.primaryCarriedItemId
+        if (carriedItemId.isNullOrBlank() || snapshot.carriedItemCount <= 0) return
 
-        resolveCargoStack(snapshot.primaryCarriedItemId!!, snapshot.carriedItemCount)?.let { cargoStack ->
+        resolveCargoStack(carriedItemId, snapshot.carriedItemCount)?.let { cargoStack ->
             renderFloatingStack(client, matrices, vertexConsumers, cargoStack, x, y - 0.28, z, 0.34f, seed * 31)
             if (snapshot.carriedItemCount > 1) {
                 drawCount(client, matrices, vertexConsumers, snapshot.carriedItemCount.toString(), x, y - 0.51, z)
@@ -354,6 +357,8 @@ object WorkerOverlayRenderer {
         overlays.clear()
         tagStackCache.clear()
         cargoStackCache.clear()
+        CommandPostCrewSnapshotCache.clearAll()
+        CrewSourceSnapshotCache.clearAll()
     }
 
     private fun prune(now: Long) {

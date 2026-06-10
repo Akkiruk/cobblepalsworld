@@ -56,9 +56,7 @@ data class CommandPostCrewMemberSnapshot(
         isMissing -> "Storage moved"
         isFainted -> "Fainted"
         tagTypeId == null -> "No role"
-        statusReason() != null -> statusReason()!!.label
-        hasEntity -> "Ready"
-        else -> "Awaiting spawn"
+        else -> statusReason()?.label ?: if (hasEntity) "Ready" else "Awaiting spawn"
     }
 
     fun statusDetailOrFallback(): String = when {

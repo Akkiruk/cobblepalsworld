@@ -68,10 +68,9 @@ object FilterSerializer {
         val list = nbt.getList(KEY_ITEMS, 10)
         for (i in 0 until list.size) {
             val entry = list.getCompound(i)
-            if (entry.contains("Item")) {
-                val result = ItemStack.fromNbt(registries, entry.get("Item")!!)
-                result.ifPresent { items.add(it) }
-            }
+            val itemNbt = entry.get("Item") ?: continue
+            val result = ItemStack.fromNbt(registries, itemNbt)
+            result.ifPresent { items.add(it) }
         }
 
         val matchTags = mutableListOf<String>()

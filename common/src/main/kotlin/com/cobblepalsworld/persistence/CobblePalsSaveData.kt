@@ -281,7 +281,9 @@ class CobblePalsSaveData : PersistentState() {
                         for (i in 0 until itemsNbt.size) {
                             val slotNbt = itemsNbt.getCompound(i)
                             val slot = slotNbt.getByte("Slot").toInt()
-                            val stack = ItemStack.fromNbt(registries, slotNbt.get("Item")!!)
+                            val itemNbt = slotNbt.get("Item") ?: continue
+                            if (slot !in 0 until size) continue
+                            val stack = ItemStack.fromNbt(registries, itemNbt)
                             stack.ifPresent { inventory.setStack(slot, it) }
                         }
                         InventoryManager.put(uuid, inventory)

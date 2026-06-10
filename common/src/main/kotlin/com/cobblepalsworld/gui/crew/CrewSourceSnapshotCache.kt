@@ -14,4 +14,8 @@ object CrewSourceSnapshotCache {
     fun clear(routerPos: BlockPos) {
         snapshotsByRouter.remove(routerPos.toImmutable())
     }
+
+    fun clearAll() {
+        snapshotsByRouter.clear()
+    }
 }

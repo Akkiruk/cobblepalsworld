@@ -589,7 +589,11 @@ object TagExecutionEngine {
             }
         }
 
-        val depositPos = state.depositPos!!
+        val depositPos = state.depositPos ?: run {
+            resetToIdle(state)
+            state.setStatus(WorkerStatusReason.NO_DEPOSIT, "Deposit target was lost; searching again")
+            return
+        }
         if (!isWithinWorkRange(origin, depositPos, effectiveRange(tag, state))) {
             state.depositPos = null
             if (state.cachedContainerPos == depositPos) {

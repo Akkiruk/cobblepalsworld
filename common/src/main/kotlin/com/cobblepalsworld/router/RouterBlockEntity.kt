@@ -370,8 +370,9 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         for (index in 0 until items.size) {
             val entry = items.getCompound(index)
             val slot = entry.getByte("Slot").toInt()
-            if (slot !in 0 until TOTAL_SLOTS || !entry.contains("Item")) continue
-            val decoded = ItemStack.fromNbt(registries, entry.get("Item")!!)
+            if (slot !in 0 until TOTAL_SLOTS) continue
+            val itemNbt = entry.get("Item") ?: continue
+            val decoded = ItemStack.fromNbt(registries, itemNbt)
             decoded.ifPresent { inventory.setStack(slot, TagRegistry.normalizeStack(it)) }
         }
     }
