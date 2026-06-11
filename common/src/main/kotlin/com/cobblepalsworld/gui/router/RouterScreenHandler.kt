@@ -72,36 +72,36 @@ class RouterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
         this.routerInventory = SimpleInventory(RouterBlockEntity.TOTAL_SLOTS)
-        this.routerData = ArrayPropertyDelegate(RouterBlockEntity.PROPERTY_COUNT)
+        this.routerData = ArrayPropertyDelegate(RouterSyncedProperties.totalCount)
         setupSlots(playerInventory)
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory, routerInventory: Inventory, routerData: PropertyDelegate) : super(MenuTypes.ROUTER.get(), syncId) {
         checkSize(routerInventory, RouterBlockEntity.TOTAL_SLOTS)
-        checkDataCount(routerData, RouterBlockEntity.PROPERTY_COUNT)
+        checkDataCount(routerData, RouterSyncedProperties.totalCount)
         this.routerInventory = routerInventory
         this.routerData = routerData
         setupSlots(playerInventory)
     }
 
-    val linked: Boolean get() = routerData.get(0) != 0
-    val rosterCount: Int get() = routerData.get(1)
-    val assignedCount: Int get() = routerData.get(2)
-    val activeCount: Int get() = routerData.get(3)
+    val linked: Boolean get() = RouterSyncedProperties.LINKED.getBoolean(routerData)
+    val rosterCount: Int get() = RouterSyncedProperties.ROSTER_COUNT.get(routerData)
+    val assignedCount: Int get() = RouterSyncedProperties.ASSIGNED_COUNT.get(routerData)
+    val activeCount: Int get() = RouterSyncedProperties.ACTIVE_COUNT.get(routerData)
     val routerPos: BlockPos get() = BlockPos(
-        routerData.get(RouterBlockEntity.PROPERTY_POS_START),
-        routerData.get(RouterBlockEntity.PROPERTY_POS_START + 1),
-        routerData.get(RouterBlockEntity.PROPERTY_POS_START + 2)
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.X),
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.Y),
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.Z)
     )
 
     fun moduleAssigned(moduleIndex: Int): Boolean {
         if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
-        return routerData.get(RouterBlockEntity.PROPERTY_MODULE_ASSIGNED_START + moduleIndex) != 0
+        return RouterSyncedProperties.MODULE_ASSIGNED.getBoolean(routerData, moduleIndex)
     }
 
     fun moduleActive(moduleIndex: Int): Boolean {
         if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
-        return routerData.get(RouterBlockEntity.PROPERTY_MODULE_ACTIVE_START + moduleIndex) != 0
+        return RouterSyncedProperties.MODULE_ACTIVE.getBoolean(routerData, moduleIndex)
     }
 
     private fun setupSlots(playerInventory: PlayerInventory) {

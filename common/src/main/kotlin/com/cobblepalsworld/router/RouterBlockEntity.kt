@@ -8,6 +8,7 @@ import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.gui.router.RouterScreenHandler
+import com.cobblepalsworld.gui.router.RouterSyncedProperties
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.tag.TagInstance
@@ -50,10 +51,6 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
         const val STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT
         const val TOTAL_SLOTS = STORAGE_SLOT_END
 
-        const val PROPERTY_MODULE_ASSIGNED_START = 4
-        const val PROPERTY_MODULE_ACTIVE_START = PROPERTY_MODULE_ASSIGNED_START + MODULE_SLOT_COUNT
-        const val PROPERTY_POS_START = PROPERTY_MODULE_ACTIVE_START + MODULE_SLOT_COUNT
-        const val PROPERTY_COUNT = PROPERTY_POS_START + 3
         private val AUTOMATION_SLOTS = IntArray(STORAGE_SLOT_COUNT) { STORAGE_SLOT_START + it }
 
         fun tick(world: World, pos: BlockPos, state: BlockState, blockEntity: RouterBlockEntity) {
@@ -66,30 +63,32 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
     private val storageInventoryView: Inventory = RouterStorageInventory(this)
     private val propertyDelegate = object : PropertyDelegate {
         override fun get(index: Int): Int {
-            return when (index) {
-                0 -> if (nativeCrewCount() > 0) 1 else 0
-                1 -> nativeCrewCount().takeIf { it > 0 } ?: linkedWorkerCount
-                2 -> assignedWorkerCount
-                3 -> activeWorkerCount
-                in PROPERTY_MODULE_ASSIGNED_START until PROPERTY_MODULE_ACTIVE_START -> {
-                    val moduleIndex = index - PROPERTY_MODULE_ASSIGNED_START
-                    if (assignedWorkers[moduleIndex] != null) 1 else 0
+            return when (val property = RouterSyncedProperties.byIndex(index)) {
+                RouterSyncedProperties.LINKED -> if (nativeCrewCount() > 0) 1 else 0
+                RouterSyncedProperties.ROSTER_COUNT -> nativeCrewCount().takeIf { it > 0 } ?: linkedWorkerCount
+                RouterSyncedProperties.ASSIGNED_COUNT -> assignedWorkerCount
+                RouterSyncedProperties.ACTIVE_COUNT -> activeWorkerCount
+                is RouterSyncedProperties.ArrayElement -> when {
+                    RouterSyncedProperties.MODULE_ASSIGNED.matches(property) -> if (assignedWorkers[property.offset] != null) 1 else 0
+                    RouterSyncedProperties.MODULE_ACTIVE.matches(property) -> {
+                        val pokemonId = assignedWorkers[property.offset]
+                        if (pokemonId != null && WorkerSessionManager.getState(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
+                    }
+                    RouterSyncedProperties.POS_COMPONENT.matches(property) -> when (RouterSyncedProperties.PosComponent.entries.getOrNull(property.offset)) {
+                        RouterSyncedProperties.PosComponent.X -> pos.x
+                        RouterSyncedProperties.PosComponent.Y -> pos.y
+                        RouterSyncedProperties.PosComponent.Z -> pos.z
+                        null -> 0
+                    }
+                    else -> 0
                 }
-                in PROPERTY_MODULE_ACTIVE_START until PROPERTY_POS_START -> {
-                    val moduleIndex = index - PROPERTY_MODULE_ACTIVE_START
-                    val pokemonId = assignedWorkers[moduleIndex]
-                    if (pokemonId != null && WorkerSessionManager.getState(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
-                }
-                PROPERTY_POS_START -> pos.x
-                PROPERTY_POS_START + 1 -> pos.y
-                PROPERTY_POS_START + 2 -> pos.z
                 else -> 0
             }
         }
 
         override fun set(index: Int, value: Int) {}
 
-        override fun size(): Int = PROPERTY_COUNT
+        override fun size(): Int = RouterSyncedProperties.totalCount
     }
 
     var cooldownTicks: Int = 0
