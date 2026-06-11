@@ -181,7 +181,13 @@ object WorkerSessionManager {
         val removed = mutableSetOf<UUID>()
         sessions.forEach { (pokemonId, session) ->
             val state = session.state ?: return@forEach
-            val isStale = state.lastSeenTick > 0L && currentTime - state.lastSeenTick > staleAfterTicks
+            if (state.lastSeenTick <= 0L) {
+                // Never ticked since creation: start its staleness clock now so an
+                // orphaned state can't sit in memory forever.
+                state.lastSeenTick = currentTime
+                return@forEach
+            }
+            val isStale = currentTime - state.lastSeenTick > staleAfterTicks
             if (!isStale) return@forEach
 
             session.state = null

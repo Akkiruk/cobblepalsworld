@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0
+
+Ground-up architecture pass: every core system was restructured for reliability and maintainability. No gameplay changes are intended — worlds, items, and network behavior carry over as-is.
+
+- World save data is now versioned with a sequential migration pipeline: old saves are upgraded in place on load, future format changes can never silently drop assignments or inventories, and saves from newer versions are detected and logged instead of being misread. Tag items also carry a data version that is migrated on read.
+- Worker behaviors now own their runtime state through lifecycle hooks (`onWorkerCleanup`/`onRuntimeReset`): the execution engine no longer hardcodes per-behavior cleanup, so leftover per-worker caches can never be missed when a role is added or changed.
+- The worker state machine was split into per-phase handlers (Idle, Navigating, Arriving, Working, Depositing) dispatched through a phase registry — same behavior, but each phase is now a focused, independently readable unit.
+- The networking layer was decomposed from one 632-line file into one file per packet with a thin registration facade; packet ids, wire formats, and registration order are unchanged.
+- Command Post GUI sync no longer uses hand-maintained property index arithmetic: a single typed property layout (`RouterSyncedProperties`) is shared by server and client, eliminating the bug class behind the 0.2.48 "wrong role card" fix.
+- The Command Post screen was decomposed from a 1,417-line monolith into per-mode panels (source, jobs, policy, logistics) behind a small panel interface, with shared state in one context object — rendering, input priority, and behavior are unchanged.
+- Tag roles are now defined by an identifier-backed definition registry: the `TagType` enum holds only the stable id, while capabilities, presentation, and feedback live in overridable `TagTypeDefinition`s — addons can reconfigure a role without touching the enum.
+- Hardened concurrency and memory behavior: worksite/controller index updates are now atomic, duplicate behavior registrations are logged, and orphaned worker states that were never ticked are now aged out instead of lingering forever.
+- Added the mod's first unit test suite (mastery tier math, assignment profile rules, tag definition integrity, save migrations) wired into the common module's Gradle test task.
+
 ## 0.2.48
 
 - Fixed the Policy view targeting the wrong role card: when tag cards sat in non-contiguous slots, the quick chips and Edit button could silently fail or edit a different card than the one shown.
