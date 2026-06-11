@@ -285,7 +285,7 @@ object WorkerSessionManager {
 
     private fun addToWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
         binding ?: return
-        worksiteIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+        addToIndex(worksiteIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
     private fun removeFromWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
@@ -295,7 +295,7 @@ object WorkerSessionManager {
 
     private fun addToControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
         binding ?: return
-        controllerIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+        addToIndex(controllerIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
     private fun removeFromControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
@@ -303,11 +303,18 @@ object WorkerSessionManager {
         removeFromIndex(controllerIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
+    private fun addToIndex(index: ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>, key: BindingIndexKey, pokemonId: UUID) {
+        // compute() makes membership updates atomic with map insertion, so a
+        // concurrent removeFromIndex can never drop an in-flight registration.
+        index.compute(key) { _, existing ->
+            (existing ?: ConcurrentHashMap.newKeySet()).also { it.add(pokemonId) }
+        }
+    }
+
     private fun removeFromIndex(index: ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>, key: BindingIndexKey, pokemonId: UUID) {
-        val entries = index[key] ?: return
-        entries.remove(pokemonId)
-        if (entries.isEmpty()) {
-            index.remove(key, entries)
+        index.computeIfPresent(key) { _, entries ->
+            entries.remove(pokemonId)
+            if (entries.isEmpty()) null else entries
         }
     }
 

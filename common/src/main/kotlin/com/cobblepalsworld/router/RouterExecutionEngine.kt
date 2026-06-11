@@ -4,7 +4,7 @@ import com.cobblemon.mod.common.entity.PoseType
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.behavior.TagExecutionEngine
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
@@ -60,7 +60,7 @@ object RouterExecutionEngine {
             val assignedWorkerCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { router.assignedWorker(it) != null }
             val activeWorkerCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { slotIndex ->
                 val pokemonId = router.assignedWorker(slotIndex) ?: return@count false
-                StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
+                WorkerSessionManager.getState(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true
             }
             router.updateStatus(hasNativeCrew, visibleRosterCount, assignedWorkerCount, activeWorkerCount)
             router.updatePowered(activeWorkerCount > 0)
@@ -144,7 +144,7 @@ object RouterExecutionEngine {
             }
 
             assignedWorkerCount += 1
-            if (StateManager.get(chosen.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) {
+            if (WorkerSessionManager.getState(chosen.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) {
                 activeWorkerCount += 1
             }
         }
@@ -206,7 +206,7 @@ object RouterExecutionEngine {
         roster.forEach { candidate ->
             if (candidate.pokemonId in controlledThisTick) return@forEach
             val entity = candidate.entity ?: return@forEach
-            val state = StateManager.getOrCreate(candidate.pokemonId)
+            val state = WorkerSessionManager.getOrCreateState(candidate.pokemonId)
             state.lastSeenTick = entity.world.time
             if (state.phase == WorkerPhase.IDLE) {
                 val profile = TagAssignmentManager.getProfile(candidate.pokemonId)
@@ -227,7 +227,7 @@ object RouterExecutionEngine {
 
     private fun buildWorkerVisual(entity: PokemonEntity, pokemonId: UUID): CobblePalsNetworking.WorkerVisualSnapshot? {
         val assignmentView = TagAssignmentManager.getView(pokemonId) ?: return null
-        val state = StateManager.get(pokemonId)
+        val state = WorkerSessionManager.getState(pokemonId)
 
         var primaryCarriedItemId: String? = null
         var carriedItemCount = 0

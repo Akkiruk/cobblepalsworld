@@ -3,7 +3,7 @@ package com.cobblepalsworld.router
 import com.cobblepalsworld.augment.AugmentItem
 import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
@@ -78,7 +78,7 @@ class RouterBlockEntity(pos: BlockPos, state: BlockState) : BlockEntity(RouterRe
                 in PROPERTY_MODULE_ACTIVE_START until PROPERTY_POS_START -> {
                     val moduleIndex = index - PROPERTY_MODULE_ACTIVE_START
                     val pokemonId = assignedWorkers[moduleIndex]
-                    if (pokemonId != null && StateManager.get(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
+                    if (pokemonId != null && WorkerSessionManager.getState(pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true) 1 else 0
                 }
                 PROPERTY_POS_START -> pos.x
                 PROPERTY_POS_START + 1 -> pos.y

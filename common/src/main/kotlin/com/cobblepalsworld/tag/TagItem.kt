@@ -46,8 +46,14 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
         private const val KEY_PENDING_AREA_Y = "PendingAreaY"
         private const val KEY_PENDING_AREA_Z = "PendingAreaZ"
         private const val KEY_SETTINGS = "TagSettings"
+        /** Monotonic edit counter, bumped on every data write (used for client cache invalidation). */
         private const val KEY_REVISION = "TagRevision"
+        /** Structural format version of the stack's tag data. Bump alongside [TAG_DATA_VERSION] migrations. */
+        private const val KEY_DATA_VERSION = "TagDataVersion"
         private const val KEY_TRACKING_ID = "TagTrackingId"
+
+        /** Current structural version of the tag data written to item stacks. */
+        const val TAG_DATA_VERSION = 1
 
         /** How often (in ticks) a held bound tag re-emits its binding preview particles. */
         private const val PREVIEW_INTERVAL_TICKS = 10L
@@ -83,6 +89,7 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
 
         fun getSpec(stack: ItemStack, registries: RegistryWrapper.WrapperLookup): TagSpec? {
             val tagItem = stack.item as? TagItem ?: return null
+            upgradeStackData(stack)
             return TagSpec(
                 type = tagItem.tagType,
                 filter = getFilter(stack, registries),
@@ -280,6 +287,25 @@ class TagItem(val tagType: TagType, settings: Settings) : Item(settings) {
             val nbt = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA)
                 ?.copyNbt() ?: NbtCompound()
             nbt.putLong(KEY_REVISION, nbt.getLong(KEY_REVISION) + 1L)
+            nbt.putInt(KEY_DATA_VERSION, TAG_DATA_VERSION)
+            stack.set(
+                net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
+                net.minecraft.component.type.NbtComponent.of(nbt)
+            )
+        }
+
+        /**
+         * Migrates older tag-stack data layouts to [TAG_DATA_VERSION] in place.
+         * Version 0 (pre-versioning) stacks are structurally identical to v1,
+         * so today this only stamps the version; future layout changes add
+         * sequential upgrade steps here, mirroring SaveMigrations.
+         */
+        private fun upgradeStackData(stack: ItemStack) {
+            val component = stack.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA) ?: return
+            val nbt = component.copyNbt()
+            val version = if (nbt.contains(KEY_DATA_VERSION)) nbt.getInt(KEY_DATA_VERSION) else 0
+            if (version >= TAG_DATA_VERSION) return
+            nbt.putInt(KEY_DATA_VERSION, TAG_DATA_VERSION)
             stack.set(
                 net.minecraft.component.DataComponentTypes.CUSTOM_DATA,
                 net.minecraft.component.type.NbtComponent.of(nbt)

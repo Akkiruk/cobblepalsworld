@@ -1,7 +1,7 @@
 package com.cobblepalsworld.command
 
 import com.cobblepalsworld.behavior.TagExecutionEngine
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
@@ -38,7 +38,7 @@ object CobblePalsCommand {
         source.sendFeedback({ header("CobblePals Status") }, false)
         source.sendFeedback({ detail("Assignments", TagAssignmentManager.count()) }, false)
         source.sendFeedback({ detail("Inventories", InventoryManager.count()) }, false)
-        source.sendFeedback({ detail("Runtime States", StateManager.count()) }, false)
+        source.sendFeedback({ detail("Runtime States", WorkerSessionManager.countStates()) }, false)
         source.sendFeedback({ detail("Claims", ClaimManager.count()) }, false)
         return 1
     }

@@ -3,15 +3,12 @@ package com.cobblepalsworld.behavior
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerState
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
-import com.cobblepalsworld.behavior.behaviors.BreakerBehavior
-import com.cobblepalsworld.behavior.behaviors.DistributorBehavior
-import com.cobblepalsworld.behavior.behaviors.SenderBehavior
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
 import com.cobblepalsworld.navigation.ClaimManager
@@ -95,7 +92,7 @@ object TagExecutionEngine {
         origin: BlockPos,
         navigationBudget: NavigationBudget
     ) {
-        val state = StateManager.getOrCreate(pokemon.uuid)
+        val state = WorkerSessionManager.getOrCreateState(pokemon.uuid)
         state.lastSeenTick = world.time
 
         if (!isTagEnabled(tag.type)) {
@@ -184,25 +181,21 @@ object TagExecutionEngine {
 
     fun cleanupRuntimeOnly(pokemonId: java.util.UUID) {
         ClaimManager.releaseAll(pokemonId)
-        StateManager.remove(pokemonId)
-        BreakerBehavior.clearWorksiteOrigin(pokemonId)
-        SenderBehavior.cleanup(pokemonId)
-        DistributorBehavior.cleanup(pokemonId)
+        WorkerSessionManager.removeState(pokemonId)
+        TagBehaviorRegistry.all().forEach { it.onWorkerCleanup(pokemonId) }
     }
 
     fun pruneStaleRuntime(currentTime: Long, staleAfterTicks: Long) {
-        val stalePokemonIds = StateManager.pruneStale(currentTime, staleAfterTicks)
+        val stalePokemonIds = WorkerSessionManager.pruneStaleRuntime(currentTime, staleAfterTicks)
         stalePokemonIds.forEach(::cleanupRuntimeOnly)
         ClaimManager.pruneStale(currentTime, staleAfterTicks)
     }
 
     fun resetRuntimeState() {
-        StateManager.clear()
+        WorkerSessionManager.clearStates()
         ClaimManager.clear()
         WorkerNavigationManager.clearFailureCache()
-        BreakerBehavior.clearAllWorksiteOrigins()
-        SenderBehavior.clearAllRuntimeState()
-        DistributorBehavior.clearAllRuntimeState()
+        TagBehaviorRegistry.all().forEach { it.onRuntimeReset() }
     }
 
     private fun recoverCarriedInventory(pokemonId: java.util.UUID, world: World, pos: BlockPos, inventory: PokemonInventory) {

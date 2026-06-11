@@ -2,7 +2,7 @@ package com.cobblepalsworld.persistence
 
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentSerializer
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.crew.CommandPostCrewBinding
 import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
@@ -42,6 +42,8 @@ private data class AssignmentRecord(
 class CobblePalsSaveData : PersistentState() {
 
     override fun writeNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): NbtCompound {
+        SaveMigrations.stamp(nbt)
+
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
         for ((uuid, record) in getAllAssignments()) {
@@ -170,10 +172,12 @@ class CobblePalsSaveData : PersistentState() {
         fun fromNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): CobblePalsSaveData {
             val data = CobblePalsSaveData()
 
+            SaveMigrations.upgrade(nbt)
+
             TagAssignmentManager.clear()
             CommandPostCrewManager.clear()
             InventoryManager.clear()
-            StateManager.clear()
+            WorkerSessionManager.clearStates()
             ClaimManager.clear()
 
             try {

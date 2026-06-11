@@ -1,6 +1,6 @@
 package com.cobblepalsworld.gui.crew
 
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
@@ -23,7 +23,7 @@ object CommandPostCrewSnapshotFactory {
             .map { member ->
                 val pokemon = CommandPostCrewLifecycle.resolvePokemon(world, member, fallbackOwnerUuid)
                 val assignmentView = TagAssignmentManager.getView(member.pokemonId)
-                val state = StateManager.get(member.pokemonId)
+                val state = WorkerSessionManager.getState(member.pokemonId)
                 val inventory = InventoryManager.get(member.pokemonId)
                 var carriedItemCount = 0
                 var carriedSlotCount = 0
@@ -76,7 +76,7 @@ object CommandPostCrewSnapshotFactory {
             .sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName.lowercase() })
 
         val assignedCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { router.assignedWorker(it) != null }
-        val activeCount = members.count { member -> StateManager.get(member.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true }
+        val activeCount = members.count { member -> WorkerSessionManager.getState(member.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true }
         return CommandPostCrewSnapshot(
             routerPos = routerPos,
             members = members,

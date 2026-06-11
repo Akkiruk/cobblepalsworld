@@ -7,7 +7,7 @@ import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.gui.crew.CrewSourceBoxSnapshot
 import com.cobblepalsworld.gui.crew.CrewSourcePokemonSnapshot
@@ -442,7 +442,7 @@ object CobblePalsNetworking {
         val crewBinding = CommandPostCrewManager.bindingFor(uuid)
         val controllerBinding = TagAssignmentManager.getControllerBinding(uuid)
         val assignmentView = TagAssignmentManager.getView(uuid)
-        val state = StateManager.get(uuid)
+        val state = WorkerSessionManager.getState(uuid)
         val inventory = InventoryManager.get(uuid)
         val alreadyHere = crewBinding?.dimensionId == dimensionId && crewBinding.pos == controllerPos
         val cargoSummary = inventory?.let { inv ->

@@ -5,7 +5,7 @@ import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.behavior.TagExecutionEngine
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.inventory.InventoryManager
@@ -86,7 +86,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.invData = object : PropertyDelegate {
             override fun get(index: Int): Int {
                 val pokemonInv = InventoryManager.get(pokemonId)
-                val workerState = StateManager.get(pokemonId)
+                val workerState = WorkerSessionManager.getState(pokemonId)
                 val isManagedByCommandPost = TagAssignmentManager.getControllerBinding(pokemonId) != null
                 val assignmentProfile = TagAssignmentManager.getProfile(pokemonId)
                 return when (index) {

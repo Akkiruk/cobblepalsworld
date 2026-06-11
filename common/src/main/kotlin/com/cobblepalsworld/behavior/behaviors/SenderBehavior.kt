@@ -115,10 +115,6 @@ object SenderBehavior : TagBehavior {
         return WorkResult.Done()
     }
 
-    fun cleanup(pokemonId: java.util.UUID) {}
-
-    fun clearAllRuntimeState() {}
-
     private fun containerHasMatchingItems(world: World, pos: BlockPos, filter: TagFilter): Boolean {
         val inventory = ContainerFinder.getInventoryAt(world, pos) ?: return false
         for (slot in 0 until inventory.size()) {
