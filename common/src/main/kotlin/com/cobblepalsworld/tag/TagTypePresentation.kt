@@ -16,13 +16,7 @@ object TagTypePresentation {
             .joinToString(" ") { part -> part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
     }
 
-    fun familyOf(tagType: TagType): TagRoleFamily {
-        return when (tagType) {
-            TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM -> TagRoleFamily.Gathering
-            TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> TagRoleFamily.Logistics
-            TagType.ACTIVATOR -> TagRoleFamily.Interaction
-        }
-    }
+    fun familyOf(tagType: TagType): TagRoleFamily = tagType.family
 
     fun bindingLabel(tagType: TagType): String {
         return when (tagType.bindingMode) {

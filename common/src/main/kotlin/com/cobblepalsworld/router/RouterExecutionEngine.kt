@@ -13,6 +13,7 @@ import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.networking.packets.WorkerVisualSnapshot
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.assignment.WorkerAssignmentMode
@@ -79,7 +80,7 @@ object RouterExecutionEngine {
         val claimed = mutableSetOf<UUID>()
         val controlledThisTick = mutableSetOf<UUID>()
         val navigationBudget = ServerScaleRuntime.navigationBudget(world, ConfigManager.config.general.maxPathStartsPerPastureTick)
-        val activeVisuals = mutableListOf<CobblePalsNetworking.WorkerVisualSnapshot>()
+        val activeVisuals = mutableListOf<WorkerVisualSnapshot>()
 
         var assignedWorkerCount = 0
         var activeWorkerCount = 0
@@ -201,7 +202,7 @@ object RouterExecutionEngine {
         roster: List<WorkerCandidate>,
         controlledThisTick: Set<UUID>,
         capLimited: Boolean,
-        activeVisuals: MutableList<CobblePalsNetworking.WorkerVisualSnapshot>
+        activeVisuals: MutableList<WorkerVisualSnapshot>
     ) {
         roster.forEach { candidate ->
             if (candidate.pokemonId in controlledThisTick) return@forEach
@@ -225,7 +226,7 @@ object RouterExecutionEngine {
         }
     }
 
-    private fun buildWorkerVisual(entity: PokemonEntity, pokemonId: UUID): CobblePalsNetworking.WorkerVisualSnapshot? {
+    private fun buildWorkerVisual(entity: PokemonEntity, pokemonId: UUID): WorkerVisualSnapshot? {
         val assignmentView = TagAssignmentManager.getView(pokemonId) ?: return null
         val state = WorkerSessionManager.getState(pokemonId)
 
@@ -248,7 +249,7 @@ object RouterExecutionEngine {
             return null
         }
 
-        return CobblePalsNetworking.WorkerVisualSnapshot(
+        return WorkerVisualSnapshot(
             entityId = entity.id,
             tagTypeId = assignmentView.tag.type.id,
             phaseOrdinal = phase.ordinal,

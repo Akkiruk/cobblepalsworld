@@ -1,18 +1,21 @@
 package com.cobblepalsworld.tag
 
 import net.minecraft.particle.ParticleEffect
-import net.minecraft.particle.ParticleTypes
 import net.minecraft.sound.SoundEvent
-import net.minecraft.sound.SoundEvents
 import net.minecraft.util.Formatting
 
 /**
- * Single source of truth for tag capabilities.
- * To add a new tag:
- * 1. Add an entry here
- * 2. Create a TagBehavior implementation
- * 3. Register it in CobblePalsWorld.registerBehaviors()
+ * Stable keys for the built-in tag roles.
+ *
+ * The enum holds nothing but the persistent id; everything a role does —
+ * capabilities, presentation, feedback — lives in its [TagTypeDefinition],
+ * resolved through [TagTypeDefinitions]. To add a new role:
+ * 1. Add an entry here (the persistent id)
+ * 2. Register a TagTypeDefinition in TagTypeDefinitions
+ * 3. Create a TagBehavior implementation and register it in CobblePalsWorld.registerBehaviors()
  * 4. Add recipe JSON + lang key + item model
+ * Existing roles can be reconfigured at runtime via TagTypeDefinitions.override()
+ * without touching this enum or any call site.
  */
 enum class BindingMode {
     NONE,
@@ -21,105 +24,37 @@ enum class BindingMode {
     AREA,
 }
 
-enum class TagType(
-    val id: String,
-    val bindingMode: BindingMode = BindingMode.NONE,
-    val usesFilter: Boolean = true,
-    val supportsTargetList: Boolean = false,
-    val description: String,
-    val color: Formatting = Formatting.WHITE,
-    val arrivalParticle: ParticleEffect = ParticleTypes.HAPPY_VILLAGER,
-    val workParticle: ParticleEffect = ParticleTypes.HAPPY_VILLAGER,
-    val workSound: SoundEvent = SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP
-) {
+enum class TagType(val id: String) {
     // --- Core combat / world interaction ---
-    BREAKER(
-        id = "breaker",
-        bindingMode = BindingMode.POSITION,
-        description = "Breaks one exact bound block, then returns the drops to the Command Post",
-        color = Formatting.RED,
-        arrivalParticle = ParticleTypes.CRIT,
-        workParticle = ParticleTypes.EXPLOSION,
-        workSound = SoundEvents.BLOCK_STONE_BREAK
-    ),
+    BREAKER("breaker"),
 
     // --- Gathering ---
-    HARVESTER(
-        id = "harvester",
-        bindingMode = BindingMode.AREA,
-        description = "Harvests mature crops only inside the selected work box into the Command Post buffer",
-        usesFilter = false,
-        color = Formatting.DARK_GREEN,
-        arrivalParticle = ParticleTypes.HAPPY_VILLAGER,
-        workParticle = ParticleTypes.COMPOSTER,
-        workSound = SoundEvents.BLOCK_CROP_BREAK
-    ),
-    VACUUM(
-        id = "vacuum",
-        description = "Collects dropped items near the Command Post into its buffer",
-        color = Formatting.AQUA,
-        arrivalParticle = ParticleTypes.PORTAL,
-        workParticle = ParticleTypes.PORTAL,
-        workSound = SoundEvents.ENTITY_ITEM_PICKUP
-    ),
+    HARVESTER("harvester"),
+    VACUUM("vacuum"),
 
     // --- Logistics ---
-    SENDER(
-        id = "sender",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Sends filtered items from the Command Post buffer to one bound container",
-        color = Formatting.LIGHT_PURPLE,
-        arrivalParticle = ParticleTypes.ENCHANT,
-        workParticle = ParticleTypes.ENCHANT,
-        workSound = SoundEvents.BLOCK_CHEST_CLOSE
-    ),
-    PULLER(
-        id = "puller",
-        bindingMode = BindingMode.CONTAINER,
-        description = "Pulls filtered items from one bound container into the Command Post buffer",
-        color = Formatting.BLUE,
-        arrivalParticle = ParticleTypes.ENCHANT,
-        workParticle = ParticleTypes.ENCHANT,
-        workSound = SoundEvents.BLOCK_CHEST_OPEN
-    ),
-    DISTRIBUTOR(
-        id = "distributor",
-        bindingMode = BindingMode.CONTAINER,
-        supportsTargetList = true,
-        description = "Distributes filtered items from the Command Post buffer across multiple containers",
-        color = Formatting.DARK_PURPLE,
-        arrivalParticle = ParticleTypes.ENCHANT,
-        workParticle = ParticleTypes.ENCHANT,
-        workSound = SoundEvents.BLOCK_BARREL_OPEN
-    ),
-    DROPPER(
-        id = "dropper",
-        bindingMode = BindingMode.POSITION,
-        description = "Drops matching items from the Command Post buffer at a bound location",
-        color = Formatting.DARK_GRAY,
-        arrivalParticle = ParticleTypes.SMOKE,
-        workParticle = ParticleTypes.SMOKE,
-        workSound = SoundEvents.ENTITY_ITEM_FRAME_REMOVE_ITEM
-    ),
-    VOID(
-        id = "void",
-        description = "Deletes matching items directly from the Command Post buffer",
-        color = Formatting.DARK_RED,
-        arrivalParticle = ParticleTypes.LARGE_SMOKE,
-        workParticle = ParticleTypes.LARGE_SMOKE,
-        workSound = SoundEvents.BLOCK_LAVA_EXTINGUISH
-    ),
+    SENDER("sender"),
+    PULLER("puller"),
+    DISTRIBUTOR("distributor"),
+    DROPPER("dropper"),
+    VOID("void"),
+
     // --- Interaction ---
-    ACTIVATOR(
-        id = "activator",
-        bindingMode = BindingMode.POSITION,
-        description = "Right-clicks one exact bound target with filtered items from the Command Post buffer",
-        color = Formatting.YELLOW,
-        arrivalParticle = ParticleTypes.WAX_ON,
-        workParticle = ParticleTypes.WAX_ON,
-        workSound = SoundEvents.BLOCK_DISPENSER_DISPENSE
-    ),
+    ACTIVATOR("activator"),
     ;
+
+    /** The full role definition backing this key. */
+    val definition: TagTypeDefinition get() = TagTypeDefinitions.get(this)
+
+    val bindingMode: BindingMode get() = definition.bindingMode
+    val usesFilter: Boolean get() = definition.usesFilter
+    val supportsTargetList: Boolean get() = definition.supportsTargetList
+    val description: String get() = definition.description
+    val color: Formatting get() = definition.color
+    val arrivalParticle: ParticleEffect get() = definition.arrivalParticle
+    val workParticle: ParticleEffect get() = definition.workParticle
+    val workSound: SoundEvent get() = definition.workSound
+    val family: TagRoleFamily get() = definition.family
 
     val supportsBinding: Boolean get() = bindingMode != BindingMode.NONE
 
