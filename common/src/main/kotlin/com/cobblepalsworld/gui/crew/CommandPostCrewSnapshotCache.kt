@@ -14,4 +14,8 @@ object CommandPostCrewSnapshotCache {
     fun clear(routerPos: BlockPos) {
         snapshots.remove(routerPos.toImmutable())
     }
+
+    fun clearAll() {
+        snapshots.clear()
+    }
 }

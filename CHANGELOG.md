@@ -1,7 +1,56 @@
 # Changelog
 
+## 3.0.0
+
+Ground-up architecture pass: every core system was restructured for reliability and maintainability. No gameplay changes are intended; worlds, items, and network behavior carry over as-is.
+
+- World save data is now versioned with a sequential migration pipeline: old saves are upgraded in place on load, future format changes can never silently drop assignments or inventories, and saves from newer versions are detected and logged instead of being misread. Tag items also carry a data version that is migrated on read.
+- Worker behaviors now own their runtime state through lifecycle hooks (`onWorkerCleanup`/`onRuntimeReset`): the execution engine no longer hardcodes per-behavior cleanup, so leftover per-worker caches can never be missed when a role is added or changed.
+- The worker state machine was split into per-phase handlers (Idle, Navigating, Arriving, Working, Depositing) dispatched through a phase registry — same behavior, but each phase is now a focused, independently readable unit.
+- The networking layer was decomposed from one 632-line file into one file per packet with a thin registration facade; packet ids, wire formats, and registration order are unchanged.
+- Command Post GUI sync no longer uses hand-maintained property index arithmetic: a single typed property layout (`RouterSyncedProperties`) is shared by server and client, eliminating the bug class behind the 0.2.48 "wrong role card" fix.
+- The Command Post screen was decomposed from a 1,417-line monolith into per-mode panels (source, jobs, policy, logistics) behind a small panel interface, with shared state in one context object — rendering, input priority, and behavior are unchanged.
+- Tag roles are now defined by an identifier-backed definition registry: the `TagType` enum holds only the stable id, while capabilities, presentation, and feedback live in overridable `TagTypeDefinition`s — addons can reconfigure a role without touching the enum.
+- Hardened concurrency and memory behavior: worksite/controller index updates are now atomic, duplicate behavior registrations are logged, and orphaned worker states that were never ticked are now aged out instead of lingering forever.
+- Added the mod's first unit test suite (mastery tier math, assignment profile rules, tag definition integrity, save migrations) wired into the common module's Gradle test task.
+
+## 0.2.48
+
+- Fixed the Policy view targeting the wrong role card: when tag cards sat in non-contiguous slots, the quick chips and Edit button could silently fail or edit a different card than the one shown.
+- The Policy view now shows every role card instead of only the first four: scroll the panel to page through all nine slots, with a row counter showing where you are.
+- Policy quick actions now respect what each role actually supports, matching the role editor: Target and Run chips only appear (and only apply) for roles that use target lists, and filter toggles are rejected for roles without filters — no more editing settings that silently did nothing.
+- Pruned dead code left from half-finished optimizations: the never-read worker slot-memory and deposit miss-cache fields, three reserved-but-empty Command Post sync values, and three orphaned translation strings.
+
+## 0.2.47
+
+- Finished the crew assignment modes that previously did nothing: Reserved workers are now truly held out of Command Post labor, workers with general fallback locked are no longer auto-drafted into new roles, and Preferred workers are dispatched first — with the best mastery for the role winning the slot and Restricted workers only taking roles they have actually mastered.
+- Standby crew now report why they are waiting: Reserved, Held (fallback locked), and Standby (Command Post at its worker cap) statuses are finally used, shown in crew tooltips and worker overlays with translatable detail lines.
+- Assignment mode choices now survive role changes, releases, and world reloads: profiles persist independently of the worker's current role card and are reset only when a Pokemon is removed from the post's crew.
+- Wired up the previously dormant tag policy analyzer: the Jobs view now flags role cards that need a binding, block every item, or compete for the same target, and the Policy view shows a severity marker per role card with full explanations on hover — all localized.
+- Command Posts now honor the `distantTickMultiplier` config that previously did nothing: worksites with no players nearby dispatch on a slower cadence, cutting idle server load.
+- Removed dead code: the unused texture generator script and its orphaned widgets.png, unused ContainerFinder helpers, and the never-produced IDLE movement purpose.
+
+## 0.2.46
+
+- Polished the tag binding flow: binding a container, block, or work area now plays a lodestone-style lock chime with a particle pop at the target, area corners chime when set, extra targets ping as they are added or removed, clearing a binding has its own sound, and trying to bind a non-container plays a clear "no" cue instead of failing with text alone.
+- Holding a bound tag now softly highlights what it points at: the bound block, container, and extra targets glow with end-rod particles, work areas mark all their corners, and a pending first corner flickers with flame until the box is finished — visible only to the holder and only within render range.
+- Made tag editing discoverable from the item itself: every tag tooltip now says "Use in hand to edit filter & behavior", and the Command Post edit hint was reworded to explain the hover + R shortcut instead of assuming players already knew it.
+- Localized the last hardcoded player-facing strings: all ~50 worker status detail messages (cooldowns, pathing problems, deposit failures, redstone gating, eco idle) and the crew panel status fallbacks now live in en_us.json, so worker diagnostics can finally be translated like the rest of the mod.
+- Clarified the augment install hint to spell out where augments actually go: a tag's augment slots in the Assign Tag screen or the Command Post Jobs view.
+
+## 0.2.45
+
+- Added Work Mastery: every worker Pokemon now earns persistent, per-role mastery for each job it completes, climbing from Novice through Apprentice, Adept, and Expert up to Master.
+- Mastery tiers grant real perks — Apprentice workers shave 5% off their work cooldown scaling to 25% at Master, and Adept and above gain bonus search range (up to +8 blocks) — all stacking with augments and applied instantly on tier-up.
+- Tier-ups are celebrated in-world with a totem particle burst and level-up chime at the worker, and mastery follows the Pokemon itself, surviving reassignment, re-leasing, and moves between Command Posts.
+- The Command Post crew view now shows mastery everywhere it matters: the selected-worker panel renders tier-colored role titles like "Adept Harvester", and crew tooltips show tier, completed jobs, and progress toward the next rank.
+
 ## 0.2.44
 
+- Hardened save/load reliability: corrupted item NBT entries in Pokemon inventories, Command Post inventories, and tag filters are now skipped safely instead of risking a crash or aborting the rest of the load, and out-of-range inventory slots are ignored on load.
+- Removed the remaining fragile non-null assertions from the worker deposit flow and crew snapshot status labels; a worker whose deposit target disappears mid-trip now cleanly re-enters target search instead of risking a tick crash.
+- Client crew and source snapshot caches are now fully cleared on world or dimension change so stale Command Post data from a previous world can never leak into the next session.
+- Made every player-facing string translatable: tag and augment tooltips, tag binding action-bar messages, Command Post screen tooltips, filter and assignment screen tooltips, and screen-handler warnings now use lang keys, expanding en_us.json from 27 to over 120 entries so the mod can be localized.
 - Kept Command Post-managed workers depositing back into router storage, hold their cargo cleanly when Command Post storage is unavailable or full, and tightened dropper target validation so it only uses valid bound or controller destinations.
 - Added `/cobblepals status workers` and `/cobblepals status blocked` summaries for live worker debugging, and reset Command Post runtime state against real router blocks on command and server stop.
 - Cleared dead worker runtime and router assignment state immediately and switched breaker block destruction to the server break path so protected or failed targets retry cleanly instead of desyncing.

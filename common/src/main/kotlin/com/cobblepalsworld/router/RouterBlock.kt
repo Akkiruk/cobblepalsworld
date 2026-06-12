@@ -52,7 +52,7 @@ class RouterBlock(settings: Settings) : BlockWithEntity(settings) {
         val blockEntity = world.getBlockEntity(pos) as? RouterBlockEntity ?: return ActionResult.PASS
         if (!blockEntity.canAccess(player)) {
             if (!world.isClient) {
-                player.sendMessage(Text.literal("This command post is secured to another player.").formatted(Formatting.RED), true)
+                player.sendMessage(Text.translatable("message.cobblepalsworld.post_secured").formatted(Formatting.RED), true)
             }
             return ActionResult.SUCCESS
         }

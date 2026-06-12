@@ -1,14 +1,15 @@
 package com.cobblepalsworld.gui.crew
 
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.config.ConfigManager
 import com.cobblepalsworld.crew.CommandPostCrewLifecycle
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
+import com.cobblepalsworld.mastery.MasteryTier
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.assignment.TagAssignmentManager
-import com.cobblepalsworld.assignment.WorkerAssignmentMode
 import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld
@@ -22,7 +23,7 @@ object CommandPostCrewSnapshotFactory {
             .map { member ->
                 val pokemon = CommandPostCrewLifecycle.resolvePokemon(world, member, fallbackOwnerUuid)
                 val assignmentView = TagAssignmentManager.getView(member.pokemonId)
-                val state = StateManager.get(member.pokemonId)
+                val state = WorkerSessionManager.getState(member.pokemonId)
                 val inventory = InventoryManager.get(member.pokemonId)
                 var carriedItemCount = 0
                 var carriedSlotCount = 0
@@ -41,6 +42,10 @@ object CommandPostCrewSnapshotFactory {
                 }
                 val entity = pokemon?.entity
                 val hasEntity = entity != null && entity.world === world && !entity.isRemoved
+                val tagType = assignmentView?.tag?.type
+                val profile = TagAssignmentManager.getProfile(member.pokemonId)
+                val masteryJobs = tagType?.let { WorkMasteryManager.jobsCompleted(member.pokemonId, it) } ?: 0L
+                val masteryTier = tagType?.let { WorkMasteryManager.tierFor(member.pokemonId, it) } ?: MasteryTier.NOVICE
                 CommandPostCrewMemberSnapshot(
                     pokemonId = member.pokemonId,
                     displayName = pokemon?.getDisplayName(false)?.string ?: member.displayName,
@@ -62,14 +67,16 @@ object CommandPostCrewSnapshotFactory {
                     carriedItemCount = carriedItemCount,
                     carriedSlotCount = carriedSlotCount,
                     cargoSummary = if (carriedDescriptions.isEmpty()) "Cargo empty" else carriedDescriptions.joinToString(", "),
-                    assignmentModeOrdinal = assignmentView?.assignmentProfile?.mode?.ordinal ?: WorkerAssignmentMode.GENERAL.ordinal,
-                    allowFallback = assignmentView?.assignmentProfile?.allowFallback ?: true
+                    assignmentModeOrdinal = profile.mode.ordinal,
+                    allowFallback = profile.allowFallback,
+                    masteryTierOrdinal = masteryTier.ordinal,
+                    masteryJobs = masteryJobs
                 )
             }
             .sortedWith(compareBy<CommandPostCrewMemberSnapshot> { it.sortRank() }.thenBy { it.displayName.lowercase() })
 
         val assignedCount = (0 until RouterBlockEntity.MODULE_SLOT_COUNT).count { router.assignedWorker(it) != null }
-        val activeCount = members.count { member -> StateManager.get(member.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true }
+        val activeCount = members.count { member -> WorkerSessionManager.getState(member.pokemonId)?.phase?.let { it != WorkerPhase.IDLE } == true }
         return CommandPostCrewSnapshot(
             routerPos = routerPos,
             members = members,

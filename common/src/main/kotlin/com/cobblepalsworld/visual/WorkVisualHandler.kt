@@ -33,6 +33,13 @@ object WorkVisualHandler {
         spawnParticlesAtEntity(world, entity, ParticleConfig.getWorkParticle(tagType), 2)
     }
 
+    /** Celebration burst when a worker reaches a new mastery tier. */
+    fun onMasteryTierUp(world: World, entity: PokemonEntity) {
+        spawnParticlesAtEntity(world, entity, ParticleTypes.TOTEM_OF_UNDYING, 24)
+        spawnParticlesAtEntity(world, entity, ParticleTypes.HAPPY_VILLAGER, 8)
+        world.playSound(null, entity.blockPos, SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.NEUTRAL, 0.7f, 1.1f)
+    }
+
     fun onBlocked(world: World, entity: PokemonEntity, reason: WorkerStatusReason) {
         val particle = when (reason) {
             WorkerStatusReason.REDSTONE_OFF -> ParticleTypes.ELECTRIC_SPARK

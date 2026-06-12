@@ -72,32 +72,36 @@ class RouterScreenHandler : ScreenHandler {
 
     constructor(syncId: Int, playerInventory: PlayerInventory) : super(MenuTypes.ROUTER.get(), syncId) {
         this.routerInventory = SimpleInventory(RouterBlockEntity.TOTAL_SLOTS)
-        this.routerData = ArrayPropertyDelegate(28)
+        this.routerData = ArrayPropertyDelegate(RouterSyncedProperties.totalCount)
         setupSlots(playerInventory)
     }
 
     constructor(syncId: Int, playerInventory: PlayerInventory, routerInventory: Inventory, routerData: PropertyDelegate) : super(MenuTypes.ROUTER.get(), syncId) {
         checkSize(routerInventory, RouterBlockEntity.TOTAL_SLOTS)
-        checkDataCount(routerData, 28)
+        checkDataCount(routerData, RouterSyncedProperties.totalCount)
         this.routerInventory = routerInventory
         this.routerData = routerData
         setupSlots(playerInventory)
     }
 
-    val linked: Boolean get() = routerData.get(0) != 0
-    val rosterCount: Int get() = routerData.get(1)
-    val assignedCount: Int get() = routerData.get(2)
-    val activeCount: Int get() = routerData.get(3)
-    val routerPos: BlockPos get() = BlockPos(routerData.get(25), routerData.get(26), routerData.get(27))
+    val linked: Boolean get() = RouterSyncedProperties.LINKED.getBoolean(routerData)
+    val rosterCount: Int get() = RouterSyncedProperties.ROSTER_COUNT.get(routerData)
+    val assignedCount: Int get() = RouterSyncedProperties.ASSIGNED_COUNT.get(routerData)
+    val activeCount: Int get() = RouterSyncedProperties.ACTIVE_COUNT.get(routerData)
+    val routerPos: BlockPos get() = BlockPos(
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.X),
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.Y),
+        RouterSyncedProperties.POS_COMPONENT.get(routerData, RouterSyncedProperties.PosComponent.Z)
+    )
 
     fun moduleAssigned(moduleIndex: Int): Boolean {
         if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
-        return routerData.get(7 + moduleIndex) != 0
+        return RouterSyncedProperties.MODULE_ASSIGNED.getBoolean(routerData, moduleIndex)
     }
 
     fun moduleActive(moduleIndex: Int): Boolean {
         if (moduleIndex !in 0 until RouterBlockEntity.MODULE_SLOT_COUNT) return false
-        return routerData.get(16 + moduleIndex) != 0
+        return RouterSyncedProperties.MODULE_ACTIVE.getBoolean(routerData, moduleIndex)
     }
 
     private fun setupSlots(playerInventory: PlayerInventory) {
@@ -203,26 +207,26 @@ class RouterScreenHandler : ScreenHandler {
 
         return mutatePolicyRow(player, rowIndex) { spec ->
             when (action) {
-                POLICY_ACTION_TOGGLE_WHITELIST -> spec.copy(filter = spec.filter.copy(whitelist = !spec.filter.whitelist))
-                POLICY_ACTION_TOGGLE_NBT -> spec.copy(filter = spec.filter.copy(matchNbt = !spec.filter.matchNbt))
-                POLICY_ACTION_CYCLE_MATCH -> spec.copy(filter = spec.filter.copy(matchMode = nextMatchMode(spec.filter.matchMode)))
+                POLICY_ACTION_TOGGLE_WHITELIST -> if (spec.type.usesFilter) spec.copy(filter = spec.filter.copy(whitelist = !spec.filter.whitelist)) else return@mutatePolicyRow null
+                POLICY_ACTION_TOGGLE_NBT -> if (spec.type.usesFilter) spec.copy(filter = spec.filter.copy(matchNbt = !spec.filter.matchNbt)) else return@mutatePolicyRow null
+                POLICY_ACTION_CYCLE_MATCH -> if (spec.type.usesFilter) spec.copy(filter = spec.filter.copy(matchMode = nextMatchMode(spec.filter.matchMode))) else return@mutatePolicyRow null
                 POLICY_ACTION_CYCLE_SIGNAL -> spec.copy(settings = spec.settings.copy(redstoneMode = nextRedstoneMode(spec.settings.redstoneMode)))
-                POLICY_ACTION_CYCLE_TARGET -> spec.copy(settings = spec.settings.copy(targetStrategy = nextTargetStrategy(spec.settings.targetStrategy)))
-                POLICY_ACTION_TOGGLE_RUN -> spec.copy(settings = spec.settings.copy(terminateAfterSuccess = !spec.settings.terminateAfterSuccess))
-                POLICY_ACTION_CYCLE_REGULATOR -> spec.copy(settings = spec.settings.copy(regulatorAmount = nextRegulator(spec.settings.regulatorAmount)))
+                POLICY_ACTION_CYCLE_TARGET -> if (spec.type.supportsTargetList) spec.copy(settings = spec.settings.copy(targetStrategy = nextTargetStrategy(spec.settings.targetStrategy))) else return@mutatePolicyRow null
+                POLICY_ACTION_TOGGLE_RUN -> if (spec.type.supportsTargetList) spec.copy(settings = spec.settings.copy(terminateAfterSuccess = !spec.settings.terminateAfterSuccess)) else return@mutatePolicyRow null
+                POLICY_ACTION_CYCLE_REGULATOR -> if (spec.type.supportsTargetList) spec.copy(settings = spec.settings.copy(regulatorAmount = nextRegulator(spec.settings.regulatorAmount))) else return@mutatePolicyRow null
                 else -> spec
             }
         }
     }
 
-    private fun mutatePolicyRow(player: PlayerEntity, rowIndex: Int, transform: (TagSpec) -> TagSpec): Boolean {
+    private fun mutatePolicyRow(player: PlayerEntity, rowIndex: Int, transform: (TagSpec) -> TagSpec?): Boolean {
         val moduleIndex = policyModules().getOrNull(rowIndex)?.moduleIndex ?: return false
         val inventorySlot = RouterBlockEntity.MODULE_SLOT_START + moduleIndex
         val stack = routerInventory.getStack(inventorySlot)
         val tagItem = stack.item as? TagItem ?: return false
         val registries = player.world.registryManager
         val original = TagItem.getSpec(stack, registries) ?: TagSpec(type = tagItem.tagType)
-        val updated = transform(original)
+        val updated = transform(original) ?: return false
         TagItem.setSpec(stack, updated, registries)
         (routerInventory as? RouterBlockEntity)?.markModuleSlotChanged(inventorySlot)
         routerInventory.markDirty()

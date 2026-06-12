@@ -61,11 +61,11 @@ object BreakerBehavior : TagBehavior {
         worksiteOrigins[pokemonId] = origin
     }
 
-    fun clearWorksiteOrigin(pokemonId: java.util.UUID) {
+    override fun onWorkerCleanup(pokemonId: java.util.UUID) {
         worksiteOrigins.remove(pokemonId)
     }
 
-    fun clearAllWorksiteOrigins() {
+    override fun onRuntimeReset() {
         worksiteOrigins.clear()
     }
 

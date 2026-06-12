@@ -5,7 +5,7 @@ import com.cobblepalsworld.augment.AugmentSet
 import com.cobblepalsworld.augment.AugmentType
 import com.cobblepalsworld.gui.MenuTypes
 import com.cobblepalsworld.behavior.TagExecutionEngine
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
 import com.cobblepalsworld.gui.filter.TagFilterScreenHandler
 import com.cobblepalsworld.inventory.InventoryManager
@@ -86,7 +86,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         this.invData = object : PropertyDelegate {
             override fun get(index: Int): Int {
                 val pokemonInv = InventoryManager.get(pokemonId)
-                val workerState = StateManager.get(pokemonId)
+                val workerState = WorkerSessionManager.getState(pokemonId)
                 val isManagedByCommandPost = TagAssignmentManager.getControllerBinding(pokemonId) != null
                 val assignmentProfile = TagAssignmentManager.getProfile(pokemonId)
                 return when (index) {
@@ -282,7 +282,7 @@ class PokemonTagScreenHandler : ScreenHandler {
         if (!player.world.isClient && currentPokemonId != null) {
             if (TagAssignmentManager.getControllerBinding(currentPokemonId) != null) {
                 player.sendMessage(
-                    net.minecraft.text.Text.literal("This Pokemon is currently managed by a linked Command Post.")
+                    net.minecraft.text.Text.translatable("message.cobblepalsworld.pokemon_managed")
                         .formatted(net.minecraft.util.Formatting.YELLOW),
                     true
                 )

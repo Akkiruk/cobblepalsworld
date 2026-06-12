@@ -19,8 +19,10 @@ data class TagPolicyLine(
 
 data class TagPolicyIssue(
     val severity: TagPolicySeverity,
-    val label: String,
-    val detail: String,
+    /** Translation key for the short issue label. */
+    val labelKey: String,
+    /** Translation key for the longer explanation. */
+    val detailKey: String,
     val moduleIndexes: Set<Int>
 )
 
@@ -41,7 +43,7 @@ object TagPolicyAnalyzer {
         }
 
         return issues.mapValues { (_, moduleIssues) ->
-            moduleIssues.sortedWith(compareBy<TagPolicyIssue> { severityRank(it.severity) }.thenBy { it.label })
+            moduleIssues.sortedWith(compareBy<TagPolicyIssue> { severityRank(it.severity) }.thenBy { it.labelKey })
         }
     }
 
@@ -57,8 +59,8 @@ object TagPolicyAnalyzer {
         if (line.tagType.supportsBinding && spec.boundPos == null && spec.boundArea == null) {
             issues += TagPolicyIssue(
                 severity = TagPolicySeverity.BLOCKING,
-                label = "Needs target",
-                detail = "Bind this role card before assigning crew to it.",
+                labelKey = "gui.cobblepalsworld.policy_issue.needs_target",
+                detailKey = "gui.cobblepalsworld.policy_issue.needs_target.detail",
                 moduleIndexes = setOf(line.moduleIndex)
             )
         }
@@ -67,8 +69,8 @@ object TagPolicyAnalyzer {
             if (filter.whitelist && filter.isEmpty()) {
                 issues += TagPolicyIssue(
                     severity = TagPolicySeverity.BLOCKING,
-                    label = "Empty allow",
-                    detail = "Whitelist mode with no item, tag, or mod rules blocks every item.",
+                    labelKey = "gui.cobblepalsworld.policy_issue.empty_allow",
+                    detailKey = "gui.cobblepalsworld.policy_issue.empty_allow.detail",
                     moduleIndexes = setOf(line.moduleIndex)
                 )
             }
@@ -76,8 +78,8 @@ object TagPolicyAnalyzer {
             if (filter.matchMode == FilterMatchMode.ALL && activeFilterGroups(filter) > 1) {
                 issues += TagPolicyIssue(
                     severity = TagPolicySeverity.WARNING,
-                    label = "Strict match",
-                    detail = "ALL mode requires the same item to satisfy every enabled filter group.",
+                    labelKey = "gui.cobblepalsworld.policy_issue.strict_match",
+                    detailKey = "gui.cobblepalsworld.policy_issue.strict_match.detail",
                     moduleIndexes = setOf(line.moduleIndex)
                 )
             }
@@ -98,15 +100,15 @@ object TagPolicyAnalyzer {
                 if (sameConcreteTarget(first, second) && filtersOverlap(first.spec.filter, second.spec.filter)) {
                     issues += TagPolicyIssue(
                         severity = TagPolicySeverity.WARNING,
-                        label = "Same target",
-                        detail = "These tag cards point at the same target and may compete for the same work.",
+                        labelKey = "gui.cobblepalsworld.policy_issue.same_target",
+                        detailKey = "gui.cobblepalsworld.policy_issue.same_target.detail",
                         moduleIndexes = modules
                     )
                 } else if (filtersOverlap(first.spec.filter, second.spec.filter)) {
                     issues += TagPolicyIssue(
                         severity = TagPolicySeverity.INFO,
-                        label = "Shared filter",
-                        detail = "Another role card matches some of the same items, tags, or mods.",
+                        labelKey = "gui.cobblepalsworld.policy_issue.shared_filter",
+                        detailKey = "gui.cobblepalsworld.policy_issue.shared_filter.detail",
                         moduleIndexes = modules
                     )
                 }

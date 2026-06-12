@@ -58,4 +58,12 @@ data class BoundArea(
     fun height(): Int = max.y - min.y + 1
 
     fun depth(): Int = max.z - min.z + 1
+
+    /** The distinct corner positions of this area, used for in-world binding previews. */
+    fun corners(): List<BlockPos> {
+        val xs = if (min.x == max.x) listOf(min.x) else listOf(min.x, max.x)
+        val ys = if (min.y == max.y) listOf(min.y) else listOf(min.y, max.y)
+        val zs = if (min.z == max.z) listOf(min.z) else listOf(min.z, max.z)
+        return xs.flatMap { cx -> ys.flatMap { cy -> zs.map { cz -> BlockPos(cx, cy, cz) } } }
+    }
 }

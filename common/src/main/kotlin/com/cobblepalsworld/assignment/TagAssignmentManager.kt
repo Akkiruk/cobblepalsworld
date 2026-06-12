@@ -74,5 +74,11 @@ object TagAssignmentManager {
         WorkerSessionManager.forEachAssignmentRecord(action)
     }
 
+    fun forEachCustomProfile(action: (UUID, WorkerAssignmentProfile) -> Unit) {
+        WorkerSessionManager.forEachCustomProfile(action)
+    }
+
+    fun resetProfile(pokemonId: UUID) = WorkerSessionManager.resetAssignmentProfile(pokemonId)
+
     fun clear() = WorkerSessionManager.clearAssignments()
 }

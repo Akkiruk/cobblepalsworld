@@ -2,12 +2,13 @@ package com.cobblepalsworld.persistence
 
 import com.cobblepalsworld.CobblePalsWorld
 import com.cobblepalsworld.augment.AugmentSerializer
-import com.cobblepalsworld.behavior.state.StateManager
+import com.cobblepalsworld.session.WorkerSessionManager
 import com.cobblepalsworld.crew.CommandPostCrewBinding
 import com.cobblepalsworld.crew.CommandPostCrewMember
 import com.cobblepalsworld.crew.CommandPostCrewManager
 import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.inventory.PokemonInventory
+import com.cobblepalsworld.mastery.WorkMasteryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.assignment.ControllerBinding
 import com.cobblepalsworld.assignment.TagAssignmentManager
@@ -41,6 +42,8 @@ private data class AssignmentRecord(
 class CobblePalsSaveData : PersistentState() {
 
     override fun writeNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): NbtCompound {
+        SaveMigrations.stamp(nbt)
+
         // Save tag assignments
         val assignmentsNbt = NbtCompound()
         for ((uuid, record) in getAllAssignments()) {
@@ -80,6 +83,17 @@ class CobblePalsSaveData : PersistentState() {
             assignmentsNbt.put(uuid.toString(), tagNbt)
         }
         nbt.put("Assignments", assignmentsNbt)
+
+        // Save assignment profiles (Reserved/Preferred/fallback) for every worker that
+        // customized one, including crew members that currently hold no role card.
+        val profilesNbt = NbtCompound()
+        TagAssignmentManager.forEachCustomProfile { uuid, profile ->
+            val profileNbt = NbtCompound()
+            profileNbt.putInt("Mode", profile.mode.ordinal)
+            profileNbt.putBoolean("AllowFallback", profile.allowFallback)
+            profilesNbt.put(uuid.toString(), profileNbt)
+        }
+        nbt.put("WorkerProfiles", profilesNbt)
 
         // Save inventories
         val inventoriesNbt = NbtCompound()
@@ -132,6 +146,8 @@ class CobblePalsSaveData : PersistentState() {
         }
         nbt.put("CommandPostCrews", commandPostCrewsNbt)
 
+        WorkMasteryManager.writeNbt(nbt)
+
         return nbt
     }
 
@@ -156,11 +172,19 @@ class CobblePalsSaveData : PersistentState() {
         fun fromNbt(nbt: NbtCompound, registries: RegistryWrapper.WrapperLookup): CobblePalsSaveData {
             val data = CobblePalsSaveData()
 
+            SaveMigrations.upgrade(nbt)
+
             TagAssignmentManager.clear()
             CommandPostCrewManager.clear()
             InventoryManager.clear()
-            StateManager.clear()
+            WorkerSessionManager.clearStates()
             ClaimManager.clear()
+
+            try {
+                WorkMasteryManager.readNbt(nbt)
+            } catch (e: Exception) {
+                CobblePalsWorld.LOGGER.warn("Failed to load work mastery records", e)
+            }
 
             // Load assignments
             if (nbt.contains("Assignments")) {
@@ -228,6 +252,24 @@ class CobblePalsSaveData : PersistentState() {
                 }
             }
 
+            // Load standalone assignment profiles after per-assignment ones so they win.
+            if (nbt.contains("WorkerProfiles")) {
+                val profilesNbt = nbt.getCompound("WorkerProfiles")
+                for (key in profilesNbt.keys) {
+                    try {
+                        val uuid = UUID.fromString(key)
+                        val profileNbt = profilesNbt.getCompound(key)
+                        TagAssignmentManager.updateProfile(
+                            pokemonId = uuid,
+                            mode = WorkerAssignmentMode.fromOrdinal(profileNbt.getInt("Mode")),
+                            allowFallback = if (profileNbt.contains("AllowFallback")) profileNbt.getBoolean("AllowFallback") else true
+                        )
+                    } catch (e: Exception) {
+                        CobblePalsWorld.LOGGER.warn("Failed to load worker profile for $key", e)
+                    }
+                }
+            }
+
             if (nbt.contains("CommandPostCrews")) {
                 val crewsNbt = nbt.getList("CommandPostCrews", 10)
                 for (index in 0 until crewsNbt.size) {
@@ -281,7 +323,9 @@ class CobblePalsSaveData : PersistentState() {
                         for (i in 0 until itemsNbt.size) {
                             val slotNbt = itemsNbt.getCompound(i)
                             val slot = slotNbt.getByte("Slot").toInt()
-                            val stack = ItemStack.fromNbt(registries, slotNbt.get("Item")!!)
+                            val itemNbt = slotNbt.get("Item") ?: continue
+                            if (slot !in 0 until size) continue
+                            val stack = ItemStack.fromNbt(registries, itemNbt)
                             stack.ifPresent { inventory.setStack(slot, it) }
                         }
                         InventoryManager.put(uuid, inventory)

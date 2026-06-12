@@ -142,6 +142,18 @@ object WorkerSessionManager {
         }
     }
 
+    fun forEachCustomProfile(action: (UUID, WorkerAssignmentProfile) -> Unit) {
+        sessions.forEach { (uuid, session) ->
+            if (!session.assignmentProfile.isDefault()) action(uuid, session.assignmentProfile)
+        }
+    }
+
+    fun resetAssignmentProfile(pokemonId: UUID) {
+        val session = sessions[pokemonId] ?: return
+        session.assignmentProfile = WorkerAssignmentProfile()
+        discardIfEmpty(pokemonId, session)
+    }
+
     fun clearAssignments() {
         sessions.forEach { (uuid, session) ->
             removeFromWorksiteIndex(uuid, session.worksiteBinding)
@@ -169,7 +181,13 @@ object WorkerSessionManager {
         val removed = mutableSetOf<UUID>()
         sessions.forEach { (pokemonId, session) ->
             val state = session.state ?: return@forEach
-            val isStale = state.lastSeenTick > 0L && currentTime - state.lastSeenTick > staleAfterTicks
+            if (state.lastSeenTick <= 0L) {
+                // Never ticked since creation: start its staleness clock now so an
+                // orphaned state can't sit in memory forever.
+                state.lastSeenTick = currentTime
+                return@forEach
+            }
+            val isStale = currentTime - state.lastSeenTick > staleAfterTicks
             if (!isStale) return@forEach
 
             session.state = null
@@ -267,14 +285,13 @@ object WorkerSessionManager {
         session.tag = null
         session.worksiteBinding = null
         session.controllerBinding = null
-        session.assignmentProfile = WorkerAssignmentProfile()
         discardIfEmpty(pokemonId, session)
         return tag
     }
 
     private fun addToWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
         binding ?: return
-        worksiteIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+        addToIndex(worksiteIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
     private fun removeFromWorksiteIndex(pokemonId: UUID, binding: WorksiteBinding?) {
@@ -284,7 +301,7 @@ object WorkerSessionManager {
 
     private fun addToControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
         binding ?: return
-        controllerIndex.getOrPut(BindingIndexKey(binding.dimensionId, binding.pos.toImmutable())) { ConcurrentHashMap.newKeySet() }.add(pokemonId)
+        addToIndex(controllerIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
     private fun removeFromControllerIndex(pokemonId: UUID, binding: ControllerBinding?) {
@@ -292,11 +309,18 @@ object WorkerSessionManager {
         removeFromIndex(controllerIndex, BindingIndexKey(binding.dimensionId, binding.pos.toImmutable()), pokemonId)
     }
 
+    private fun addToIndex(index: ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>, key: BindingIndexKey, pokemonId: UUID) {
+        // compute() makes membership updates atomic with map insertion, so a
+        // concurrent removeFromIndex can never drop an in-flight registration.
+        index.compute(key) { _, existing ->
+            (existing ?: ConcurrentHashMap.newKeySet()).also { it.add(pokemonId) }
+        }
+    }
+
     private fun removeFromIndex(index: ConcurrentHashMap<BindingIndexKey, MutableSet<UUID>>, key: BindingIndexKey, pokemonId: UUID) {
-        val entries = index[key] ?: return
-        entries.remove(pokemonId)
-        if (entries.isEmpty()) {
-            index.remove(key, entries)
+        index.computeIfPresent(key) { _, entries ->
+            entries.remove(pokemonId)
+            if (entries.isEmpty()) null else entries
         }
     }
 
@@ -305,6 +329,9 @@ object WorkerSessionManager {
             return
         }
         if (session.worksiteBinding != null || session.controllerBinding != null) {
+            return
+        }
+        if (!session.assignmentProfile.isDefault()) {
             return
         }
         sessions.remove(pokemonId, session)

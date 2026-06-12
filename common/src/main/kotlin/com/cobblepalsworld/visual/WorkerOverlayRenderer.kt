@@ -3,7 +3,9 @@ package com.cobblepalsworld.visual
 import com.cobblepalsworld.behavior.state.WorkerPhase
 import com.cobblepalsworld.behavior.state.WorkerStatusKind
 import com.cobblepalsworld.behavior.state.WorkerStatusReason
-import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.gui.crew.CommandPostCrewSnapshotCache
+import com.cobblepalsworld.gui.crew.CrewSourceSnapshotCache
+import com.cobblepalsworld.networking.packets.WorkerVisualSnapshot
 import com.cobblepalsworld.tag.TagRegistry
 import com.cobblepalsworld.tag.TagType
 import com.mojang.blaze3d.systems.RenderSystem
@@ -38,7 +40,7 @@ object WorkerOverlayRenderer {
     private val cargoStackCache = linkedMapOf<String, ItemStack>()
     private var worldKey: String? = null
 
-    fun replaceWorksiteVisuals(worksitePos: BlockPos, visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>) {
+    fun replaceWorksiteVisuals(worksitePos: BlockPos, visuals: List<WorkerVisualSnapshot>) {
         val client = MinecraftClient.getInstance()
         val world = client.world ?: return
         syncWorld(world.registryKey.value.toString())
@@ -111,7 +113,7 @@ object WorkerOverlayRenderer {
         client: MinecraftClient,
         matrices: MatrixStack,
         vertexConsumers: VertexConsumerProvider.Immediate,
-        snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
+        snapshot: WorkerVisualSnapshot,
         x: Double,
         y: Double,
         z: Double,
@@ -126,9 +128,10 @@ object WorkerOverlayRenderer {
             drawLabel(client, matrices, vertexConsumers, snapshot.statusLabel(), x, y + 0.18, z, labelColor(snapshot))
         }
 
-        if (!snapshot.hasCargo()) return
+        val carriedItemId = snapshot.primaryCarriedItemId
+        if (carriedItemId.isNullOrBlank() || snapshot.carriedItemCount <= 0) return
 
-        resolveCargoStack(snapshot.primaryCarriedItemId!!, snapshot.carriedItemCount)?.let { cargoStack ->
+        resolveCargoStack(carriedItemId, snapshot.carriedItemCount)?.let { cargoStack ->
             renderFloatingStack(client, matrices, vertexConsumers, cargoStack, x, y - 0.28, z, 0.34f, seed * 31)
             if (snapshot.carriedItemCount > 1) {
                 drawCount(client, matrices, vertexConsumers, snapshot.carriedItemCount.toString(), x, y - 0.51, z)
@@ -139,7 +142,7 @@ object WorkerOverlayRenderer {
     private fun drawIconBacking(
         client: MinecraftClient,
         matrices: MatrixStack,
-        snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
+        snapshot: WorkerVisualSnapshot,
         x: Double,
         y: Double,
         z: Double
@@ -297,31 +300,31 @@ object WorkerOverlayRenderer {
         }
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.phase(): WorkerPhase {
+    private fun WorkerVisualSnapshot.phase(): WorkerPhase {
         return WorkerPhase.entries.getOrElse(phaseOrdinal) { WorkerPhase.IDLE }
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusReason(): WorkerStatusReason {
+    private fun WorkerVisualSnapshot.statusReason(): WorkerStatusReason {
         return WorkerStatusReason.entries.getOrElse(statusReasonOrdinal) { WorkerStatusReason.READY }
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusKind(): WorkerStatusKind {
+    private fun WorkerVisualSnapshot.statusKind(): WorkerStatusKind {
         return statusReason().kind
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.hasCargo(): Boolean {
+    private fun WorkerVisualSnapshot.hasCargo(): Boolean {
         return !primaryCarriedItemId.isNullOrBlank() && carriedItemCount > 0
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.shouldShowStatusLabel(): Boolean {
+    private fun WorkerVisualSnapshot.shouldShowStatusLabel(): Boolean {
         return statusKind() == WorkerStatusKind.BLOCKED || statusKind() == WorkerStatusKind.STANDBY || statusReason() == WorkerStatusReason.PATH_BUDGET
     }
 
-    private fun CobblePalsNetworking.WorkerVisualSnapshot.statusLabel(): String {
+    private fun WorkerVisualSnapshot.statusLabel(): String {
         return statusReason().label
     }
 
-    private fun haloColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+    private fun haloColor(snapshot: WorkerVisualSnapshot): Int {
         return when (snapshot.statusKind()) {
             WorkerStatusKind.BLOCKED -> 0xE57373.toInt()
             WorkerStatusKind.STANDBY -> 0xB794F4.toInt()
@@ -330,7 +333,7 @@ object WorkerOverlayRenderer {
         }
     }
 
-    private fun familyColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+    private fun familyColor(snapshot: WorkerVisualSnapshot): Int {
         return when (TagType.fromId(snapshot.tagTypeId)) {
             TagType.BREAKER, TagType.HARVESTER, TagType.VACUUM -> 0x56CF7A
             TagType.SENDER, TagType.PULLER, TagType.DISTRIBUTOR, TagType.DROPPER, TagType.VOID -> 0x33C7C4
@@ -339,7 +342,7 @@ object WorkerOverlayRenderer {
         }
     }
 
-    private fun labelColor(snapshot: CobblePalsNetworking.WorkerVisualSnapshot): Int {
+    private fun labelColor(snapshot: WorkerVisualSnapshot): Int {
         return when (snapshot.statusKind()) {
             WorkerStatusKind.BLOCKED -> 0xFCA5A5.toInt()
             WorkerStatusKind.STANDBY -> 0xD6BCFA.toInt()
@@ -354,6 +357,8 @@ object WorkerOverlayRenderer {
         overlays.clear()
         tagStackCache.clear()
         cargoStackCache.clear()
+        CommandPostCrewSnapshotCache.clearAll()
+        CrewSourceSnapshotCache.clearAll()
     }
 
     private fun prune(now: Long) {
@@ -376,7 +381,7 @@ object WorkerOverlayRenderer {
 
     private data class OverlayEntry(
         val worksitePos: BlockPos,
-        val snapshot: CobblePalsNetworking.WorkerVisualSnapshot,
+        val snapshot: WorkerVisualSnapshot,
         val updatedAt: Long
     )
 }

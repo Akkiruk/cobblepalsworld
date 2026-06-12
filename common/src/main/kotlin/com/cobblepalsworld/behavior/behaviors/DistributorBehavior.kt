@@ -98,11 +98,11 @@ object DistributorBehavior : TagBehavior {
         return ContainerFinder.isContainer(world, target)
     }
 
-    fun cleanup(pokemonId: UUID) {
+    override fun onWorkerCleanup(pokemonId: UUID) {
         roundRobinIndex.remove(pokemonId)
     }
 
-    fun clearAllRuntimeState() {
+    override fun onRuntimeReset() {
         roundRobinIndex.clear()
     }
 

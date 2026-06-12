@@ -19,14 +19,6 @@ object ContainerFinder {
     private fun searchPositions(origin: BlockPos, range: Int): Iterable<BlockPos> =
         BlockPos.iterateOutwards(origin, range, range, range)
 
-    fun findClosest(world: World, origin: BlockPos, range: Int = 16): BlockPos? {
-        return findClosestMatching(world, origin, range)
-    }
-
-    fun findClosestExcluding(world: World, origin: BlockPos, range: Int = 16, exclude: Set<BlockPos>): BlockPos? {
-        return findClosestMatching(world, origin, range, exclude)
-    }
-
     fun findClosestMatching(
         world: World,
         origin: BlockPos,

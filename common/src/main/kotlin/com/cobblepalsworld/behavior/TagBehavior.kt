@@ -6,10 +6,25 @@ import com.cobblepalsworld.tag.TagInstance
 import com.cobblepalsworld.tag.TagType
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
+import java.util.UUID
 
 interface TagBehavior {
     val tagType: TagType
     val defaultRange: Int
+
+    /**
+     * Lifecycle hook: called when a worker's runtime state is being discarded
+     * (released, despawned, or pruned). Behaviors that keep per-worker runtime
+     * state (caches, cursors, origins) must clear it here. The engine never
+     * references concrete behaviors; it dispatches through this hook.
+     */
+    fun onWorkerCleanup(pokemonId: UUID) {}
+
+    /**
+     * Lifecycle hook: called when ALL runtime state is reset (server stop,
+     * world switch). Behaviors must drop every piece of global runtime state.
+     */
+    fun onRuntimeReset() {}
 
     /**
      * True for dual-phase behaviors that extract items for their OWN use (Sender, Placer,

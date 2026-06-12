@@ -6,7 +6,7 @@ import com.cobblepalsworld.inventory.InventoryManager
 import com.cobblepalsworld.navigation.ClaimManager
 import com.cobblepalsworld.navigation.NavigationBudget
 import com.cobblepalsworld.navigation.WorkerNavigationManager
-import com.cobblepalsworld.networking.CobblePalsNetworking
+import com.cobblepalsworld.networking.packets.WorkerVisualSnapshot
 import com.cobblepalsworld.assignment.TagAssignmentManager
 import com.cobblepalsworld.persistence.CobblePalsSaveData
 import net.minecraft.registry.RegistryKey
@@ -52,7 +52,7 @@ object ServerScaleRuntime {
     fun shouldSendWorksiteVisuals(
         world: ServerWorld,
         worksitePos: BlockPos,
-        visuals: List<CobblePalsNetworking.WorkerVisualSnapshot>
+        visuals: List<WorkerVisualSnapshot>
     ): Boolean {
         val key = WorldPosKey(world.registryKey, worksitePos.toImmutable())
         val signature = visuals.fold(visuals.size) { acc, visual -> 31 * acc + visual.hashCode() }

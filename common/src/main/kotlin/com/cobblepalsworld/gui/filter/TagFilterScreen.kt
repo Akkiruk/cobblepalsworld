@@ -191,19 +191,19 @@ class TagFilterScreen(
         val buttons = mutableListOf<PanelActionButton>()
         var top = 48
         if (handler.usesFilter) {
-            buttons += PanelActionButton("mode", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Mode", if (handler.isWhitelist) "Allow" else "Block", TagFilterScreenHandler.ACTION_TOGGLE_WHITELIST, handler.isWhitelist, listOf(Text.literal("Filter mode"), Text.literal(if (handler.isWhitelist) "Only matching items pass." else "Matching items are blocked.")))
+            buttons += PanelActionButton("mode", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Mode", if (handler.isWhitelist) "Allow" else "Block", TagFilterScreenHandler.ACTION_TOGGLE_WHITELIST, handler.isWhitelist, listOf(Text.translatable("gui.cobblepalsworld.filter_mode"), Text.translatable(if (handler.isWhitelist) "gui.cobblepalsworld.filter_mode.allow" else "gui.cobblepalsworld.filter_mode.block")))
             top += 18
-            buttons += PanelActionButton("nbt", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "NBT", if (handler.isMatchNbt) "Exact" else "Loose", TagFilterScreenHandler.ACTION_TOGGLE_NBT, handler.isMatchNbt, listOf(Text.literal("NBT matching"), Text.literal(if (handler.isMatchNbt) "Require exact item data." else "Compare items loosely.")))
+            buttons += PanelActionButton("nbt", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "NBT", if (handler.isMatchNbt) "Exact" else "Loose", TagFilterScreenHandler.ACTION_TOGGLE_NBT, handler.isMatchNbt, listOf(Text.translatable("gui.cobblepalsworld.nbt_matching"), Text.translatable(if (handler.isMatchNbt) "gui.cobblepalsworld.nbt_matching.exact" else "gui.cobblepalsworld.nbt_matching.loose")))
             top += 18
-            buttons += PanelActionButton("match", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Match", compactValue(handler.matchMode.name), TagFilterScreenHandler.ACTION_CYCLE_MATCH, true, listOf(Text.literal("Match rule"), Text.literal(matchModeHelp())))
+            buttons += PanelActionButton("match", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Match", compactValue(handler.matchMode.name), TagFilterScreenHandler.ACTION_CYCLE_MATCH, true, listOf(Text.translatable("gui.cobblepalsworld.match_rule"), Text.literal(matchModeHelp())))
             top += 18
         }
-        buttons += PanelActionButton("signal", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Signal", compactValue(handler.redstoneMode.id), TagFilterScreenHandler.ACTION_CYCLE_REDSTONE, handler.redstoneMode != com.cobblepalsworld.tag.RedstoneControlMode.ALWAYS, listOf(Text.literal("Redstone control"), Text.literal(humanValue(handler.redstoneMode.id))))
+        buttons += PanelActionButton("signal", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Signal", compactValue(handler.redstoneMode.id), TagFilterScreenHandler.ACTION_CYCLE_REDSTONE, handler.redstoneMode != com.cobblepalsworld.tag.RedstoneControlMode.ALWAYS, listOf(Text.translatable("gui.cobblepalsworld.redstone_control"), Text.literal(humanValue(handler.redstoneMode.id))))
         top += 18
         if (handler.tagType?.supportsTargetList == true) {
-            buttons += PanelActionButton("target", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Target", compactValue(handler.targetStrategy.id), TagFilterScreenHandler.ACTION_CYCLE_TARGET, true, listOf(Text.literal("Target order"), Text.literal(humanValue(handler.targetStrategy.id))))
+            buttons += PanelActionButton("target", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Target", compactValue(handler.targetStrategy.id), TagFilterScreenHandler.ACTION_CYCLE_TARGET, true, listOf(Text.translatable("gui.cobblepalsworld.target_order"), Text.literal(humanValue(handler.targetStrategy.id))))
             top += 18
-            buttons += PanelActionButton("run", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Run", if (handler.terminateAfterSuccess) "One pass" else "Loop", TagFilterScreenHandler.ACTION_TOGGLE_RUN, handler.terminateAfterSuccess, listOf(Text.literal("Completion rule")))
+            buttons += PanelActionButton("run", PANEL_BUTTON_X, top, PANEL_BUTTON_WIDTH, "Run", if (handler.terminateAfterSuccess) "One pass" else "Loop", TagFilterScreenHandler.ACTION_TOGGLE_RUN, handler.terminateAfterSuccess, listOf(Text.translatable("gui.cobblepalsworld.completion_rule")))
         }
         return buttons
     }
@@ -211,8 +211,8 @@ class TagFilterScreen(
     private fun textureButtons(): List<TextureActionButton> {
         if (handler.tagType?.supportsTargetList != true) return emptyList()
         return listOf(
-            TextureActionButton("reg-down", 305, 158, 7, 7, TagFilterScreenHandler.ACTION_REGULATOR_DOWN, CobblemonUiChrome.NAV_PREVIOUS, true, listOf(Text.literal("Lower regulator"))),
-            TextureActionButton("reg-up", 328, 158, 7, 7, TagFilterScreenHandler.ACTION_REGULATOR_UP, CobblemonUiChrome.NAV_NEXT, true, listOf(Text.literal("Raise regulator")))
+            TextureActionButton("reg-down", 305, 158, 7, 7, TagFilterScreenHandler.ACTION_REGULATOR_DOWN, CobblemonUiChrome.NAV_PREVIOUS, true, listOf(Text.translatable("gui.cobblepalsworld.regulator_down"))),
+            TextureActionButton("reg-up", 328, 158, 7, 7, TagFilterScreenHandler.ACTION_REGULATOR_UP, CobblemonUiChrome.NAV_NEXT, true, listOf(Text.translatable("gui.cobblepalsworld.regulator_up")))
         )
     }
 

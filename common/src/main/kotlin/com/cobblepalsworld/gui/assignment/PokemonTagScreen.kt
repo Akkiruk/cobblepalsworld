@@ -213,17 +213,17 @@ class PokemonTagScreen(
     private fun hasAssignedRole(): Boolean = handler.slots[PokemonTagScreenHandler.TAG_SLOT].stack.item is TagItem
 
     private fun textureButtons(): List<TextureActionButton> = listOf(
-        TextureActionButton("prev", 286, 15, 7, 7, PokemonTagScreenHandler.ACTION_PREVIOUS_PAL, CobblemonUiChrome.NAV_PREVIOUS, true, listOf(Text.literal("Previous pal"))),
-        TextureActionButton("next", 302, 15, 7, 7, PokemonTagScreenHandler.ACTION_NEXT_PAL, CobblemonUiChrome.NAV_NEXT, true, listOf(Text.literal("Next pal")))
+        TextureActionButton("prev", 286, 15, 7, 7, PokemonTagScreenHandler.ACTION_PREVIOUS_PAL, CobblemonUiChrome.NAV_PREVIOUS, true, listOf(Text.translatable("gui.cobblepalsworld.previous_pal"))),
+        TextureActionButton("next", 302, 15, 7, 7, PokemonTagScreenHandler.ACTION_NEXT_PAL, CobblemonUiChrome.NAV_NEXT, true, listOf(Text.translatable("gui.cobblepalsworld.next_pal")))
     )
 
     private fun panelButtons(): List<PanelActionButton> {
         val assignmentMode = WorkerAssignmentMode.fromOrdinal(handler.assignmentModeOrdinal)
         val canEditPolicy = hasAssignedRole()
         return listOf(
-            PanelActionButton("mode", PANEL_BUTTON_X, 75, PANEL_BUTTON_WIDTH, "Mode", assignmentLabel(assignmentMode, handler.allowFallback), PokemonTagScreenHandler.ACTION_CYCLE_ASSIGNMENT_MODE, assignmentMode != WorkerAssignmentMode.GENERAL, listOf(Text.literal("Crew mode"), Text.literal("Current: ${assignmentLabel(assignmentMode, handler.allowFallback)}"))),
-            PanelActionButton("fallback", PANEL_BUTTON_X, 96, PANEL_BUTTON_WIDTH, "Fallback", if (handler.allowFallback) "On" else "Off", PokemonTagScreenHandler.ACTION_TOGGLE_FALLBACK, !handler.allowFallback, listOf(Text.literal("Fallback"), Text.literal(if (handler.allowFallback) "General labor allowed." else "General labor locked."))),
-            PanelActionButton("policy", PANEL_BUTTON_X, 117, PANEL_BUTTON_WIDTH, "Role", if (canEditPolicy) "Policy" else "None", PokemonTagScreenHandler.ACTION_OPEN_ROLE_POLICY, canEditPolicy, listOf(Text.literal("Role policy"), Text.literal(if (canEditPolicy) "Open this role's policy." else "Assign a role first.")))
+            PanelActionButton("mode", PANEL_BUTTON_X, 75, PANEL_BUTTON_WIDTH, "Mode", assignmentLabel(assignmentMode, handler.allowFallback), PokemonTagScreenHandler.ACTION_CYCLE_ASSIGNMENT_MODE, assignmentMode != WorkerAssignmentMode.GENERAL, listOf(Text.translatable("gui.cobblepalsworld.crew_mode"), Text.translatable("gui.cobblepalsworld.crew_mode.current", assignmentLabel(assignmentMode, handler.allowFallback)))),
+            PanelActionButton("fallback", PANEL_BUTTON_X, 96, PANEL_BUTTON_WIDTH, "Fallback", if (handler.allowFallback) "On" else "Off", PokemonTagScreenHandler.ACTION_TOGGLE_FALLBACK, !handler.allowFallback, listOf(Text.translatable("gui.cobblepalsworld.fallback"), Text.translatable(if (handler.allowFallback) "gui.cobblepalsworld.fallback.on" else "gui.cobblepalsworld.fallback.off"))),
+            PanelActionButton("policy", PANEL_BUTTON_X, 117, PANEL_BUTTON_WIDTH, "Role", if (canEditPolicy) "Policy" else "None", PokemonTagScreenHandler.ACTION_OPEN_ROLE_POLICY, canEditPolicy, listOf(Text.translatable("gui.cobblepalsworld.role_policy"), Text.translatable(if (canEditPolicy) "gui.cobblepalsworld.role_policy.open" else "gui.cobblepalsworld.role_policy.assign_first")))
         )
     }
 
