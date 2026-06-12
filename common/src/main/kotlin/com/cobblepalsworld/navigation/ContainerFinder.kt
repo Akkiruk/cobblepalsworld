@@ -122,6 +122,10 @@ object ContainerFinder {
             }
         }
 
+        if (tag.controllerPos != null) {
+            return null
+        }
+
         return findClosestMatching(world, origin, range, exclude, predicate)
     }
 

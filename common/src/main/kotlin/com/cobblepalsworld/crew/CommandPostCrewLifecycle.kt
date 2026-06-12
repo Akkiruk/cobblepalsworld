@@ -4,6 +4,7 @@ import com.cobblemon.mod.common.Cobblemon
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblepalsworld.CobblePalsWorld
+import com.cobblepalsworld.behavior.TagExecutionEngine
 import com.cobblepalsworld.navigation.SafePositionResolver
 import com.cobblepalsworld.router.RouterBlockEntity
 import net.minecraft.registry.RegistryKey
@@ -73,9 +74,21 @@ object CommandPostCrewLifecycle {
     }
 
     fun handleWorkerDeath(entity: PokemonEntity) {
+        TagExecutionEngine.cleanupRuntimeOnly(entity.pokemon.uuid)
+        val world = entity.world as? ServerWorld ?: return
+        clearRouterAssignment(world, entity.pokemon.uuid)
     }
 
-    fun clearRuntimeState() {
+    fun clearRuntimeState(server: MinecraftServer) {
+        CommandPostCrewManager.forEachPost { binding, _ ->
+            val world = server.getWorld(RegistryKey.of(RegistryKeys.WORLD, Identifier.of(binding.dimensionId))) ?: return@forEachPost
+            val router = world.getBlockEntity(binding.pos) as? RouterBlockEntity ?: return@forEachPost
+            router.clearAssignedWorkers()
+            router.clearAllModuleRuntime()
+            router.cooldownTicks = 0
+            router.updatePowered(false)
+            router.markDirty()
+        }
     }
 
     fun releaseFromCommandPost(world: ServerWorld, anchor: BlockPos, member: CommandPostCrewMember, fallbackOwnerUuid: UUID? = null) {
@@ -112,5 +125,15 @@ object CommandPostCrewLifecycle {
         entity.navigation.stop()
         entity.setVelocity(0.0, 0.0, 0.0)
         return entity
+    }
+
+    private fun clearRouterAssignment(world: ServerWorld, pokemonId: UUID) {
+        val binding = CommandPostCrewManager.bindingFor(pokemonId) ?: return
+        if (binding.dimensionId != world.registryKey.value.toString()) return
+
+        val router = world.getBlockEntity(binding.pos) as? RouterBlockEntity ?: return
+        router.removeAssignedWorker(pokemonId)
+        router.cooldownTicks = 0
+        router.markDirty()
     }
 }

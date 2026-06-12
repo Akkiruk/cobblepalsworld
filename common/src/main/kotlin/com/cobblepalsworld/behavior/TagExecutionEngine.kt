@@ -529,16 +529,20 @@ object TagExecutionEngine {
             val searchRange = effectiveRange(tag, state)
             val controllerPos = ContainerFinder.controllerBufferPos(world, tag)
                 ?.takeIf { isWithinWorkRange(origin, it, searchRange) }
+            val controllerManaged = tag.controllerPos != null
 
-            // Build exclusion set: never deposit back to the source or Command Post origin
-            val excludePositions = mutableSetOf(origin)
+            // Never deposit back into the source container. For Command Post-managed workers,
+            // the router inventory is the intended destination and must stay eligible.
+            val excludePositions = mutableSetOf<BlockPos>()
+            if (controllerPos == null || controllerPos != origin) {
+                excludePositions += origin
+            }
             state.workSourcePos
                 ?.takeUnless { it == controllerPos }
                 ?.let { excludePositions.add(it) }
 
             val controllerInventory = controllerPos?.let { ContainerFinder.getInventoryAt(world, it) }
             val controllerHasSpace = controllerPos != null
-                && controllerPos !in excludePositions
                 && controllerInventory != null
                 && ContainerFinder.hasSpace(controllerInventory)
 
@@ -546,6 +550,18 @@ object TagExecutionEngine {
                 state.depositPos = controllerPos
                 state.cachedContainerPos = controllerPos
                 state.containerCacheTime = world.time
+            } else if (controllerManaged) {
+                state.cachedContainerPos = null
+                state.depositPos = null
+                state.setStatus(
+                    WorkerStatusReason.NO_DEPOSIT,
+                    if (controllerPos == null) {
+                        "Command Post storage is unavailable for this worker"
+                    } else {
+                        "Command Post storage is full; holding cargo until space opens"
+                    }
+                )
+                return
             } else {
                 // Container cache: reuse recently-found container position if still valid
                 val cached = state.cachedContainerPos

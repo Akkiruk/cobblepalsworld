@@ -84,7 +84,7 @@ object CobblePalsWorld {
 
         LifecycleEvent.SERVER_STOPPING.register { server ->
             CommandPostCrewLifecycle.recallAll(server)
-            CommandPostCrewLifecycle.clearRuntimeState()
+            CommandPostCrewLifecycle.clearRuntimeState(server)
             CobblePalsSaveData.markDirty(server)
             TagExecutionEngine.resetRuntimeState()
             CobblePalsSaveData.clearLoaded(server)

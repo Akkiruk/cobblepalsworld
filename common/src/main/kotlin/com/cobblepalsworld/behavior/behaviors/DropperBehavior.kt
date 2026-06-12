@@ -55,7 +55,7 @@ object DropperBehavior : TagBehavior {
     }
 
     override fun isTargetValid(world: World, target: BlockPos, tag: TagInstance): Boolean {
-        return ContainerFinder.isContainer(world, target) || true
+        return target == tag.boundPos || target == tag.controllerPos || ContainerFinder.isContainer(world, target)
     }
 
     private fun extractFromSource(

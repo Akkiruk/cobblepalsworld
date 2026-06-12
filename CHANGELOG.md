@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.44
+
+- Kept Command Post-managed workers depositing back into router storage, hold their cargo cleanly when Command Post storage is unavailable or full, and tightened dropper target validation so it only uses valid bound or controller destinations.
+- Added `/cobblepals status workers` and `/cobblepals status blocked` summaries for live worker debugging, and reset Command Post runtime state against real router blocks on command and server stop.
+- Cleared dead worker runtime and router assignment state immediately and switched breaker block destruction to the server break path so protected or failed targets retry cleanly instead of desyncing.
+
 ## 0.2.43
 
 - Removed the Guardian and Shepherd tags entirely from CobblePals World, including their behaviors, config defaults, recipes, language entries, module tag list entries, and item models.

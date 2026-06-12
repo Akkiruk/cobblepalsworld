@@ -16,7 +16,6 @@ import net.minecraft.item.Items
 import net.minecraft.registry.Registries
 import net.minecraft.registry.tag.BlockTags
 import net.minecraft.server.world.ServerWorld
-import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
@@ -120,8 +119,11 @@ object BreakerBehavior : TagBehavior {
             world.getBlockEntity(target),
             entity, toolStack
         )
-        world.syncWorldEvent(net.minecraft.world.WorldEvents.BLOCK_BROKEN, target, Block.getRawIdFromState(blockState))
-        world.setBlockState(target, Blocks.AIR.defaultState)
+        val broken = serverWorld.breakBlock(target, false, entity)
+        if (!broken || !world.getBlockState(target).isAir) {
+            state.setStatus(com.cobblepalsworld.behavior.state.WorkerStatusReason.WORKING, "Failed to break the target block; retrying")
+            return WorkResult.Repeat
+        }
         return WorkResult.Done(drops)
     }
 
